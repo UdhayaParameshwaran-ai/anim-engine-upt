@@ -52,6 +52,10 @@ export const SLOTS = ["TL", "T", "TR", "L", "C", "R", "BL", "B", "BR"] as const;
 export const RELATIONS = ["right-of", "left-of", "above", "below", "inside"] as const;
 export const LAYOUTS = ["center", "row", "col", "grid", "split", "stack", "cycle"] as const;
 export const TRANSITIONS = ["cut", "fade", "slide"] as const;
+export const THEMES = ["chalk", "paper", "dark", "light"] as const;
+export const CHART_TYPES = ["bar"] as const;
+/** Scene attributes the DSL understands. */
+export const SCENE_ATTRS = ["template", "in", "out", "keep"] as const;
 
 /** A template slot: where content goes. The template decides geometry. */
 export interface SlotSpec {
@@ -124,6 +128,7 @@ export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "edge", version: 1, layer: "svg", summary: "graph edge (a -> b \"label\")", named: "none", texts: { min: 0, max: 1 }, link: true, params: {}, drawable: true },
   { kind: "icon", version: 1, layer: "svg", summary: "icon from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "asset", version: 1, layer: "svg", summary: "illustration from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
+  { kind: "placeholder", version: 1, layer: "svg", summary: "labeled box standing in for a missing asset", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "chart", version: 1, layer: "svg", summary: "chart:bar data=3,5,8 labels=A,B,C", named: "required", texts: { min: 0, max: 1 }, link: false, params: { data: { type: "string" }, labels: { type: "string" } }, parts: "items", drawable: true },
 ];
 
@@ -160,3 +165,5 @@ export function findTemplate(name: string): TemplateManifest | undefined {
 export function findComponent(kind: string): ComponentManifest | undefined {
   return COMPONENTS.find((c) => c.kind === kind);
 }
+
+export { AssetLibrary, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";

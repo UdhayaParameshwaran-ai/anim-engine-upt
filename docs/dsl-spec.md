@@ -119,7 +119,56 @@ The registry (`packages/registry`) is the source of truth for verbs, their param
 | NAR112 | (warning) Point cue with no following word |
 | NAR113 | Duplicate or late `video` header |
 
-The parser is error-tolerant: a bad line produces a diagnostic and parsing continues with the next line. Diagnostics print as `L<line>:<col> <code> <severity>: <message>`, and that form is sent verbatim in LLM repair prompts. Reference checks (NAR2xx–3xx), semantic checks (NAR4xx) and timing checks (NAR5xx) belong to later layers.
+The parser is error-tolerant: a bad line produces a diagnostic and parsing continues with the next line. Diagnostics print as `L<line>:<col> <code> <severity>: <message>`, and that form is sent verbatim in LLM repair prompts. Schema (NAR2xx), reference (NAR3xx) and semantic (NAR4xx) checks belong to the validator (§7a). Timing checks (NAR5xx) belong to the timeline resolver.
+
+## 7a. Diagnostics (validator L2–L4, layout)
+
+Run `pnpm check <file>` to see them. Most come with a deterministic auto-fix. A fixed diagnostic prints with `[fixed: …]` and does not block compilation.
+
+| Code | Layer | Meaning | Auto-fix |
+|---|---|---|---|
+| NAR201 | schema | Unknown verb | Closest verb, else drop the call |
+| NAR202 | schema | Unknown element kind | Closest kind, else placeholder |
+| NAR203 | schema | Unknown template | Closest template, else remove it (layout fallback) |
+| NAR204 | schema | Unknown layout | Closest layout, else `row` |
+| NAR205 | schema | Unknown slot or relation, or a destination on a verb that has none | Closest name, else remove |
+| NAR206 | schema | Unknown parameter (warning) | Ignore |
+| NAR207 | schema | Bad parameter value | Remove (default applies) |
+| NAR208 | schema | Wrong number of texts for the kind | Drop extras / use the id as text |
+| NAR209 | schema | Name rule (`icon` needs a name, `text` takes none, bad chart type) | Placeholder / drop the name / `bar` |
+| NAR210 | schema | Link rule (`arrow` needs `a->b`, others take none) | Drop the element / drop the link |
+| NAR211 | schema | Verb target rule | Drop the call / drop the targets |
+| NAR212 | schema | `fit` on a verb that doesn't support it | Remove `fit` |
+| NAR213 | schema | Unknown transition | Closest transition, else `fade` |
+| NAR214 | schema | Bad setting (size, fps, theme, lang, voice) | Remove / closest theme |
+| NAR215 | schema | Unknown scene attribute (warning) | Ignore |
+| NAR216 | schema | `move` without a destination | Drop the call |
+| NAR217 | schema | `fit` anchored on a point cue | Remove `fit` |
+| NAR301 | reference | Undeclared element (or one declared in a later step) | Closest id, else drop the target |
+| NAR302 | reference | Duplicate element id in a scene | Drop the duplicate |
+| NAR303 | reference | Anchor is not a cue of this beat | Drop the action |
+| NAR304 | reference | Cue with no action (warning) | — |
+| NAR305 | reference | Connector endpoint not declared | Closest id, else drop the connector |
+| NAR306 | reference | Asset not in the library (warning) | Synonym, closest name, else labeled placeholder |
+| NAR307 | reference | `until=` doesn't name a later cue | Remove `until` |
+| NAR308 | reference | Focus, `->id` or placement refers to an undeclared element | Closest id / remove |
+| NAR309 | reference | `keep=` id not declared in the previous scene | Remove from keep |
+| NAR310 | reference | Unknown part (`id.part`) (warning) | Target the whole element |
+| NAR401 | semantic | Scene without narration | — |
+| NAR402 | semantic | Emphasis/transform on a hidden element (warning) | Insert `fade` first |
+| NAR403 | semantic | Hiding something not visible (warning) | Drop the target |
+| NAR404 | semantic | Element declared but never shown (warning) | — |
+| NAR405 | semantic | Too many elements in a scene (warning) | — |
+| NAR406 | semantic | Beat longer than 40 words (warning) | — |
+| NAR407 | semantic | Template slot problem: missing required slot, wrong kind, too many items | — |
+| NAR408 | semantic | Entering an element that is already visible (warning) | — |
+| NAR411 | semantic | Element doesn't fill any template slot (warning) | — |
+| NAR412 | semantic | Connector appears before its endpoints (warning) | — |
+| NAR413 | layout | Element had to shrink below 35% to fit (warning) | — |
+| NAR414 | layout | Text had to shrink below 50% (warning) | — |
+| NAR415 | layout | Elements overlap (warning) | — |
+
+Visibility checks follow narration order (where each cue falls in the sentence), not line order. Endpoints revealed later in the same `then` chain count as present for connectors, so `draw e1 then pop n2` is fine.
 
 ## 8. Grammar (EBNF)
 

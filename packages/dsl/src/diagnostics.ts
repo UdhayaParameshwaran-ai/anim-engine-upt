@@ -3,10 +3,13 @@ import type { Span } from "./ast.js";
 export type Severity = "error" | "warning";
 
 export interface Diagnostic {
-  code: DiagnosticCode;
+  /** NAR1xx syntax, NAR2xx schema, NAR3xx reference, NAR4xx semantic, NAR5xx timing. */
+  code: string;
   severity: Severity;
   message: string;
   span: Span;
+  /** Set when an auto-fix was applied; describes what was changed. */
+  fixed?: string;
 }
 
 /** L1 (syntax) codes. Higher layers (validator, resolver) own NAR2xx+. */
@@ -30,5 +33,5 @@ export type DiagnosticCode = (typeof Codes)[keyof typeof Codes];
 
 /** Compact one-line form, also used verbatim in LLM repair prompts. */
 export function formatDiagnostic(d: Diagnostic): string {
-  return `L${d.span.line}:${d.span.col} ${d.code} ${d.severity}: ${d.message}`;
+  return `L${d.span.line}:${d.span.col} ${d.code} ${d.severity}: ${d.message}${d.fixed ? ` [fixed: ${d.fixed}]` : ""}`;
 }

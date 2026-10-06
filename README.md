@@ -30,7 +30,8 @@ water = icon:droplet
 | `packages/dsl` | ✅ parser, printer, diagnostics | Streamable, error-tolerant parser → AST with spans |
 | `packages/registry` | ✅ v1 vocabulary | Verbs, templates, components, asset manifest types |
 | `packages/ir` | ✅ types | VideoIR, word timings, ResolvedTimeline |
-| `packages/validate` | planned | Reference/semantic checks, auto-fix |
+| `packages/validate` | ✅ L2–L4 checks + auto-fix | Schema, reference, template and visibility checks |
+| `packages/compiler` | ✅ layout + lowering + CLI | DSL → VideoIR; the layout engine decides every coordinate |
 | `packages/tts` | planned | Provider-neutral TTS + aligner |
 | `packages/timeline` | planned | Anchor resolution → frame-quantized tweens |
 | `packages/engine` | planned | Browser SVG/HTML engine, `render(t)` |
@@ -45,6 +46,8 @@ Requires Node 24+ and pnpm.
 pnpm install
 pnpm typecheck
 pnpm test
+pnpm check examples/photosynthesis.txt          # diagnostics
+pnpm check my-script.txt --fixed --ir           # auto-fixed script + IR
 ```
 
 ## Git account for this repo

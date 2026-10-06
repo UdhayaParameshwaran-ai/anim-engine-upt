@@ -18,6 +18,21 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.19.1)
 
+  packages/compiler:
+    dependencies:
+      '@anim/dsl':
+        specifier: workspace:*
+        version: link:../dsl
+      '@anim/ir':
+        specifier: workspace:*
+        version: link:../ir
+      '@anim/registry':
+        specifier: workspace:*
+        version: link:../registry
+      '@anim/validate':
+        specifier: workspace:*
+        version: link:../validate
+
   packages/dsl:
     dependencies:
       '@anim/registry':
@@ -27,6 +42,15 @@ importers:
   packages/ir: {}
 
   packages/registry: {}
+
+  packages/validate:
+    dependencies:
+      '@anim/dsl':
+        specifier: workspace:*
+        version: link:../dsl
+      '@anim/registry':
+        specifier: workspace:*
+        version: link:../registry
 
 packages:
 
