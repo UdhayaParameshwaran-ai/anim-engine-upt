@@ -1,0 +1,125 @@
+video 1 "Rule Book Gallery"
+
+scene numbers "Numbers" grid=L4-01
+title = title "Numbers that tell the story"
+reach = multistat "4.4B;195;88%" "people reached;countries;coverage"
+speed = gauge "72" "trial efficacy"
+rating = scorecard "4" "expert rating"
+done = progress "60%" "rollout complete"
+> Four point four billion people in {1}one hundred ninety-five countries.
+start write title
+1 draw reach
+> Efficacy reached {1 seventy-two percent}, rated {2}four out of five.
+1 draw speed
+2 draw rating
+> The rollout is {1}sixty percent complete.
+1 draw done
+
+scene words "Words" grid=L3-04
+title = title "Words that explain"
+quote = quote "The important thing is not to stop questioning." "Albert Einstein"
+body = body "Vaccines teach the immune system to recognise a germ without the risk of the disease itself."
+tip = callout "Ask why twice before you accept an answer."
+> {1}Einstein put it simply.
+start write title
+1 draw quote
+> A vaccine is a {1}safe rehearsal for the real thing.
+1 draw body
+> So {1}keep asking why.
+1 draw tip
+
+scene sides "Two sides" grid=L2-01
+title = title "Weighing it up"
+pc = proscons "Cheap;Fast;Proven" "Needs cold storage;Two doses"
+eq = formula "R = R0 × (1 − p)"
+> Every choice has {1}pros and cons.
+start write title
+1 draw pc
+> Immunity {1}lowers the reproduction number.
+1 draw eq
+
+scene lists "Lists" grid=L3-01
+title = title "Three kinds of list"
+facts = bullets "Safe;Effective;Free"
+steps = numbered "Book;Attend;Recover"
+check = checklist "ID card;Health card;Mask"
+> Some points have {1}no order.
+start write title
+1 draw facts
+> Some {1}follow a sequence.
+1 draw steps
+> And some are {1}things to bring.
+1 draw check
+
+scene charts "Charts" grid=L2-01
+title = title "Two kinds of chart"
+trend = chart:line data=10,25,40,62,80,91 data2=8,15,22,30,41,50 labels=2019,2020,2021,2022,2023,2024
+share = chart:pie data=55,25,20 labels=mRNA,Viral,Protein
+> Coverage {1}rose every year.
+start write title
+1 draw trend
+> And three {1}vaccine types share the market.
+1 draw share
+
+scene compare "Compare" grid=L2-02
+title = title "Then and now"
+versus = comparison "1950|Today" "Weeks to test|Hours to test;Few vaccines|Dozens of vaccines;Smallpox common|Smallpox gone"
+history = timeline "1796|Smallpox;1885|Rabies;1955|Polio;2020|mRNA"
+> {1}Then and now look very different.
+start write title
+1 draw versus
+> {1}Two centuries of progress.
+1 draw history
+
+scene process "Process" grid=L2-05
+title = title "From lab to arm"
+trial = funnel "Candidates|100;Trials|20;Approved|5"
+path = flowchart "Idea>Lab test;Lab test>Safe?;Safe?>Trial:yes;Safe?>Redesign:no"
+> Most candidates {1}never make it.
+start write title
+1 draw trial
+> Each one passes a {1}safety check first.
+1 draw path
+
+scene loops "Loops" grid=L2-01
+title = title "Cycles and trade-offs"
+loop = cycle "Infection;Response;Memory;Protection"
+grid = matrix "Effort|Impact" "Masks|2,6;Vaccines|5,9;Lockdown|9,7"
+> Immunity is a {1}cycle.
+start write title
+1 draw loop
+> Every measure trades {1}effort for impact.
+1 draw grid
+
+scene people "People" grid=L3-02
+title = title "The people behind it"
+photo = image "a lab scientist holding a vial"
+who = avatar "Edward Jenner" "Physician, 1796"
+org = logo "WHO"
+> Behind every vaccine is a {1}lab.
+start write title
+1 draw photo
+> {1}Edward Jenner started it all.
+1 draw who
+> Today the {1}World Health Organization coordinates it.
+1 draw org
+
+scene world "World" grid=L2-04
+title = title "A global effort"
+where = map "India;Brazil;Kenya;Germany"
+clip = video "a vaccination drive in a village"
+> Doses are made in {1}India and shipped worldwide.
+start write title
+1 draw where
+> Campaigns {1}reach remote villages.
+1 draw clip
+
+scene art "Art" grid=L2-06
+title = title "Pictures and icons"
+leaf = asset:leaf "Leaf"
+sun = icon:sun "Sunlight"
+> Illustrations {1}draw in part by part.
+start write title
+1 draw leaf
+> Icons {1}pop in.
+1 pop sun

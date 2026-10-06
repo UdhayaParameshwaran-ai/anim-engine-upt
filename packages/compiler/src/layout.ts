@@ -1,6 +1,7 @@
 import type { Diagnostic, ElementDecl, Place, Scene } from "@anim/dsl";
 import type { Box } from "@anim/ir";
-import { findTemplate, SLOTS, type AssetLibrary, type TemplateManifest } from "@anim/registry";
+import { findGridLayout, findTemplate, frameRects, GRID, slotRects, SLOTS, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
+import { gridMode, gridParts } from "@anim/validate";
 import { fit, measure, type Size } from "./measure.js";
 
 /**
@@ -59,6 +60,11 @@ class SceneLayouter {
 
   run(): SceneLayout {
     for (const [id, box] of this.kept) this.boxes.set(id, box);
+    if (this.scene.attrs.grid !== undefined && findGridLayout(this.scene.attrs.grid)) {
+      this.grid();
+      for (const e of this.els) if (LINK_KINDS.has(e.kind) && e.link) this.connector(e);
+      return this.result();
+    }
 
     // 1. Explicit slots.
     const occupied = new Set<string>();
@@ -88,6 +94,10 @@ class SceneLayouter {
     for (const e of this.els) if (LINK_KINDS.has(e.kind) && e.link) this.connector(e);
 
     this.checkOverlaps();
+    return this.result();
+  }
+
+  private result(): SceneLayout {
     const self = this;
     return {
       boxes: this.boxes,
@@ -104,6 +114,30 @@ class SceneLayouter {
         return ref ? self.clamp(relative(ref, { w: cur.w, h: cur.h }, place.relation)) : undefined;
       },
     };
+  }
+
+  /**
+   * Grid scene (Template Rule Book v2): the frame mode follows from the
+   * header/footer elements, content fills the layout's slots in reading
+   * order, each element taking its whole slot.
+   */
+  private grid(): void {
+    const layout = findGridLayout(this.scene.attrs.grid!)!;
+    const parts = gridParts(this.els);
+    const mode = gridMode(this.els);
+    const sx = this.ctx.width / GRID.width;
+    const sy = this.ctx.height / GRID.height;
+    const scale = (r: Rect): Box => round({ x: r.x * sx, y: r.y * sy, w: r.w * sx, h: r.h * sy });
+    const frame = frameRects(mode);
+    if (parts.title && frame.title) this.boxes.set(parts.title.id, scale(frame.title));
+    if (parts.subtitle && frame.subtitle) this.boxes.set(parts.subtitle.id, scale(frame.subtitle));
+    if (parts.footer && frame.footer) this.boxes.set(parts.footer.id, scale(frame.footer));
+    const rects = slotRects(layout, mode);
+    parts.content.forEach((e, i) => {
+      const r = rects[i];
+      if (r) this.boxes.set(e.id, scale(r));
+      else this.put(e, this.safe); // more elements than slots: the validator already reported it
+    });
   }
 
   // ------------------------------------------------------------ placing ---

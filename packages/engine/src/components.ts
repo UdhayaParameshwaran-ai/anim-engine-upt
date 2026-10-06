@@ -1,6 +1,7 @@
 import type { Box, ElementIR } from "@anim/ir";
 import { ICONS, ILLUSTRATIONS } from "./art.js";
 import { color, type Theme } from "./theme.js";
+import { buildWidget, WIDGET_KINDS } from "./widgets.js";
 
 export const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -22,6 +23,8 @@ export interface Instance {
   lines: Element[][];
   /** Text that should appear as the shape is drawn (labels inside nodes, boxes). */
   innerText: Element[];
+  /** Grid elements: plays the element's signature motion for draw progress k (0..1). */
+  motion?: (k: number) => void;
   /** Connectors are re-routed every frame between their endpoints. */
   connector?: { from: string; to: string; path: SVGPathElement; head?: SVGPathElement; label?: SVGTextElement };
 }
@@ -38,12 +41,20 @@ export function build(doc: Document, el: ElementIR, theme: Theme): Instance {
   const g = svg<SVGGElement>(doc, "g", { "data-id": el.id, "data-kind": el.kind });
   inst.root = g;
   const { w, h } = el.box;
+  if (WIDGET_KINDS.has(el.kind)) {
+    buildWidget(doc, inst, g, el, theme);
+    return inst;
+  }
   switch (el.kind) {
     case "title":
     case "text":
-    case "label":
-      g.append(text(doc, inst, el.texts[0] ?? "", FONT[el.kind]!, w, h, theme, { heading: el.kind === "title", parts: true }));
+    case "label": {
+      const left = el.params.align === "left";
+      // Grid headers: left-aligned, sized to their band.
+      const font = left ? Math.min(FONT[el.kind]!, h * 0.85) : FONT[el.kind]!;
+      g.append(text(doc, inst, el.texts[0] ?? "", font, w, h, theme, { heading: el.kind === "title", parts: true, align: left ? "left" : "center", ...(el.params.tone === "muted" && { fill: theme.muted }) }));
       break;
+    }
     case "list":
       g.append(list(doc, inst, el.texts[0] ?? "", w, h, theme));
       break;
@@ -67,9 +78,6 @@ export function build(doc: Document, el: ElementIR, theme: Theme): Instance {
     case "asset":
       art(doc, inst, g, el, theme);
       break;
-    case "chart":
-      chart(doc, inst, g, el, theme);
-      break;
     case "arrow":
     case "line":
     case "edge":
@@ -90,6 +98,7 @@ interface TextOpts {
   /** Appears with the enclosing shape's draw instead of on its own. */
   inner?: boolean;
   fill?: string;
+  align?: "center" | "left";
 }
 
 /** Wraps by estimated glyph width (same estimate as the layout engine), shrinking to fit the box. */
@@ -124,8 +133,9 @@ function wrap(content: string, perLine: number): string[] {
 function text(doc: Document, inst: Instance, content: string, font: number, maxW: number, maxH: number, theme: Theme, opts: TextOpts = {}): SVGTextElement {
   // `wrap` measures without brackets, so part markers don't affect line breaks.
   const fitted = fitText(content, font, maxW, maxH);
+  const left = opts.align === "left";
   const t = svg(doc, "text", {
-    "text-anchor": "middle",
+    "text-anchor": left ? "start" : "middle",
     "font-size": round(fitted.font),
     "font-family": opts.heading ? theme.headingFont : theme.font,
     "font-weight": opts.heading ? 700 : 400,
@@ -137,7 +147,7 @@ function text(doc: Document, inst: Instance, content: string, font: number, maxW
   let part = 0;
   let inPart = false;
   fitted.lines.forEach((line, li) => {
-    const ln = svg(doc, "tspan", { x: 0, y: round(top + li * lh) });
+    const ln = svg(doc, "tspan", { x: left ? round(-maxW / 2) : 0, y: round(top + li * lh) });
     for (const ch of line) {
       if (opts.parts && ch === "[") {
         inPart = true;
@@ -215,31 +225,6 @@ function art(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme
     t.setAttribute("transform", `translate(0 ${round(el.box.h / 2 - labelH / 2)})`);
     g.append(t);
   }
-}
-
-function chart(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {
-  const data = String(el.params.data ?? "").split(",").map(Number).filter((n) => !Number.isNaN(n));
-  const labels = String(el.params.labels ?? "").split(",").filter(Boolean);
-  const { w, h } = el.box;
-  const pad = 50;
-  const max = Math.max(1, ...data);
-  const bw = (w - pad * 2) / Math.max(1, data.length);
-  g.append(stroke(inst, svg(doc, "path", { d: `M${-w / 2 + pad} ${-h / 2 + 10}V${h / 2 - pad}H${w / 2 - 10}` })));
-  data.forEach((v, i) => {
-    const bh = ((h - pad - 30) * v) / max;
-    const x = -w / 2 + pad + i * bw + bw * 0.15;
-    const bar = svg(doc, "g", { "data-part": String(i + 1) });
-    const rect = svg(doc, "rect", { x: round(x), y: round(h / 2 - pad - bh), width: round(bw * 0.7), height: round(bh), rx: 6, "data-fill": "accent" });
-    bar.append(stroke(inst, rect));
-    if (labels[i]) {
-      const t = svg(doc, "text", { x: round(x + bw * 0.35), y: round(h / 2 - pad + 30), "text-anchor": "middle", "font-size": 24, "font-family": theme.font, fill: theme.fg, stroke: "none" });
-      t.textContent = labels[i]!;
-      inst.innerText.push(t);
-      bar.append(t);
-    }
-    addPart(inst, String(i + 1), bar);
-    g.append(bar);
-  });
 }
 
 function connector(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {

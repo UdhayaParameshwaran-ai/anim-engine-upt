@@ -52,10 +52,10 @@ export const SLOTS = ["TL", "T", "TR", "L", "C", "R", "BL", "B", "BR"] as const;
 export const RELATIONS = ["right-of", "left-of", "above", "below", "inside"] as const;
 export const LAYOUTS = ["center", "row", "col", "grid", "split", "stack", "cycle"] as const;
 export const TRANSITIONS = ["cut", "fade", "slide"] as const;
-export const THEMES = ["chalk", "paper", "dark", "light"] as const;
-export const CHART_TYPES = ["bar"] as const;
+export const THEMES = ["chalk", "paper", "dark", "light", "editorial"] as const;
+export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
-export const SCENE_ATTRS = ["template", "in", "out", "keep"] as const;
+export const SCENE_ATTRS = ["template", "grid", "in", "out", "keep"] as const;
 
 /** A template slot: where content goes. The template decides geometry. */
 export interface SlotSpec {
@@ -129,8 +129,53 @@ export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "icon", version: 1, layer: "svg", summary: "icon from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "asset", version: 1, layer: "svg", summary: "illustration from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "placeholder", version: 1, layer: "svg", summary: "labeled box standing in for a missing asset", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
-  { kind: "chart", version: 1, layer: "svg", summary: "chart:bar data=3,5,8 labels=A,B,C", named: "required", texts: { min: 0, max: 1 }, link: false, params: { data: { type: "string" }, labels: { type: "string" } }, parts: "items", drawable: true },
+  { kind: "chart", version: 1, layer: "svg", summary: "chart:bar|line|pie data=3,5,8 labels=A,B,C", named: "required", texts: { min: 0, max: 1 }, link: false, params: { data: { type: "string" }, data2: { type: "string" }, labels: { type: "string" } }, parts: "items", drawable: true },
+  // Grid elements (Template Rule Book v2). Lists use `;`, fields within an item use `|`.
+  ...widgets([
+    ["stat", "headline number with a label", 1, 2, {}, "none"],
+    ["multistat", "2 to 4 numbers", 1, 2, {}, "items"],
+    ["gauge", "one value against a range", 1, 2, { max: { type: "number", min: 1, default: 100 } }, "none"],
+    ["scorecard", "score as filled marks", 1, 2, { max: { type: "number", min: 1, max: 10, default: 5 } }, "items"],
+    ["progress", "progress bar with a label", 1, 2, {}, "none"],
+    ["body", "short paragraph", 1, 1, {}, "none"],
+    ["quote", "pull quote with its source", 1, 2, {}, "none"],
+    ["callout", "boxed key takeaway", 1, 1, {}, "none"],
+    ["definition", "term and its meaning", 1, 2, {}, ["term", "meaning"]],
+    ["proscons", "for and against columns", 2, 2, {}, ["pros", "cons"]],
+    ["bullets", "bullet list", 1, 1, {}, "items"],
+    ["numbered", "numbered list", 1, 1, {}, "items"],
+    ["checklist", "list with tick boxes", 1, 1, {}, "items"],
+    ["table", "rows and columns", 1, 1, { key: { type: "number", min: 1, max: 6 } }, "items"],
+    ["comparison", "two options compared row by row", 2, 2, {}, "items"],
+    ["stepper", "numbered steps", 1, 1, {}, "items"],
+    ["timeline", "events along a line", 1, 1, {}, "items"],
+    ["flowchart", "boxes joined by arrows", 1, 1, {}, "items"],
+    ["funnel", "narrowing stages", 1, 1, {}, "items"],
+    ["cycle", "repeating loop of stages", 1, 1, {}, "items"],
+    ["matrix", "2 x 2 matrix with dots", 2, 2, {}, "items"],
+    ["image", "picture slot (cover crop)", 1, 1, {}, "none"],
+    ["video", "muted clip slot", 1, 1, {}, "none"],
+    ["avatar", "person card", 1, 2, {}, "none"],
+    ["logo", "brand mark", 1, 1, {}, "none"],
+    ["map", "outline map with pins", 1, 1, {}, "items"],
+    ["footer", "page footer with a note", 0, 1, {}, "none"],
+  ]),
 ];
+
+function widgets(rows: [string, string, number, number, Record<string, ParamSpec>, readonly string[] | "items" | "none"][]): ComponentManifest[] {
+  return rows.map(([kind, summary, min, max, params, parts]) => ({
+    kind,
+    version: 1,
+    layer: "svg" as const,
+    summary,
+    named: "none" as const,
+    texts: { min, max },
+    link: false,
+    params,
+    ...(parts !== "none" && { parts }),
+    drawable: true,
+  }));
+}
 
 /**
  * Entry in the semantic SVG library. Assets are named by meaning; the
@@ -166,4 +211,6 @@ export function findComponent(kind: string): ComponentManifest | undefined {
   return COMPONENTS.find((c) => c.kind === kind);
 }
 
-export { AssetLibrary, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";
+export * from "./grid.js";
+export { findPlace, PLACES } from "./places.js";
+export { AssetLibrary, flowNodes, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";

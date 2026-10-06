@@ -1,4 +1,19 @@
-import { AssetLibrary, COMPONENTS, LAYOUTS, RELATIONS, SLOTS, TEMPLATES, THEMES, TRANSITIONS, VERBS, type AssetManifest } from "@anim/registry";
+import {
+  AssetLibrary,
+  COMPONENTS,
+  frameMode,
+  GRID_ELEMENTS,
+  GRID_LAYOUTS,
+  LAYOUTS,
+  RELATIONS,
+  slotRects,
+  SLOTS,
+  TEMPLATES,
+  THEMES,
+  TRANSITIONS,
+  VERBS,
+  type AssetManifest,
+} from "@anim/registry";
 
 /**
  * Picks the assets most relevant to a topic: words of the text matched
@@ -41,6 +56,18 @@ end highlight left.chloroplast 1
 1 highlight right fit
 1 dim left
 
+scene numbers "By the numbers" grid=L3-02 in=fade
+title = title "Microscopes changed biology"
+chart = chart:bar data=2,40,300 labels=1700,1900,2000
+cells = stat "37T" "cells in a human body"
+tip = callout "Every living thing is made of cells."
+> Each century we found {1}far more kinds of cell.
+start write title
+1 draw chart
+> Your body alone has {1 thirty-seven trillion}.
+1 draw cells
+end draw tip
+
 scene decide "What next?" template=flow in=slide
 n1 = node "Curious about cells?"
 n2 = node "Use a microscope"
@@ -61,7 +88,9 @@ export function systemPrompt(assets: AssetManifest[]): string {
     const items = t.items ? ` items ${t.items.min}-${t.items.max}` : t.graph ? ` nodes ≤${t.graph.maxNodes} + edges` : "";
     return `  ${t.name.padEnd(10)} ${t.summary}${slots ? ` [slots: ${slots}]` : ""}${items}`;
   }).join("\n");
-  const kinds = COMPONENTS.filter((c) => c.kind !== "placeholder")
+  // Grid-only elements are listed in the grid section instead.
+  const gridOnly = new Set(GRID_ELEMENTS.map((e) => e.kind).filter((k) => !["icon", "asset", "chart", "formula"].includes(k)));
+  const kinds = COMPONENTS.filter((c) => c.kind !== "placeholder" && c.kind !== "footer" && !gridOnly.has(c.kind))
     .map((c) => `  ${(c.named === "required" ? `${c.kind}:<name>` : c.kind).padEnd(13)} ${c.summary}`)
     .join("\n");
   const catalog = assets.map((a) => `${a.kind}:${a.name}${a.parts.length ? `(${a.parts.join(",")})` : ""}`).join(" ");
@@ -107,11 +136,33 @@ SLOT HINTS: @${SLOTS.join(" @")} · relative: ${RELATIONS.map((r) => `@${r}:<id>
 ELEMENT KINDS
 ${kinds}
 
+${gridSection()}
+
 ASSETS
 ${catalog}
 
 EXAMPLE
 ${EXAMPLE}`;
+}
+
+/**
+ * Grid scenes (Template Rule Book v2): the frame, the 27 layouts with their
+ * slot sizes, and the 34 elements with their minimum sizes and limits.
+ */
+function gridSection(): string {
+  const mode = frameMode("title", false);
+  const layouts = GRID_LAYOUTS.map((l) => `  ${l.code} ${l.name}: ${slotRects(l, mode).map((r) => `${r.w}×${r.h}`).join(" · ")}`).join("\n");
+  const elements = GRID_ELEMENTS.map((e) => `  ${e.syntax.padEnd(46)} ${e.role.padEnd(7)} min ${e.minW}×${e.minH} · ${e.limits}`).join("\n");
+  return `GRID SCENES (editorial pages): scene <id> "Title" grid=<layout code>
+- Use instead of template=. 1 to 4 content elements fill the layout's slots in declaration order (left→right, top→bottom); that order is also the animation order.
+- Optional frame: title = title "…" (header), subtitle = text "…", foot = footer "source or note". No @placements.
+- Each element fills its whole slot; "draw" plays its built-in motion (counts up, bars grow, items enter in turn).
+- Rules: one element per slot; each slot at least the element's minimum size; at least one primary or flex element; icon, logo, avatar and progress never in the largest slot or alone; max 1 callout, 1 icon, 2 charts; no element twice (except stat and charts).
+- Lists use ";" between items and "|" between the fields of an item.
+LAYOUTS (slot sizes with a title; a subtitle or footer makes them ~50px shorter)
+${layouts}
+GRID ELEMENTS (syntax · role · minimum slot · limits)
+${elements}`;
 }
 
 /** First pass: plan the scenes without writing narration. */
@@ -121,7 +172,7 @@ ${topic}
 
 Output only:
 - the "video 1" line and a "theme" line
-- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template=, followed by one comment line "# goal: <what this scene explains and which visuals it uses>"
+- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# goal: <what this scene explains and which visuals it uses>"
 No elements, narration or actions yet.`;
 }
 

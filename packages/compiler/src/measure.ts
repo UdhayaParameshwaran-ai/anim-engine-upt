@@ -1,5 +1,5 @@
 import type { ElementDecl } from "@anim/dsl";
-import type { AssetLibrary } from "@anim/registry";
+import { gridElementOf, type AssetLibrary } from "@anim/registry";
 
 export interface Size {
   w: number;
@@ -53,8 +53,11 @@ export function measure(el: ElementDecl, assets: AssetLibrary): Size {
     }
     case "placeholder":
       return { w: 280, h: 180 };
-    default:
-      return { w: 240, h: 160 };
+    default: {
+      // Grid elements outside a grid scene: a little above their minimum slot size.
+      const g = gridElementOf(el.kind, el.name);
+      return g ? { w: Math.round(g.minW * 1.2), h: Math.round(g.minH * 1.2) } : { w: 240, h: 160 };
+    }
   }
 }
 

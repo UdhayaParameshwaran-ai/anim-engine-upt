@@ -21,6 +21,7 @@ interface SceneView {
 type Props = Partial<Record<Prop, Value>>;
 type Css = [property: string, value: string][];
 
+let stageCount = 0;
 const SCENE_HTML_BASE = "position: absolute; inset: 0px;";
 
 /**
@@ -55,6 +56,8 @@ export class Stage {
   private readonly height: number;
   private time = 0;
   private resizer: ResizeObserver | undefined;
+  /** Unique per stage, so two stages on one page don't share filter ids. */
+  private readonly markId = `anim-mark-${++stageCount}`;
 
   constructor(
     private readonly container: HTMLElement,
@@ -79,6 +82,7 @@ export class Stage {
 
     this.svgRoot = svg(doc, "svg", { viewBox: `0 0 ${this.width} ${this.height}`, width: this.width, height: this.height }) as SVGSVGElement;
     Object.assign(this.svgRoot.style, { position: "absolute", left: "0", top: "0" });
+    if (this.theme.emphasis === "mark") this.svgRoot.append(this.markFilters(doc));
     this.svgCamera = svg(doc, "g", {
       stroke: this.theme.fg,
       "stroke-width": this.theme.stroke,
@@ -239,13 +243,15 @@ export class Stage {
     // reveal (write) — and `draw` on plain text behaves like a wipe-in.
     const textual = ["title", "text", "label", "list"].includes(inst.el.kind);
     const reveal = Math.min(num(p.reveal, 1), textual ? draw : 1);
+    // Grid elements play their own motion; `write` drives it like `draw`.
+    inst.motion?.(clamp01(Math.min(draw, num(p.reveal, 1))));
     if (inst.layer === "html") style.push(["clip-path", reveal < 1 ? `inset(0 ${round((1 - reveal) * 100)}% 0 0)` : ""]);
     else this.reveal(inst, target, reveal);
 
     // tint (highlight)
     const tint = num(p.tint, 0);
     const c = color(this.theme, this.tintMeta(target).color);
-    style.push(["filter", tint > 0.01 ? `drop-shadow(0 0 ${round(4 * tint)}px ${c}) drop-shadow(0 0 ${round(14 * tint)}px ${c})` : ""]);
+    style.push(["filter", this.emphasis(tint, c, 4, 14)]);
     if (textual) {
       for (const t of root.querySelectorAll("text")) t.setAttribute("fill", tint > 0.01 ? `color-mix(in srgb, ${c} ${Math.round(tint * 100)}%, ${this.theme.fg})` : this.theme.fg);
     }
@@ -277,7 +283,7 @@ export class Stage {
         ["transform-box", "fill-box"],
         ["transform-origin", "center"],
         ["transform", s !== 1 ? `scale(${round(s, 4)})` : ""],
-        ["filter", tint > 0.01 ? `drop-shadow(0 0 ${round(5 * tint)}px ${c}) drop-shadow(0 0 ${round(12 * tint)}px ${c})` : ""],
+        ["filter", this.emphasis(tint, c, 5, 12)],
       ]);
     }
   }
@@ -336,6 +342,27 @@ export class Stage {
     let governing: Tween | undefined;
     if (list) for (const tw of list) if (tw.t0 <= this.time) governing = tw;
     return { color: String(governing?.meta?.color ?? "accent"), style: String(governing?.meta?.style ?? "glow") };
+  }
+
+  /** CSS filter for a highlight of strength `tint`: glow, or one of four marker blocks. */
+  private emphasis(tint: number, c: string, inner: number, outer: number): string {
+    if (tint <= 0.01) return "";
+    if (this.theme.emphasis === "mark") return `url(#${this.markId}-${Math.min(4, Math.ceil(tint * 4))})`;
+    return `drop-shadow(0 0 ${round(inner * tint)}px ${c}) drop-shadow(0 0 ${round(outer * tint)}px ${c})`;
+  }
+
+  /** Marker filters: a flat block filling the target's padded bounding box, under the target. */
+  private markFilters(doc: Document): SVGDefsElement {
+    const defs = svg(doc, "defs", {}) as SVGDefsElement;
+    for (let level = 1; level <= 4; level++) {
+      const f = svg(doc, "filter", { id: `${this.markId}-${level}`, x: -0.04, y: -0.12, width: 1.08, height: 1.24 });
+      f.append(svg(doc, "feFlood", { "flood-color": this.theme.fg, "flood-opacity": round(0.1 * level / 4, 3), result: "mark" }));
+      const merge = svg(doc, "feMerge", {});
+      merge.append(svg(doc, "feMergeNode", { in: "mark" }), svg(doc, "feMergeNode", { in: "SourceGraphic" }));
+      f.append(merge);
+      defs.append(f);
+    }
+    return defs;
   }
 
   /** Detaches the stage from its container. */

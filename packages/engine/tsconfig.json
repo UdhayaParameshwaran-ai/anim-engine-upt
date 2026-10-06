@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "dist", "lib": ["ES2022", "DOM", "DOM.Iterable"] },
   "include": ["src"],
-  "references": [{ "path": "../ir" }, { "path": "../timeline" }]
+  "references": [{ "path": "../ir" }, { "path": "../registry" }, { "path": "../timeline" }]
 }

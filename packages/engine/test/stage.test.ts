@@ -7,6 +7,7 @@ import { resolve } from "@anim/timeline";
 import { MockTtsProvider, speakVideo } from "@anim/tts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { exposeForRender, Player, Stage } from "../src/index.js";
+import { countUp } from "../src/widgets.js";
 
 const EXAMPLES = join(import.meta.dirname, "../../../examples");
 
@@ -135,6 +136,37 @@ describe("stage", () => {
     expect(hook.frames).toBe(Math.round(tl.duration * tl.fps));
     hook.frame(hook.frames - 1);
     expect(stage.currentTime).toBeCloseTo((hook.frames - 1) / tl.fps, 6);
+  });
+});
+
+describe("grid elements", () => {
+  it("count up keeping prefix, suffix and formatting", () => {
+    expect(countUp("94M", 0.5)).toBe("47M");
+    expect(countUp("$1,250.50", 0.2)).toBe("$250.10");
+    expect(countUp("<100", 1)).toBe("<100");
+    expect(countUp("n/a", 0.3)).toBe("n/a");
+  });
+
+  it("render every rule-book element mid-motion identically however the time is reached", async () => {
+    const { ir, tl } = await load("rulebook-gallery.txt");
+    const kinds = new Set(ir.scenes.flatMap((s) => s.elements.map((e) => e.kind)));
+    for (const k of ["multistat", "gauge", "scorecard", "progress", "body", "quote", "callout", "proscons", "bullets", "numbered", "checklist", "chart", "comparison", "timeline", "funnel", "flowchart", "cycle", "matrix", "image", "avatar", "logo", "map", "video"]) {
+      expect(kinds, k).toContain(k);
+    }
+    // Halfway through every draw: the signature motion is mid-flight.
+    const probes = tl.tracks.filter((t) => t.prop === "draw").map((t) => (t.t0 + t.t1) / 2);
+    const html = (s: Stage) => s.root.innerHTML.replace(/anim-mark-\d+/g, "anim-mark");
+    const fresh = probes.map((t) => {
+      const s = new Stage(document.createElement("div"), ir, tl, { autoFit: false });
+      s.render(t);
+      return html(s);
+    });
+    const stage = new Stage(container, ir, tl, { autoFit: false });
+    for (let f = 0; f <= tl.duration * tl.fps; f += 7) stage.render(f / tl.fps);
+    for (const [i, t] of [...probes.entries()].reverse()) {
+      stage.render(t);
+      expect(html(stage), `t=${t}`).toBe(fresh[i]);
+    }
   });
 });
 

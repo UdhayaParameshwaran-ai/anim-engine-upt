@@ -35,7 +35,7 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
   let prevBoxes = new Map<string, Box>();
   let prevElements = new Map<string, ElementIR>();
 
-  for (const scene of script.scenes) {
+  for (const [sceneIndex, scene] of script.scenes.entries()) {
     const keep = (scene.attrs.keep ?? "").split(",").filter(Boolean);
     const kept = new Map(keep.filter((id) => prevBoxes.has(id)).map((id) => [id, prevBoxes.get(id)!]));
     const layout = layoutScene(scene, ctx, kept);
@@ -45,6 +45,15 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
     scene.steps.forEach((step, si) => {
       for (const el of step.elements) elements.push(lowerElement(el, si, layout, assets, lock));
     });
+    if (scene.attrs.grid !== undefined) {
+      // Editorial frame: left-aligned header, footer with brand and page number.
+      for (const el of elements) {
+        if ((el.id === "title" || el.id === "subtitle") && ["title", "text", "label"].includes(el.kind)) {
+          el.params = { ...el.params, align: "left", ...(el.id === "subtitle" && { tone: "muted" }) };
+        }
+        if (el.kind === "footer") el.params = { ...el.params, page: sceneIndex + 1, brand: script.title ?? "" };
+      }
+    }
 
     const ir: SceneIR = {
       id: scene.id,
@@ -78,7 +87,8 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
       dslVersion: script.version,
       ...(script.title !== undefined && { title: script.title }),
       canvas: { width: w!, height: h!, fps },
-      theme: setting(script.settings, "theme")?.[0] ?? DEFAULTS.theme,
+      // Grid scenes are designed for the monochrome editorial theme.
+      theme: setting(script.settings, "theme")?.[0] ?? (script.scenes.some((s) => s.attrs.grid !== undefined) ? "editorial" : DEFAULTS.theme),
       voice: setting(script.settings, "voice")?.[0] ?? DEFAULTS.voice,
       lang: setting(script.settings, "lang")?.[0] ?? DEFAULTS.lang,
       scenes,

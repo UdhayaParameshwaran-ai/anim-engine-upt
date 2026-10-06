@@ -96,11 +96,29 @@ export function partsOf(el: PartsInput, assets: AssetLibrary, components: readon
   const text = el.texts[0] ?? "";
   let n: number;
   if (p === "items") {
-    if (el.kind === "list") n = text.split(";").filter((s) => s.trim()).length;
-    else if (el.kind === "chart") n = (el.attrs.data ?? "").split(",").filter(Boolean).length;
-    else return "any";
+    if (el.kind === "chart") n = (el.attrs.data ?? "").split(",").filter(Boolean).length;
+    else if (el.kind === "scorecard") n = Number(el.attrs.max ?? 5) || 5;
+    else if (el.kind === "flowchart") n = flowNodes(text).length;
+    else if (el.kind === "comparison" || el.kind === "matrix") n = items(el.texts[1] ?? "").length;
+    else if (el.kind === "formula") return "any";
+    else n = items(text).length;
   } else {
     n = (text.match(/\[[^\]]+\]/g) ?? []).length;
   }
   return Array.from({ length: n }, (_, i) => String(i + 1));
+}
+
+function items(text: string): string[] {
+  return text.split(";").map((s) => s.trim()).filter(Boolean);
+}
+
+/** Node names of a flowchart spec `A>B;B>C:label`, in order of first appearance. */
+export function flowNodes(spec: string): string[] {
+  const nodes: string[] = [];
+  for (const edge of items(spec)) {
+    const [from, rest = ""] = edge.split(">").map((s) => s.trim()) as [string, string?];
+    const to = rest.split(":")[0]!.trim();
+    for (const n of [from, to]) if (n && !nodes.includes(n)) nodes.push(n);
+  }
+  return nodes;
 }

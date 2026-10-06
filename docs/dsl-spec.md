@@ -101,6 +101,32 @@ The registry (`packages/registry`) is the source of truth for verbs, their param
 
 `icon:` and `asset:` names come from the **semantic SVG library** (`sun`, `leaf`, `cell.plant`). An unknown name is matched through synonyms, or replaced with a labeled placeholder plus a warning.
 
+### 6a. Grid scenes (Template Rule Book v2)
+
+`scene <id> "Title" grid=<code>` lays the scene out as an editorial page instead of a template. The full reference is [`rulebook-v2.html`](rulebook-v2.html); the data lives in `packages/registry/src/grid.ts`.
+
+- **Frame:** `title = title "…"` fills the header, `subtitle = text "…"` adds a subtitle, `<id> = footer "note"` adds a footer (brand, note, page number). These choose one of six frame modes; missing zones give their space to the content.
+- **Layouts:** 27 approved codes (`L1-01` … `L4-08`) on a 12-column grid with 96 px margins and 32 px gaps.
+- **Content:** 1 to 4 elements, filling the slots in declaration order (left to right, top to bottom). That order is also the animation order. Each element takes its whole slot. `@` placements are ignored.
+- **Elements:** `stat` `multistat` `gauge` `scorecard` `progress` `body` `quote` `callout` `definition` `proscons` `formula` `bullets` `numbered` `checklist` `chart:bar|line|pie` `table` `comparison` `stepper` `timeline` `flowchart` `funnel` `cycle` `matrix` `image` `video` `avatar` `logo` `map` `icon:<name>` `asset:<name>`. Lists use `;` between items and `|` between the fields of an item, e.g. `timeline "1796|Smallpox;1955|Polio"` or `flowchart "Start>Check;Check>Done:yes"`.
+- **Motion:** `draw` plays each element's signature motion (stats count up, bars grow, ticks draw, items enter in turn). `fade`/`pop` show it finished.
+- **Theme:** grid scenes default to the monochrome `editorial` theme unless `theme` is set. Highlights there are flat marker blocks, not glows.
+
+| Code | Rule | Check | Auto-fix |
+|---|---|---|---|
+| NAR420 | R2 | Unknown layout code | Closest code, or a layout with the right slot count |
+| NAR421 | R1/R3 | Element count ≠ slot count, or more than 4 | Same-size layout (same family first) |
+| NAR422 | — | Element that can't fill a slot | `text`→`body`, `list`→`bullets`, `card`→`definition`, `label`→`callout` |
+| NAR423 | R4 | Slot smaller than the element's minimum | Another layout where everything fits (warning if none) |
+| NAR424 | R5 | Only support elements | — |
+| NAR425 | R6 | Icon/logo/avatar/progress in the largest slot or alone | Another layout (warning if none) |
+| NAR426 | R7 | More than 1 callout, 1 icon or 2 charts | — |
+| NAR427 | R8 | Same element twice (except stat, charts) (warning) | — |
+| NAR428 | R10 | Text or item limits exceeded (warning) | — |
+| NAR429 | R11 | Shown order ≠ slot order (warning) | Reorder the declarations |
+| NAR430 | — | Both `grid=` and `template=` | Drop `template` |
+| NAR431 | — | `@` placement in a grid scene (warning) | Drop it |
+
 ## 7. Diagnostics (parser, L1)
 
 | Code | Meaning |

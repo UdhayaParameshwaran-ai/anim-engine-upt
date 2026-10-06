@@ -6,5 +6,5 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
-  "dependencies": { "@anim/ir": "workspace:*", "@anim/timeline": "workspace:*" }
+  "dependencies": { "@anim/ir": "workspace:*", "@anim/registry": "workspace:*", "@anim/timeline": "workspace:*" }
 }

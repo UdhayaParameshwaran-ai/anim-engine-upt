@@ -104,6 +104,9 @@ importers:
       '@anim/ir':
         specifier: workspace:*
         version: link:../ir
+      '@anim/registry':
+        specifier: workspace:*
+        version: link:../registry
       '@anim/timeline':
         specifier: workspace:*
         version: link:../timeline

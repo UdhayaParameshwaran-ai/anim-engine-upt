@@ -20,6 +20,7 @@ import {
   type VerbManifest,
 } from "@anim/registry";
 import { closest } from "./fuzzy.js";
+import { checkGrid } from "./grid.js";
 
 export interface ValidateOptions {
   assets?: AssetLibrary;
@@ -383,6 +384,10 @@ class Validator {
   }
 
   private template(scene: Scene, own: ElementDecl[]): void {
+    if (scene.attrs.grid !== undefined) {
+      checkGrid(scene, own, { autofix: this.autofix, error: this.error.bind(this), warn: this.warn.bind(this) });
+      return;
+    }
     const tpl = scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
     if (!tpl) return;
     const slotNames = new Set(tpl.slots.map((s) => s.name));

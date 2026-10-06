@@ -1,0 +1,38 @@
+video 1 "How Vaccines Work"
+
+scene numbers "By the numbers" grid=L3-02 in=fade
+title = title "Vaccines save millions of lives"
+subtitle = text "Measles vaccination, worldwide"
+chart = chart:bar data=12,48,72,85 labels=1980,1995,2010,2020
+saved = stat "94M" "deaths prevented since 1974"
+note = callout "Coverage above 95% stops outbreaks."
+foot = footer "Source: WHO immunization data"
+> Over four decades, {1}measles vaccination climbed past eighty percent.
+start write title
+start fade subtitle,foot
+1 draw chart
+> That has prevented {1 ninety-four million} deaths.
+1 draw saved
+> Once coverage passes {1 ninety-five percent}, outbreaks stop spreading.
+1 draw note
+
+scene how "How the immune system learns" grid=L2-01 in=slide
+title = title "Training the immune system"
+steps = stepper "Inject|a harmless piece of the germ;Detect|immune cells spot it;Remember|memory cells stay ready"
+facts = checklist "No disease needed;Lasts for years;Protects others too"
+> A vaccine shows your body a {1}harmless piece of a germ.
+start write title
+1 draw steps
+> The body learns, and {1}remembers, without getting sick.
+1 draw facts
+end highlight facts.1
+
+scene compare "With and without" grid=L2-07 in=fade
+title = title "Why it matters"
+key = definition "Herd immunity" "When enough people are immune, a germ can't find new hosts."
+table = table "Disease|Before|After;Measles|2.6M|128K;Polio|350K|<100;Tetanus|787K|25K" key=2
+> {1 Herd immunity} protects people who can't be vaccinated.
+start write title
+1 draw key
+> Deaths from measles fell {1}twenty-fold.
+1 draw table

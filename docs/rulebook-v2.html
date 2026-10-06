@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Template Rule Book v2</title>
+<style>
+/* Layout concept: sticky section nav on the left, one long reference page on the right, drawn like a sheet in a drawing set (mono labels, hairlines, square corners). */
+@font-face{font-family:"Inter";font-weight:400;src:url("assets/fonts/inter-400.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"Inter";font-weight:600;src:url("assets/fonts/inter-600.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"Inter";font-weight:700;src:url("assets/fonts/inter-700.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"JetBrains Mono";font-weight:400;src:url("assets/fonts/jbmono-400.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"JetBrains Mono";font-weight:600;src:url("assets/fonts/jbmono-600.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"JetBrains Mono";font-weight:700;src:url("assets/fonts/jbmono-700.woff2") format("woff2");font-display:swap}
+
+:root{
+  --bg:#FFFFFF; --ink:#000000; --text:#222222; --mute:#555555; --rule:#D9D9D9; --fill:#F2F2F2; --inv:#FFFFFF;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0C0C0C;--ink:#FFFFFF;--text:#E4E4E4;--mute:#9A9A9A;--rule:#2E2E2E;--fill:#171717;--inv:#0C0C0C;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0C0C0C;--ink:#FFFFFF;--text:#E4E4E4;--mute:#9A9A9A;--rule:#2E2E2E;--fill:#171717;--inv:#0C0C0C;color-scheme:dark}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{background:var(--bg);color:var(--text);font:400 17px/26px var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3{color:var(--ink);text-wrap:balance}
+button,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--ink);border-radius:0;padding:8px 12px;cursor:pointer}
+button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.mono{font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;font-size:12px;line-height:16px;color:var(--mute);font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+
+/* frame */
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1480px;margin:0 auto}
+nav.side{position:sticky;top:0;align-self:start;height:100vh;padding:32px 24px 32px 16px;border-right:1px solid var(--rule);display:flex;flex-direction:column;gap:24px;overflow:auto}
+nav.side .brand{display:flex;flex-direction:column;gap:4px}
+nav.side .brand b{font-size:18px;line-height:24px;color:var(--ink)}
+nav.side ol{list-style:none;display:flex;flex-direction:column}
+nav.side a{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--rule);color:var(--text);text-decoration:none;font-size:15px;line-height:20px}
+nav.side a span{font-family:var(--mono);font-size:12px;color:var(--mute);width:20px;flex:none;padding-top:2px}
+nav.side a:hover,nav.side a.on{color:var(--ink);font-weight:600}
+nav.side a.on{border-bottom-color:var(--ink)}
+main{padding:48px 32px 96px;min-width:0;display:flex;flex-direction:column;gap:80px}
+@media (max-width:1000px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  nav.side{position:sticky;top:0;z-index:20;height:auto;flex-direction:row;align-items:center;gap:16px;padding:8px 16px;border-right:0;border-bottom:1px solid var(--ink);background:var(--bg);overflow-x:auto}
+  nav.side .brand{display:none}
+  nav.side ol{flex-direction:row;gap:16px}
+  nav.side a{border:0;white-space:nowrap;padding:8px 0}
+  nav.side a span{display:none}
+  main{padding:32px 16px 64px;gap:56px}
+}
+
+section>header{display:flex;flex-direction:column;gap:8px;border-top:2px solid var(--ink);padding-top:16px;margin-bottom:32px;max-width:760px}
+section>header h2{font-size:36px;line-height:42px;letter-spacing:-.02em}
+section>header p{color:var(--mute)}
+h3{font-size:20px;line-height:28px}
+
+/* hero */
+.hero{display:flex;flex-direction:column;gap:24px;padding-bottom:8px}
+.hero h1{font-size:clamp(40px,6vw,72px);line-height:1.04;letter-spacing:-.03em;max-width:900px}
+.hero p.lead{font-size:20px;line-height:30px;max-width:720px;color:var(--text)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid var(--ink);border-left:1px solid var(--rule)}
+.stat{padding:16px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:4px}
+.stat b{font:700 44px/44px var(--mono);letter-spacing:-.04em;color:var(--ink)}
+.changes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.change{border:1px solid var(--rule);padding:16px;display:flex;flex-direction:column;gap:8px}
+.change.hl{background:var(--ink);color:var(--inv);border-color:var(--ink)}
+.change.hl h3,.change.hl .mono{color:var(--inv)}
+.change p{font-size:15px;line-height:22px}
+
+/* sheets (page diagrams) */
+.sheet{position:relative;width:100%;aspect-ratio:16/9;background:var(--bg);border:1px solid var(--ink);overflow:hidden;container-type:inline-size}
+.sheet i{position:absolute;display:block;font-style:normal}
+.sheet .zone{background:repeating-linear-gradient(45deg,var(--rule) 0 1px,transparent 1px 7px)}
+.sheet .zl{font:600 clamp(7px,1.9cqw,11px)/1 var(--mono);color:var(--mute);display:flex;align-items:center;padding-left:6px;text-transform:uppercase;letter-spacing:.06em;background:none}
+.sheet .slot{background:var(--fill);border:1px solid var(--ink);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.sheet .slot.big{background:var(--bg)}
+.sheet .sn{position:absolute;left:4px;top:3px;font:700 clamp(8px,2.3cqw,13px)/1 var(--mono);color:var(--ink)}
+.sheet .slot svg{width:82%;height:82%}
+svg .s{stroke:var(--ink);fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke}
+svg .h{stroke:var(--ink);fill:var(--fill);stroke-width:1.6;vector-effect:non-scaling-stroke}
+svg .f{fill:var(--ink);stroke:none}
+svg .g{fill:var(--mute);stroke:none;opacity:.55}
+svg .m{font-family:var(--mono);font-weight:700;fill:var(--ink)}
+svg .w{fill:var(--bg)}
+.sheet .slot .sn+svg{margin-top:6px}
+
+/* chips and filters */
+.toolbar{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;margin-bottom:24px;padding:16px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.toolbar .grp{display:flex;flex-direction:column;gap:6px;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{padding:6px 12px;font-size:14px}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--inv)}
+.badge{display:inline-block;font:600 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:1px 6px;border:1px solid var(--ink);color:var(--ink);white-space:nowrap}
+.badge.new{background:var(--ink);color:var(--inv)}
+.badge.soft{border-color:var(--rule);color:var(--mute)}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:24px}
+.card{border:1px solid var(--rule);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card.is-new{border-color:var(--ink)}
+.card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.card h3{font-size:17px;line-height:24px}
+.card .sub{margin-top:2px}
+.slots{list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:18px;color:var(--mute)}
+.slots li{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:baseline;border-top:1px solid var(--rule);padding-top:6px}
+.slots b{font-family:var(--mono);color:var(--ink)}
+.slots .shp{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.card .try{align-self:flex-start;font-size:14px;padding:6px 12px}
+.family{margin:40px 0 16px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;border-bottom:1px solid var(--rule);padding-bottom:8px}
+.family:first-child{margin-top:0}
+.family h3{font-size:20px}
+
+/* modes */
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:24px}
+.mode{display:flex;flex-direction:column;gap:10px}
+.mode dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:14px;line-height:20px}
+.mode dt{color:var(--mute)}
+.mode dd{font-family:var(--mono);color:var(--ink)}
+.anatomy{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:32px;align-items:center;margin-bottom:40px}
+@media (max-width:800px){.anatomy{grid-template-columns:minmax(0,1fr)}}
+.anatomy ul{list-style:none;display:flex;flex-direction:column;gap:12px}
+.anatomy li{border-top:1px solid var(--rule);padding-top:12px;font-size:16px;line-height:24px}
+.anatomy li b{color:var(--ink)}
+
+/* elements */
+.el .pv{background:var(--fill);border:1px solid var(--rule);aspect-ratio:8/5;display:flex;align-items:center;justify-content:center}
+.el .pv svg{width:70%;height:84%}
+.el .what{font-size:15px;line-height:22px;color:var(--text)}
+.el dl{display:grid;grid-template-columns:76px 1fr;gap:6px 12px;font-size:13px;line-height:19px}
+.el dt{font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--mute);padding-top:2px}
+.el dd{color:var(--text);min-width:0}
+.fits{display:flex;flex-wrap:wrap;gap:4px}
+.fit{font:600 10px/14px var(--mono);text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border:1px solid var(--ink);white-space:nowrap}
+.fit.y{background:var(--ink);color:var(--inv)}
+.fit.s{background:var(--bg);color:var(--ink)}
+.fit.n{border-color:var(--rule);color:var(--mute);text-decoration:line-through}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:13px;color:var(--mute)}
+
+/* shapes */
+.shapes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:24px;align-items:end}
+.shape{display:flex;flex-direction:column;gap:10px}
+.shape .box{background:var(--fill);border:1px solid var(--ink);display:flex;align-items:center;justify-content:center;max-width:100%;font:700 22px/1 var(--mono);color:var(--ink)}
+.shape p{font-size:14px;line-height:20px;color:var(--mute)}
+.shape b{color:var(--ink)}
+.tablewrap{overflow-x:auto;margin-top:32px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:20px;min-width:560px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mute);background:var(--fill)}
+td.mn{font-family:var(--mono);color:var(--ink);white-space:nowrap}
+
+/* rules */
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
+.rule{border:1px solid var(--rule);padding:16px;display:grid;grid-template-columns:44px 1fr;gap:12px;min-width:0}
+.rule .id{font:700 18px/24px var(--mono);color:var(--ink)}
+.rule h3{font-size:17px;line-height:24px;margin-bottom:4px}
+.rule p{font-size:15px;line-height:22px;color:var(--text)}
+
+/* builder */
+.builder{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);gap:32px;align-items:start}
+@media (max-width:900px){.builder{grid-template-columns:minmax(0,1fr)}}
+.picks{display:flex;flex-direction:column;gap:12px}
+.pick{display:grid;grid-template-columns:1fr;gap:4px}
+.pick label{display:flex;justify-content:space-between;gap:8px}
+.pick select{width:100%}
+.checks{list-style:none;display:flex;flex-direction:column;border-top:1px solid var(--ink)}
+.checks li{display:grid;grid-template-columns:44px 1fr auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px;line-height:20px;align-items:baseline}
+.checks b{font-family:var(--mono);color:var(--ink)}
+.checks .ok,.checks .bad{font:700 11px/16px var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:1px 6px;border:1px solid var(--ink)}
+.checks .ok{background:var(--ink);color:var(--inv)}
+.checks .bad{background:var(--bg);color:var(--ink);text-decoration:underline wavy}
+.verdict{font:700 20px/28px var(--sans);color:var(--ink);margin:12px 0}
+.note{font-size:14px;line-height:21px;color:var(--mute);max-width:720px}
+
+/* growth */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:32px}
+ol.test{padding-left:24px;display:flex;flex-direction:column;gap:8px}
+ol.test li{padding-left:4px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="Sections">
+    <div class="brand"><span class="mono">Template rules</span><b>Rule Book v2</b></div>
+    <ol id="nav"></ol>
+  </nav>
+  <main>
+
+  <section id="overview" class="hero">
+    <span class="mono">Version 2 · Monochrome editorial · 1920 × 1080</span>
+    <h1>Every template is a frame, a grid and a few slots.</h1>
+    <p class="lead">This page is the rulebook for building templates: what the page frame allows, which slot layouts are approved, what can go in each slot, and how to check a template before it is made.</p>
+    <div class="stats" id="stats"></div>
+    <div>
+      <h3 style="margin-bottom:12px">What is new in v2</h3>
+      <div class="changes" id="changes"></div>
+    </div>
+  </section>
+
+  <section id="frame">
+    <header><span class="mono">01 · Frame</span><h2>The page frame and its six sizes</h2><p>A template has up to three zones. Only the content zone is required. Turning the header or footer on or off changes only the height of the content area, giving six modes.</p></header>
+    <div class="anatomy">
+      <div id="anatomySheet"></div>
+      <ul>
+        <li><b>Header</b> holds the title and an optional subtitle. Three options: none, title only, title and subtitle.</li>
+        <li><b>Content</b> holds 1 to 4 slots on a 12-column grid. Margin 96 px, gap 32 px.</li>
+        <li><b>Footer</b> holds the brand mark, a note and the page number. Two options: off or on.</li>
+        <li><b>Missing zones collapse.</b> The content area grows into the freed space. There are never empty bands.</li>
+      </ul>
+    </div>
+    <div class="modes" id="modes"></div>
+  </section>
+
+  <section id="layouts">
+    <header><span class="mono">02 · Layouts</span><h2>27 approved slot layouts</h2><p>Grouped by family. Sizes below change with the header and footer mode you pick. Black tags mark the four layouts added in v2.</p></header>
+    <div class="toolbar">
+      <div class="grp"><span class="mono">Header</span><select id="lh"><option value="sub">Title + subtitle</option><option value="title">Title only</option><option value="none">None</option></select></div>
+      <div class="grp"><span class="mono">Footer</span><select id="lf"><option value="on">On</option><option value="off">Off</option></select></div>
+      <div class="grp"><span class="mono">Slots</span><div class="chips" id="lc"></div></div>
+      <div class="grp"><span class="mono" id="lmode"></span></div>
+    </div>
+    <div id="layoutList"></div>
+  </section>
+
+  <section id="elements">
+    <header><span class="mono">03 · Elements</span><h2>34 elements that can go in a slot</h2><p>Each slot holds one element. Core elements are already used in your templates. New ones are added in v2 and are ready to build. The chips show how well each element fits each slot shape (see section 04).</p></header>
+    <div class="toolbar">
+      <div class="grp"><span class="mono">Content type</span><div class="chips" id="eg"></div></div>
+      <div class="grp"><span class="mono">Status</span><div class="chips" id="es"></div></div>
+      <div class="grp"><span class="mono">Role</span><div class="chips" id="er"></div></div>
+    </div>
+    <div class="legend" style="margin-bottom:24px"><span><span class="fit y">yes</span> fits at least 80% of that shape's sizes</span><span><span class="fit s">some</span> fits some</span><span><span class="fit n">no</span> almost never</span><span><b style="color:var(--ink)">primary</b> can carry a template · <b style="color:var(--ink)">flex</b> can carry or support · <b style="color:var(--ink)">support</b> never alone</span></div>
+    <div class="grid" id="elGrid"></div>
+  </section>
+
+  <section id="shapes">
+    <header><span class="mono">04 · Slot shapes</span><h2>Five slot shapes, one image ratio each</h2><p>There are many slot sizes but only five shapes. Prepare one asset per shape instead of one per slot. Always supply the asset 20% larger than the slot, with the subject in the middle 60%.</p></header>
+    <div class="shapes" id="shapeRow"></div>
+    <div class="tablewrap"><table id="shapeTable"></table></div>
+  </section>
+
+  <section id="rules">
+    <header><span class="mono">05 · Rules</span><h2>Twelve rules a template must pass</h2><p>R3 to R8 are checked automatically in the builder below. The rest are checked by eye.</p></header>
+    <div class="rules" id="ruleList"></div>
+  </section>
+
+  <section id="builder">
+    <header><span class="mono">06 · Builder</span><h2>Try a layout and check the rules</h2><p>Pick a layout and fill each slot. The checks on the right update as you go. This does not save anything. It is a rehearsal for what a template will need.</p></header>
+    <div class="toolbar">
+      <div class="grp"><span class="mono">Layout</span><select id="bl"></select></div>
+      <div class="grp"><span class="mono">Header</span><select id="bh"><option value="sub">Title + subtitle</option><option value="title">Title only</option><option value="none">None</option></select></div>
+      <div class="grp"><span class="mono">Footer</span><select id="bf"><option value="on">On</option><option value="off">Off</option></select></div>
+      <div class="grp"><button id="breset" type="button">Reset slots</button></div>
+    </div>
+    <div class="builder">
+      <div><div id="bsheet"></div><p class="note" style="margin-top:12px" id="bnote"></p></div>
+      <div>
+        <div class="picks" id="picks"></div>
+        <div class="verdict" id="verdict"></div>
+        <ul class="checks" id="checks"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="growth">
+    <header><span class="mono">07 · Growth</span><h2>27 approved, about 220 possible</h2><p>The gap is always 32 px and a template has at most 4 slots, so the only thing that can grow is where the cuts fall on the grid. The 27 layouts are a chosen set, not a limit.</p></header>
+    <div class="two">
+      <div>
+        <h3 style="margin-bottom:12px">How many layouts the grid allows</h3>
+        <div class="tablewrap" style="margin-top:0"><table style="min-width:0">
+          <tr><th>Slots</th><th>Possible</th><th>Distinct (mirrors merged)</th><th>Approved</th></tr>
+          <tr><td class="mn">1</td><td class="mn">1</td><td class="mn">1</td><td class="mn" id="g1"></td></tr>
+          <tr><td class="mn">2</td><td class="mn">10</td><td class="mn">6</td><td class="mn" id="g2"></td></tr>
+          <tr><td class="mn">3</td><td class="mn">~97</td><td class="mn">~34</td><td class="mn" id="g3"></td></tr>
+          <tr><td class="mn">4</td><td class="mn">~622</td><td class="mn">~182</td><td class="mn" id="g4"></td></tr>
+        </table></div>
+        <p class="note" style="margin-top:12px">Counts assume cuts at columns 3 to 9 or at 1/3, 1/2, 2/3 of the height, with each slot at least 3 columns wide (408 px) and 150 px tall. They are an estimate. Most of the unapproved ones are awkward, with very uneven or thin slots.</p>
+      </div>
+      <div>
+        <h3 style="margin-bottom:12px">Test for adding a new layout</h3>
+        <ol class="test">
+          <li>It has 1 to 4 slots.</li>
+          <li>Every vertical cut is on the 12-column grid. Every horizontal cut is at 1/3, 1/2 or 2/3.</li>
+          <li>Every slot is at least 408 px wide and 150 px tall.</li>
+          <li>It passes rules R3 to R8 with a realistic set of elements.</li>
+          <li>It gets the next free code <span class="mono">L{n}-{nn}</span>, a card in the layout section and a row in the JSON file.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+const D = {"version": 2, "canvas": {"width": 1920, "height": 1080, "margin": 96, "columns": 12, "gutter": 32, "baseline": 8}, "modes": [{"id": "A", "header": "sub", "footer": true, "y": 230, "h": 750}, {"id": "B", "header": "title", "footer": true, "y": 184, "h": 796}, {"id": "C", "header": "none", "footer": true, "y": 96, "h": 884}, {"id": "D", "header": "sub", "footer": false, "y": 230, "h": 754}, {"id": "E", "header": "title", "footer": false, "y": 184, "h": 800}, {"id": "F", "header": "none", "footer": false, "y": 96, "h": 888}], "layouts": [{"code": "L1-01", "name": "Full width", "family": "Single", "rows": 1, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 1}], "built": "TPL-001", "new": false, "note": ""}, {"code": "L1-02", "name": "Centered", "family": "Single", "rows": 1, "slots": [{"col": 3, "span": 8, "row": 0, "row_span": 1}], "built": "TPL-002", "new": false, "note": "cols 3 to 10, one focal element"}, {"code": "L2-01", "name": "Side by side 50/50", "family": "Columns", "rows": 1, "slots": [{"col": 1, "span": 6, "row": 0, "row_span": 1}, {"col": 7, "span": 6, "row": 0, "row_span": 1}], "built": "TPL-003", "new": false, "note": ""}, {"code": "L2-02", "name": "Stacked 50/50", "family": "Rows", "rows": 2, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 1}, {"col": 1, "span": 12, "row": 1, "row_span": 1}], "built": "TPL-006", "new": false, "note": ""}, {"code": "L2-03", "name": "Left 1/3 + Right 2/3", "family": "Columns", "rows": 1, "slots": [{"col": 1, "span": 4, "row": 0, "row_span": 1}, {"col": 5, "span": 8, "row": 0, "row_span": 1}], "built": "TPL-004", "new": false, "note": ""}, {"code": "L2-04", "name": "Left 2/3 + Right 1/3", "family": "Columns", "rows": 1, "slots": [{"col": 1, "span": 8, "row": 0, "row_span": 1}, {"col": 9, "span": 4, "row": 0, "row_span": 1}], "built": "TPL-005", "new": false, "note": ""}, {"code": "L2-05", "name": "Left 5/12 + Right 7/12", "family": "Columns", "rows": 1, "slots": [{"col": 1, "span": 5, "row": 0, "row_span": 1}, {"col": 6, "span": 7, "row": 0, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L2-06", "name": "Left 7/12 + Right 5/12", "family": "Columns", "rows": 1, "slots": [{"col": 1, "span": 7, "row": 0, "row_span": 1}, {"col": 8, "span": 5, "row": 0, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L2-07", "name": "Banner top 1/3 + Body 2/3", "family": "Rows", "rows": 3, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 1}, {"col": 1, "span": 12, "row": 1, "row_span": 2}], "built": null, "new": false, "note": ""}, {"code": "L2-08", "name": "Body 2/3 + Banner bottom 1/3", "family": "Rows", "rows": 3, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 2}, {"col": 1, "span": 12, "row": 2, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L2-09", "name": "Narrow rail + Wide body", "family": "Rail", "rows": 1, "slots": [{"col": 1, "span": 3, "row": 0, "row_span": 1}, {"col": 4, "span": 9, "row": 0, "row_span": 1}], "built": null, "new": true, "note": "3 cols + 9 cols"}, {"code": "L3-01", "name": "Three columns", "family": "Columns", "rows": 1, "slots": [{"col": 1, "span": 4, "row": 0, "row_span": 1}, {"col": 5, "span": 4, "row": 0, "row_span": 1}, {"col": 9, "span": 4, "row": 0, "row_span": 1}], "built": "TPL-005 (arch)", "new": false, "note": ""}, {"code": "L3-02", "name": "Big left + 2 stacked right", "family": "Featured", "rows": 2, "slots": [{"col": 1, "span": 7, "row": 0, "row_span": 2}, {"col": 8, "span": 5, "row": 0, "row_span": 1}, {"col": 8, "span": 5, "row": 1, "row_span": 1}], "built": "TPL-007", "new": false, "note": ""}, {"code": "L3-03", "name": "2 stacked left + Big right", "family": "Featured", "rows": 2, "slots": [{"col": 1, "span": 5, "row": 0, "row_span": 1}, {"col": 1, "span": 5, "row": 1, "row_span": 1}, {"col": 6, "span": 7, "row": 0, "row_span": 2}], "built": "TPL-010", "new": false, "note": ""}, {"code": "L3-04", "name": "Wide top + 2 bottom", "family": "Banner", "rows": 2, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 1}, {"col": 1, "span": 6, "row": 1, "row_span": 1}, {"col": 7, "span": 6, "row": 1, "row_span": 1}], "built": "TPL-007 (arch)", "new": false, "note": ""}, {"code": "L3-05", "name": "2 top + Wide bottom", "family": "Banner", "rows": 2, "slots": [{"col": 1, "span": 6, "row": 0, "row_span": 1}, {"col": 7, "span": 6, "row": 0, "row_span": 1}, {"col": 1, "span": 12, "row": 1, "row_span": 1}], "built": "TPL-008", "new": false, "note": ""}, {"code": "L3-06", "name": "Three rows (list view)", "family": "Rows", "rows": 3, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 1}, {"col": 1, "span": 12, "row": 1, "row_span": 1}, {"col": 1, "span": 12, "row": 2, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L3-07", "name": "Rail + 2 stacked", "family": "Rail", "rows": 2, "slots": [{"col": 1, "span": 3, "row": 0, "row_span": 2}, {"col": 4, "span": 9, "row": 0, "row_span": 1}, {"col": 4, "span": 9, "row": 1, "row_span": 1}], "built": null, "new": true, "note": "3 cols rail, two 9-col rows"}, {"code": "L3-08", "name": "Hero 2/3 + 2 thin bottom", "family": "Banner", "rows": 3, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 2}, {"col": 1, "span": 6, "row": 2, "row_span": 1}, {"col": 7, "span": 6, "row": 2, "row_span": 1}], "built": null, "new": true, "note": "hero is the top two thirds"}, {"code": "L4-01", "name": "2 x 2 grid", "family": "Grid", "rows": 2, "slots": [{"col": 1, "span": 6, "row": 0, "row_span": 1}, {"col": 7, "span": 6, "row": 0, "row_span": 1}, {"col": 1, "span": 6, "row": 1, "row_span": 1}, {"col": 7, "span": 6, "row": 1, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L4-02", "name": "Four columns", "family": "Columns", "rows": 1, "slots": [{"col": 1, "span": 3, "row": 0, "row_span": 1}, {"col": 4, "span": 3, "row": 0, "row_span": 1}, {"col": 7, "span": 3, "row": 0, "row_span": 1}, {"col": 10, "span": 3, "row": 0, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L4-03", "name": "Four rows (list view)", "family": "Rows", "rows": 4, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 1}, {"col": 1, "span": 12, "row": 1, "row_span": 1}, {"col": 1, "span": 12, "row": 2, "row_span": 1}, {"col": 1, "span": 12, "row": 3, "row_span": 1}], "built": null, "new": false, "note": "short elements only"}, {"code": "L4-04", "name": "Big left + 3 stacked right", "family": "Featured", "rows": 3, "slots": [{"col": 1, "span": 7, "row": 0, "row_span": 3}, {"col": 8, "span": 5, "row": 0, "row_span": 1}, {"col": 8, "span": 5, "row": 1, "row_span": 1}, {"col": 8, "span": 5, "row": 2, "row_span": 1}], "built": "TPL-009", "new": false, "note": ""}, {"code": "L4-05", "name": "3 stacked left + Big right", "family": "Featured", "rows": 3, "slots": [{"col": 1, "span": 5, "row": 0, "row_span": 1}, {"col": 1, "span": 5, "row": 1, "row_span": 1}, {"col": 1, "span": 5, "row": 2, "row_span": 1}, {"col": 6, "span": 7, "row": 0, "row_span": 3}], "built": null, "new": false, "note": ""}, {"code": "L4-06", "name": "Wide top + 3 bottom", "family": "Banner", "rows": 2, "slots": [{"col": 1, "span": 12, "row": 0, "row_span": 1}, {"col": 1, "span": 4, "row": 1, "row_span": 1}, {"col": 5, "span": 4, "row": 1, "row_span": 1}, {"col": 9, "span": 4, "row": 1, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L4-07", "name": "3 top + Wide bottom", "family": "Banner", "rows": 2, "slots": [{"col": 1, "span": 4, "row": 0, "row_span": 1}, {"col": 5, "span": 4, "row": 0, "row_span": 1}, {"col": 9, "span": 4, "row": 0, "row_span": 1}, {"col": 1, "span": 12, "row": 1, "row_span": 1}], "built": null, "new": false, "note": ""}, {"code": "L4-08", "name": "Offset 2 + 2 (7/5 over 5/7)", "family": "Grid", "rows": 2, "slots": [{"col": 1, "span": 7, "row": 0, "row_span": 1}, {"col": 8, "span": 5, "row": 0, "row_span": 1}, {"col": 1, "span": 5, "row": 1, "row_span": 1}, {"col": 6, "span": 7, "row": 1, "row_span": 1}], "built": null, "new": true, "note": "staggered rows"}], "elements": [{"id": "image", "name": "Image", "group": "Pictures", "role": "primary", "min_w": 400, "min_h": 300, "status": "core", "what": "A photo or screenshot, cropped to the slot.", "limits": "Cover crop with a focal point. Supply 20% larger than the slot.", "motion": "Slow push-in, scale 1 to 1.04 over the scene.", "used": "TPL-001, 003, 010"}, {"id": "illustration", "name": "Illustration", "group": "Pictures", "role": "primary", "min_w": 400, "min_h": 300, "status": "core", "what": "A flat vector drawing or diagram scene.", "limits": "Monochrome line and fill. Same crop rules as image.", "motion": "Parts draw in, then a slow push-in.", "used": "TPL-010 (arch)"}, {"id": "icon", "name": "Icon", "group": "Pictures", "role": "support", "min_w": 160, "min_h": 160, "status": "core", "what": "A single symbol, always square and centred.", "limits": "96, 160 or 240 px. One per template.", "motion": "Pops in with a small rotation.", "used": "TPL-004, 007, 009"}, {"id": "video", "name": "Video / animated loop", "group": "Pictures", "role": "primary", "min_w": 400, "min_h": 300, "status": "new", "what": "A muted clip that plays in the slot.", "limits": "Max 8 s loop. Same crop rules as image.", "motion": "Starts on the slot's reveal.", "used": ""}, {"id": "avatar", "name": "Person / avatar card", "group": "Pictures", "role": "support", "min_w": 240, "min_h": 240, "status": "new", "what": "A photo with a name and a role line.", "limits": "Photo 1:1. Name 1 line, role 1 line.", "motion": "Photo fades in, name types on.", "used": ""}, {"id": "logo", "name": "Logo / brand mark", "group": "Pictures", "role": "support", "min_w": 160, "min_h": 80, "status": "new", "what": "A brand mark or partner logo.", "limits": "Monochrome version only. Never the largest slot.", "motion": "Fade in only.", "used": ""}, {"id": "map", "name": "Map", "group": "Pictures", "role": "primary", "min_w": 560, "min_h": 360, "status": "new", "what": "A simplified outline map with pins.", "limits": "Up to 5 pins, each with a short label.", "motion": "Pins drop in one by one.", "used": ""}, {"id": "stat", "name": "Big number / Stat", "group": "Numbers", "role": "flex", "min_w": 360, "min_h": 240, "status": "core", "what": "One headline number with a label.", "limits": "Max 7 characters in mono, label max 6 words.", "motion": "Counts up or down, then a small pop.", "used": "TPL-002"}, {"id": "multistat", "name": "Multi-stat (2 to 4)", "group": "Numbers", "role": "flex", "min_w": 720, "min_h": 200, "status": "new", "what": "Two to four numbers in one slot.", "limits": "Each number max 5 characters, label max 3 words.", "motion": "Numbers count in turn.", "used": "TPL-005 (arch) as one slot"}, {"id": "gauge", "name": "Gauge / progress ring", "group": "Numbers", "role": "flex", "min_w": 320, "min_h": 320, "status": "new", "what": "A single value against a range.", "limits": "One value, one label, range shown.", "motion": "Needle or arc sweeps to the value.", "used": ""}, {"id": "scorecard", "name": "Scorecard / rating", "group": "Numbers", "role": "flex", "min_w": 400, "min_h": 240, "status": "new", "what": "A score out of five or ten.", "limits": "One score, up to 5 marks.", "motion": "Marks fill in order.", "used": ""}, {"id": "progress", "name": "Progress", "group": "Numbers", "role": "support", "min_w": 400, "min_h": 160, "status": "core", "what": "A bar showing how far along something is.", "limits": "One bar, one label, value in mono.", "motion": "Fill sweeps to the value.", "used": "TPL-009 (arch)"}, {"id": "body", "name": "Body paragraph", "group": "Text", "role": "flex", "min_w": 480, "min_h": 200, "status": "core", "what": "A short paragraph of explanation.", "limits": "Max 60 words. Type 28 px, never below 24.", "motion": "Lines rise in with a short stagger.", "used": "TPL-004, 009, 010"}, {"id": "quote", "name": "Quote", "group": "Text", "role": "flex", "min_w": 560, "min_h": 240, "status": "core", "what": "A pull quote with its source.", "limits": "Max 25 words, source on one line.", "motion": "Left to right wipe reveal.", "used": "TPL-008 (arch)"}, {"id": "callout", "name": "Callout / Takeaway", "group": "Text", "role": "support", "min_w": 400, "min_h": 150, "status": "core", "what": "A boxed key takeaway with a heavy left bar.", "limits": "Max 20 words. One per template.", "motion": "Left to right wipe reveal.", "used": "TPL-005, 007, 008, 009"}, {"id": "definition", "name": "Definition card", "group": "Text", "role": "flex", "min_w": 480, "min_h": 200, "status": "new", "what": "A term and its one-line meaning.", "limits": "Term max 3 words, meaning max 20.", "motion": "Term lands, meaning wipes in.", "used": ""}, {"id": "proscons", "name": "Pros and cons", "group": "Text", "role": "flex", "min_w": 640, "min_h": 280, "status": "new", "what": "Two short columns, for and against.", "limits": "Max 4 lines per column.", "motion": "Columns enter left then right.", "used": ""}, {"id": "formula", "name": "Formula / equation", "group": "Text", "role": "flex", "min_w": 560, "min_h": 160, "status": "new", "what": "One equation in large mono type.", "limits": "One line, max 24 characters.", "motion": "Characters type on.", "used": ""}, {"id": "bullets", "name": "Bullet list", "group": "Points", "role": "flex", "min_w": 480, "min_h": 240, "status": "core", "what": "Short points, one idea each.", "limits": "Max 5 items, one line each, two at most.", "motion": "Items enter in turn.", "used": "TPL-003, 010"}, {"id": "numbered", "name": "Numbered list", "group": "Points", "role": "flex", "min_w": 480, "min_h": 240, "status": "new", "what": "Points where the order matters.", "limits": "Max 5 items.", "motion": "Numbers then text, in turn.", "used": ""}, {"id": "checklist", "name": "Checklist", "group": "Points", "role": "flex", "min_w": 480, "min_h": 280, "status": "core", "what": "Items with a tick box each.", "limits": "Max 5 items.", "motion": "Ticks draw in order.", "used": "TPL-009 (arch)"}, {"id": "bar", "name": "Bar chart", "group": "Data", "role": "primary", "min_w": 560, "min_h": 320, "status": "core", "what": "Compare a few values side by side.", "limits": "Max 6 bars. Tone and pattern, never hue.", "motion": "Bars grow, values count up.", "used": "TPL-005, 008"}, {"id": "line", "name": "Line chart", "group": "Data", "role": "primary", "min_w": 640, "min_h": 320, "status": "core", "what": "A trend over time.", "limits": "Max 12 points, 2 series.", "motion": "Line draws left to right.", "used": "TPL-006"}, {"id": "pie", "name": "Pie / Donut chart", "group": "Data", "role": "primary", "min_w": 400, "min_h": 320, "status": "core", "what": "Parts of a whole.", "limits": "Max 5 slices.", "motion": "Slices sweep in clockwise.", "used": "TPL-008"}, {"id": "table", "name": "Table / Ledger", "group": "Data", "role": "primary", "min_w": 640, "min_h": 240, "status": "core", "what": "Rows and columns of facts.", "limits": "Max 6 rows, 4 columns.", "motion": "Rows enter in turn, key row flips to black.", "used": "TPL-006"}, {"id": "comparison", "name": "Comparison", "group": "Data", "role": "primary", "min_w": 640, "min_h": 320, "status": "core", "what": "Two or three options side by side.", "limits": "Max 2 options, 5 rows.", "motion": "Options slide in from each side.", "used": "TPL-003 (lib)"}, {"id": "stepper", "name": "Stepper", "group": "Process", "role": "primary", "min_w": 520, "min_h": 240, "status": "core", "what": "Numbered steps in order.", "limits": "3 to 5 steps, each with a title and one line.", "motion": "Steps enter in order, connectors draw.", "used": "TPL-007"}, {"id": "timeline", "name": "Timeline", "group": "Process", "role": "primary", "min_w": 640, "min_h": 280, "status": "core", "what": "Events along a line of time.", "limits": "3 to 6 events.", "motion": "Line draws, events appear in order.", "used": "TPL-009"}, {"id": "flowchart", "name": "Flowchart", "group": "Process", "role": "primary", "min_w": 720, "min_h": 320, "status": "core", "what": "Boxes and decisions joined by arrows.", "limits": "Max 6 nodes.", "motion": "Nodes enter, arrows draw between them.", "used": "TPL-007 (arch)"}, {"id": "funnel", "name": "Funnel", "group": "Process", "role": "primary", "min_w": 400, "min_h": 320, "status": "new", "what": "Stages that narrow, like conversion.", "limits": "3 to 5 stages with a value each.", "motion": "Stages drop in from the top.", "used": ""}, {"id": "cycle", "name": "Cycle / loop diagram", "group": "Process", "role": "primary", "min_w": 400, "min_h": 320, "status": "new", "what": "A repeating loop of 3 to 5 stages.", "limits": "3 to 5 stages.", "motion": "Stages light up in turn around the loop.", "used": ""}, {"id": "matrix", "name": "2 x 2 matrix", "group": "Process", "role": "primary", "min_w": 400, "min_h": 320, "status": "new", "what": "Two axes, four quadrants.", "limits": "2 axis labels, up to 4 dots.", "motion": "Axes draw, dots land.", "used": ""}], "rules": [{"id": "R1", "title": "1 to 4 slots", "text": "A template has at least 1 and at most 4 slots. More items go inside one element, such as a list, table or multi-stat.", "checkable": false}, {"id": "R2", "title": "Layouts come from the catalog", "text": "Use one of the 27 approved layouts. A new layout is added to the catalog first (see the test in Growth).", "checkable": false}, {"id": "R3", "title": "One element in every slot", "text": "No empty slots and no slot with two elements. One idea per slot.", "checkable": true}, {"id": "R4", "title": "The slot must be big enough", "text": "A slot is at least as large as the element's minimum size in both width and height.", "checkable": true}, {"id": "R5", "title": "Something must carry the template", "text": "At least one slot holds a primary or flex element. A template can't be made of support elements only.", "checkable": true}, {"id": "R6", "title": "Small assets stay small", "text": "Icon, logo, person card and progress are never in the largest slot of a multi-slot layout, and never alone in a 1-slot layout.", "checkable": true}, {"id": "R7", "title": "Per-template limits", "text": "At most 1 callout, 1 icon and 2 charts (bar, line, pie). One black-filled emphasis block at most.", "checkable": true}, {"id": "R8", "title": "No repeats", "text": "The same element is not used twice, except charts (bar, line, pie) and stat.", "checkable": true}, {"id": "R9", "title": "Fixed spacing", "text": "Margin 96 px, 12 columns, gap 32 px between slots in both directions, 8 px baseline.", "checkable": false}, {"id": "R10", "title": "Text limits", "text": "Title max 2 lines. Body max 60 words. Bullets max 5. Callout max 20 words. Type never below 18 px (labels) or 24 px (text).", "checkable": false}, {"id": "R11", "title": "Reading order", "text": "Slots are numbered left to right, top to bottom. That number is also the animation order.", "checkable": false}, {"id": "R12", "title": "Pictures are cropped, not stretched", "text": "Images, video and illustration use cover crop. Supply the asset 20% larger than the slot with the subject in the middle 60%.", "checkable": false}]};
+const COL=(1728-11*32)/12, GAP=32;
+const spanW=n=>Math.round(n*COL+(n-1)*GAP), colX=c=>Math.round(96+(c-1)*(COL+GAP));
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const SHAPES=['banner','wide','landscape','square','portrait'];
+const SHAPE_INFO={banner:['21:9 or 3:1','width ÷ height 2.2 or more'],wide:['16:9','1.6 to 2.2'],landscape:['4:3 or 3:2','1.2 to 1.6'],square:['1:1 or 5:4','0.9 to 1.2'],portrait:['3:4, 4:5 or 2:3','below 0.9']};
+const SHAPE_BOX={banner:[210,90],wide:[192,108],landscape:[160,120],square:[130,130],portrait:[98,130]};
+const shapeOf=(w,h)=>{const a=w/h;return a>=2.2?'banner':a>=1.6?'wide':a>=1.2?'landscape':a>=0.9?'square':'portrait'};
+const modeFor=(h,f)=>D.modes.find(m=>m.header===h&&m.footer===(f==='on'));
+const EL=Object.fromEntries(D.elements.map(e=>[e.id,e]));
+const SMALL=['icon','logo','avatar','progress'];
+const CHARTS=['bar','line','pie'];
+
+function rects(l,m){const n=l.rows,rh=(m.h-GAP*(n-1))/n;return l.slots.map((s,i)=>({n:i+1,x:colX(s.col),y:Math.round(m.y+s.row*(rh+GAP)),w:spanW(s.span),h:Math.round(s.row_span*rh+(s.row_span-1)*GAP)}))}
+const largest=rs=>rs.reduce((a,b)=>b.w*b.h>a.w*a.h?b:a).n;
+
+/* ---------- mini previews (viewBox 160 x 100) ---------- */
+const r=(x,y,w,h,c='s')=>`<rect class="${c}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+const ln=(a,b,c2,d,c='s')=>`<line class="${c}" x1="${a}" y1="${b}" x2="${c2}" y2="${d}"/>`;
+const ci=(x,y,rad,c='s')=>`<circle class="${c}" cx="${x}" cy="${y}" r="${rad}"/>`;
+const pa=(d,c='s')=>`<path class="${c}" d="${d}"/>`;
+const tx=(x,y,t,sz,anchor='middle')=>`<text class="m" x="${x}" y="${y}" font-size="${sz}" text-anchor="${anchor}">${t}</text>`;
+const bars=(x,y,w,n,gap=8,last=0.6)=>Array.from({length:n},(_,i)=>r(x,y+i*gap,i===n-1?w*last:w,3,'g')).join('');
+const PREV={
+ image:()=>r(10,10,140,80,'h')+pa('M10 82 L50 46 L76 70 L102 40 L150 82')+ci(122,28,8),
+ illustration:()=>ci(55,48,28,'h')+pa('M92 80 L118 28 L146 80Z','h')+pa('M14 88 Q58 72 100 90 T152 84'),
+ icon:()=>r(50,20,60,60,'h')+pa('M64 50 h32 M80 34 v32')+ci(80,50,14),
+ video:()=>r(10,12,140,76,'h')+pa('M68 34 L100 50 L68 66Z','f')+r(16,80,90,3,'g')+r(16,80,36,3,'f'),
+ avatar:()=>ci(80,30,14,'h')+pa('M50 74 Q80 36 110 74Z','h')+r(56,82,48,3,'g')+r(66,90,28,3,'g'),
+ logo:()=>r(36,32,34,34,'f')+r(80,38,48,7,'f')+r(80,52,34,4,'g'),
+ map:()=>pa('M16 30 L54 16 L96 26 L136 14 L146 62 L102 84 L56 74 L18 82Z','h')+ci(92,46,7,'f')+ci(92,46,2,'w'),
+ stat:()=>tx(80,58,'42%',40)+r(46,72,68,3,'g'),
+ multistat:()=>tx(30,54,'12',22)+tx(80,54,'48',22)+tx(130,54,'96',22)+r(14,64,32,3,'g')+r(64,64,32,3,'g')+r(114,64,32,3,'g')+ln(55,32,55,72,'g')+ln(105,32,105,72,'g'),
+ gauge:()=>pa('M22 78 A58 58 0 0 1 138 78')+pa('M22 78 A58 58 0 0 1 80 20','s')+ln(80,78,104,42)+ci(80,78,5,'f'),
+ scorecard:()=>[0,1,2,3,4].map(i=>r(14+i*28,36,22,22,i<4?'f':'s')).join('')+tx(80,86,'4.0 / 5',12),
+ progress:()=>r(14,42,132,14,'s')+r(14,42,80,14,'f')+tx(80,76,'60%',12),
+ body:()=>bars(14,20,132,6,12),
+ quote:()=>tx(34,64,'&ldquo;',62)+bars(58,32,86,4,12),
+ callout:()=>r(12,26,6,48,'f')+bars(28,32,116,4,12),
+ definition:()=>r(14,18,52,7,'f')+ln(14,32,146,32)+bars(14,42,126,3,12),
+ proscons:()=>ln(80,10,80,90,'g')+tx(40,28,'+',20)+tx(120,28,'&minus;',20)+bars(16,38,56,4,11)+bars(96,38,52,4,11),
+ formula:()=>tx(80,58,'E = mc&sup2;',26),
+ bullets:()=>[0,1,2,3].map(i=>ci(18,24+i*18,3,'f')+r(30,22+i*18,100-i*12,4,'g')).join(''),
+ numbered:()=>[0,1,2].map(i=>tx(20,32+i*24,(i+1)+'.',12,'middle')+r(36,27+i*24,92-i*10,4,'g')).join(''),
+ checklist:()=>[0,1,2].map(i=>r(16,16+i*26,16,16,'s')+pa(`M20 ${25+i*26} l4 4 l7 -9`)+r(42,22+i*26,86-i*10,4,'g')).join(''),
+ bar:()=>ln(12,86,148,86)+r(24,52,20,34,'f')+r(54,36,20,50,'s')+r(84,22,20,64,'f')+r(114,44,20,42,'s'),
+ line:()=>ln(12,86,148,86)+pa('M16 72 L46 52 L76 60 L106 32 L146 18')+[[16,72],[46,52],[76,60],[106,32],[146,18]].map(p=>ci(p[0],p[1],3,'f')).join(''),
+ pie:()=>ci(80,50,36)+pa('M80 50 L80 14 A36 36 0 0 1 114 62Z','f')+ln(80,50,48,66),
+ table:()=>r(10,14,140,72)+r(10,14,140,16,'f')+ln(10,46,150,46,'s')+ln(10,62,150,62,'s')+ln(58,14,58,86,'s')+ln(104,14,104,86,'s'),
+ comparison:()=>r(10,14,64,72)+r(86,14,64,72)+r(10,14,64,14,'f')+r(86,14,64,14,'s')+bars(18,38,48,4,12)+bars(94,38,48,4,12),
+ stepper:()=>[0,1,2].map(i=>r(14+i*50,18,28,28,i===2?'f':'s')+tx(28+i*50,38,String(i+1),14).replace('class="m"',i===2?'class="m w"':'class="m"')+(i<2?ln(44+i*50,32,62+i*50,32):'')+r(10+i*50,56,36,3,'g')+r(14+i*50,64,28,3,'g')).join(''),
+ timeline:()=>ln(12,50,148,50)+[26,60,94,128].map((x,i)=>ci(x,50,5,i===3?'f':'h')+r(x-14,(i%2?58:34),28,3,'g')).join(''),
+ flowchart:()=>r(10,38,36,24)+pa('M80 28 L106 50 L80 72 L54 50Z')+r(116,38,36,24,'f')+ln(46,50,54,50)+ln(106,50,116,50)+pa('M110 46 l6 4 l-6 4','s'),
+ funnel:()=>pa('M14 14 H146 L124 40 H36Z','h')+pa('M38 46 H122 L106 68 H54Z','h')+pa('M56 74 H104 L94 90 H66Z','f'),
+ cycle:()=>ci(80,50,30)+ci(80,20,7,'f')+ci(106,65,7,'f')+ci(54,65,7,'f')+pa('M96 28 l8 6 l-2 -10','s'),
+ matrix:()=>r(30,10,100,80)+ln(80,10,80,90)+ln(30,50,130,50)+ci(104,28,6,'f')+ci(52,70,5,'h')
+};
+const svg=id=>`<svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(EL[id].name)} sketch">${PREV[id]()}</svg>`;
+
+/* ---------- sheet renderer ---------- */
+function sheet(l,m,o={}){
+  const rs=rects(l,m),big=rs.length>1?largest(rs):0;
+  let h='<div class="sheet">';
+  if(m.header!=='none'){const hh=m.header==='sub'?148:96;h+=`<i class="zone" style="left:${96/19.2}%;top:${56/10.8}%;width:${1728/19.2}%;height:${hh/10.8}%"></i><i class="zl" style="left:${96/19.2}%;top:${56/10.8}%;width:${1728/19.2}%;height:${hh/10.8}%">header</i>`}
+  if(m.footer)h+=`<i class="zone" style="left:${96/19.2}%;top:${1004/10.8}%;width:${1728/19.2}%;height:${46/10.8}%"></i><i class="zl" style="left:${96/19.2}%;top:${1004/10.8}%;width:${1728/19.2}%;height:${46/10.8}%">footer</i>`;
+  rs.forEach(s=>{const id=o.prev&&o.prev[s.n];
+    h+=`<i class="slot${s.n===big?' big':''}" style="left:${s.x/19.2}%;top:${s.y/10.8}%;width:${s.w/19.2}%;height:${s.h/10.8}%"><span class="sn">S${s.n}</span>${id?svg(id):''}</i>`});
+  return h+'</div>';
+}
+
+/* ---------- nav, hero ---------- */
+const SECTIONS=[['overview','Overview'],['frame','Frame'],['layouts','Layouts'],['elements','Elements'],['shapes','Slot shapes'],['rules','Rules'],['builder','Builder'],['growth','Growth']];
+$('nav').innerHTML=SECTIONS.map((s,i)=>`<li><a href="#${s[0]}" data-s="${s[0]}"><span>${String(i+1).padStart(2,'0')}</span>${s[1]}</a></li>`).join('');
+const allSizes=(()=>{const set=new Map();D.layouts.forEach(l=>D.modes.forEach(m=>rects(l,m).forEach(s=>set.set(s.w+'x'+s.h,[s.w,s.h]))));return [...set.values()]})();
+const newL=D.layouts.filter(l=>l.new).length,newE=D.elements.filter(e=>e.status==='new').length;
+$('stats').innerHTML=[[D.layouts.length,'Layouts'],[D.elements.length,'Elements'],[D.modes.length,'Frame modes'],[4,'Max slots'],['32px','Gap, always'],[allSizes.length,'Slot sizes']].map(a=>`<div class="stat"><b class="num">${a[0]}</b><span class="mono">${a[1]}</span></div>`).join('');
+$('changes').innerHTML=[
+ ['hl',`+${newL} layouts`,'A narrow side rail, a rail with two stacked slots, a hero with two thin slots below, and an offset four-slot layout.'],
+ ['',`+${newE} elements`,'Video, person card, logo, map, multi-stat, gauge, scorecard, definition card, pros and cons, formula, numbered list, funnel, cycle and matrix.'],
+ ['','Slot shapes','All slot sizes reduced to five shapes with one image ratio each, so assets are made per shape.'],
+ ['','Fixed rules','Chart minimums now match your built templates. Body is a flex element. Small assets cannot take the largest slot.'],
+ ['','Live builder','Pick a layout, fill the slots and see rules R3 to R8 pass or fail as you go.']
+].map((a,i)=>`<div class="change ${a[0]}"><span class="mono">${['Added','Added','New guide','Corrected','Added'][i]}</span><h3>${a[1]}</h3><p>${a[2]}</p></div>`).join('');
+
+/* ---------- frame ---------- */
+$('anatomySheet').innerHTML=sheet({rows:1,slots:[{col:1,span:7,row:0,row_span:1},{col:8,span:5,row:0,row_span:1}]},D.modes[0]);
+$('modes').innerHTML=D.modes.map(m=>{
+  const lay={rows:1,slots:[{col:1,span:12,row:0,row_span:1}]};
+  const hn={sub:'Title + subtitle',title:'Title only',none:'None'}[m.header];
+  return `<div class="mode"><span class="mono">Mode ${m.id}</span>${sheet(lay,m)}<dl><dt>Header</dt><dd>${hn}</dd><dt>Footer</dt><dd>${m.footer?'On':'Off'}</dd><dt>Content</dt><dd class="num">y ${m.y} · h ${m.h}</dd><dt>Bottom</dt><dd class="num">${m.y+m.h}</dd></dl></div>`}).join('');
+
+/* ---------- layouts ---------- */
+let lcount=0;
+['All',1,2,3,4].forEach(v=>{const b=document.createElement('button');b.type='button';b.textContent=v;b.dataset.v=v==='All'?0:v;b.onclick=()=>{lcount=+b.dataset.v;drawLayouts()};$('lc').appendChild(b)});
+$('lh').onchange=$('lf').onchange=()=>drawLayouts();
+const FAM_TEXT={Single:'One focal element',Columns:'Side by side',Rows:'Stacked, also called list view',Featured:'One big slot with smaller ones beside it',Banner:'One wide slot with others in a row',Grid:'Equal or staggered cells',Rail:'A narrow side rail next to the body'};
+function drawLayouts(){
+  const m=modeFor($('lh').value,$('lf').value);
+  $('lmode').textContent=`Mode ${m.id} · content y ${m.y} · height ${m.h}`;
+  [...$('lc').children].forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.v===lcount)));
+  let out='';
+  ['Single','Columns','Rows','Rail','Featured','Banner','Grid'].forEach(f=>{
+    const ls=D.layouts.filter(l=>l.family===f&&(!lcount||l.slots.length===lcount));
+    if(!ls.length)return;
+    out+=`<div class="family"><h3>${f}</h3><span class="mono">${FAM_TEXT[f]} · ${ls.length}</span></div><div class="grid">`;
+    ls.forEach(l=>{
+      const rs=rects(l,m);
+      out+=`<article class="card${l.new?' is-new':''}"><div class="top"><div><h3>${l.code} · ${esc(l.name)}</h3><div class="mono sub">${l.slots.length} slot${l.slots.length>1?'s':''}${l.note?' · '+esc(l.note):''}</div></div>${l.new?'<span class="badge new">New</span>':l.built?`<span class="badge">Built</span>`:'<span class="badge soft">Not built</span>'}</div>${sheet(l,m)}<ul class="slots">${rs.map(s=>`<li><b>S${s.n}</b><span class="num">${s.w} × ${s.h}</span><span class="shp">${shapeOf(s.w,s.h)}</span></li>`).join('')}</ul>${l.built?`<div class="mono">Built as ${esc(l.built)}</div>`:''}<button class="try" type="button" data-code="${l.code}">Try in builder</button></article>`});
+    out+='</div>';
+  });
+  $('layoutList').innerHTML=out;
+  $('layoutList').querySelectorAll('.try').forEach(b=>b.onclick=()=>{$('bl').value=b.dataset.code;$('bh').value=$('lh').value;$('bf').value=$('lf').value;resetPicks();drawBuilder();$('builder').scrollIntoView()});
+}
+drawLayouts();
+
+/* ---------- elements ---------- */
+const fitShare=(e,shape)=>{const ss=allSizes.filter(s=>shapeOf(s[0],s[1])===shape);if(!ss.length)return 0;return ss.filter(s=>s[0]>=e.min_w&&s[1]>=e.min_h).length/ss.length};
+const fitCls=x=>x>=.8?'y':x>=.2?'s':'n';
+const fitTxt={y:'yes',s:'some',n:'no'};
+const GROUPS=['Pictures','Numbers','Text','Points','Data','Process'];
+const ef={g:'All',s:'All',r:'All'};
+function chipRow(id,vals,key){
+  $(id).innerHTML='';
+  vals.forEach(v=>{const b=document.createElement('button');b.type='button';b.textContent=v;b.onclick=()=>{ef[key]=v;drawElements()};b.dataset.v=v;$(id).appendChild(b)});
+}
+chipRow('eg',['All',...GROUPS],'g');chipRow('es',['All','Core','New'],'s');chipRow('er',['All','primary','flex','support'],'r');
+function drawElements(){
+  ['eg','es','er'].forEach((id,i)=>{const k=['g','s','r'][i];[...$(id).children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===ef[k])))});
+  const list=D.elements.filter(e=>(ef.g==='All'||e.group===ef.g)&&(ef.s==='All'||e.status===ef.s.toLowerCase())&&(ef.r==='All'||e.role===ef.r));
+  $('elGrid').innerHTML=list.map(e=>`<article class="card el${e.status==='new'?' is-new':''}"><div class="pv">${svg(e.id)}</div><div class="top"><div><h3>${esc(e.name)}</h3><div class="mono sub">${e.group} · ${e.role}</div></div><span class="badge${e.status==='new'?' new':''}">${e.status==='new'?'New':'Core'}</span></div><p class="what">${esc(e.what)}</p><dl><dt>Min slot</dt><dd class="num">${e.min_w} × ${e.min_h}</dd><dt>Content</dt><dd>${esc(e.limits)}</dd><dt>Motion</dt><dd>${esc(e.motion)}</dd>${e.used?`<dt>Used in</dt><dd>${esc(e.used)}</dd>`:''}</dl><div class="fits">${SHAPES.map(s=>{const c=fitCls(fitShare(e,s));return `<span class="fit ${c}" title="${s}: ${fitTxt[c]}">${s} ${fitTxt[c]}</span>`}).join('')}</div></article>`).join('')||'<p class="note">No elements match these filters.</p>';
+}
+drawElements();
+document.querySelector('#elements header h2').textContent=`${D.elements.length} elements that can go in a slot`;
+
+/* ---------- shapes ---------- */
+$('shapeRow').innerHTML=SHAPES.map(s=>{
+  const n=allSizes.filter(z=>shapeOf(z[0],z[1])===s).length,b=SHAPE_BOX[s];
+  return `<div class="shape"><div class="box" style="width:${b[0]}px;height:${b[1]}px">${SHAPE_INFO[s][0].split(' ')[0]}</div><h3>${s[0].toUpperCase()+s.slice(1)}</h3><p>Aspect ${SHAPE_INFO[s][1]}</p><p>Supply <b>${SHAPE_INFO[s][0]}</b></p><p class="num">${n} slot sizes</p></div>`}).join('');
+const modeA=D.modes[0];
+const examples=sh=>{const out=[];D.layouts.forEach(l=>rects(l,modeA).forEach(r2=>{if(shapeOf(r2.w,r2.h)===sh&&out.length<3&&!out.some(o=>o.includes(r2.w+' × '+r2.h)))out.push(`${l.code} S${r2.n} ${r2.w} × ${r2.h}`)}));return out.join(', ')};
+$('shapeTable').innerHTML='<tr><th>Shape</th><th>Image ratio</th><th>Export size to supply (mode A)</th><th>Example slots (mode A)</th></tr>'+SHAPES.map(s=>{
+  const zs=allSizes.filter(z=>shapeOf(z[0],z[1])===s);const maxW=Math.max(...zs.map(z=>z[0]));
+  const ex=[];D.layouts.forEach(l=>rects(l,modeA).forEach(r2=>{if(shapeOf(r2.w,r2.h)===s)ex.push(r2)}));
+  const big=ex.reduce((a,b)=>b.w*b.h>a.w*a.h?b:a,ex[0]||{w:0,h:0});
+  return `<tr><td class="mn">${s}</td><td class="mn">${SHAPE_INFO[s][0]}</td><td class="mn">${big?Math.round(big.w*1.2)+' × '+Math.round(big.h*1.2):'-'} (largest)</td><td>${examples(s)}</td></tr>`}).join('');
+
+/* ---------- rules ---------- */
+$('ruleList').innerHTML=D.rules.map(r2=>`<div class="rule"><div class="id">${r2.id}</div><div><h3>${esc(r2.title)}</h3><p>${esc(r2.text)}</p>${r2.checkable?'<span class="mono">Checked in builder</span>':''}</div></div>`).join('');
+
+/* ---------- builder ---------- */
+D.layouts.forEach(l=>{const o=document.createElement('option');o.value=l.code;o.textContent=`${l.code} · ${l.name}${l.new?' (new)':''}`;$('bl').appendChild(o)});
+$('bl').value='L2-04';$('bh').value='sub';$('bf').value='on';
+let picks={};
+const PREF_BIG=['bar','image','stepper','timeline','table','line','pie','flowchart','stat'];
+const PREF_SMALL=['callout','stat','bullets','body','icon','checklist','quote','progress'];
+function fits(e,s,l,bigN,nSlots){
+  if(s.w<e.min_w||s.h<e.min_h)return false;
+  if(SMALL.includes(e.id)&&(nSlots===1||s.n===bigN))return false;
+  return true;
+}
+function resetPicks(){
+  const l=D.layouts.find(x=>x.code===$('bl').value),m=modeFor($('bh').value,$('bf').value),rs=rects(l,m),big=largest(rs);
+  picks={};
+  const used=new Set();
+  rs.forEach(s=>{
+    const pref=(s.n===big?PREF_BIG:PREF_SMALL).concat(D.elements.map(e=>e.id));
+    const id=pref.find(p=>EL[p]&&!used.has(p)&&fits(EL[p],s,l,big,rs.length));
+    picks[s.n]=id||'';if(id)used.add(id);
+  });
+}
+function drawBuilder(){
+  const l=D.layouts.find(x=>x.code===$('bl').value),m=modeFor($('bh').value,$('bf').value),rs=rects(l,m),big=largest(rs),n=rs.length;
+  rs.forEach(s=>{if(picks[s.n]&&!EL[picks[s.n]])picks[s.n]=''});
+  $('bsheet').innerHTML=sheet(l,m,{prev:picks});
+  $('bnote').textContent=`${l.code} · ${l.name} · mode ${m.id}. Slot S${n>1?big:1} is the largest.`;
+  $('picks').innerHTML=rs.map(s=>{
+    const opts=D.elements.filter(e=>fits(e,s,l,big,n));
+    const cur=picks[s.n];
+    const curOk=cur&&opts.some(e=>e.id===cur);
+    return `<div class="pick"><label class="mono" for="p${s.n}"><span>Slot S${s.n}</span><span class="num">${s.w} × ${s.h} · ${shapeOf(s.w,s.h)}</span></label><select id="p${s.n}" data-n="${s.n}"><option value=""${cur?'':' selected'}>Choose an element</option>${cur&&!curOk?`<option value="${cur}" selected>${esc(EL[cur].name)} (too small now)</option>`:''}${opts.map(e=>`<option value="${e.id}"${e.id===cur?' selected':''}>${esc(e.name)}${e.status==='new'?' (new)':''}</option>`).join('')}</select></div>`}).join('');
+  $('picks').querySelectorAll('select').forEach(sel=>sel.onchange=()=>{picks[sel.dataset.n]=sel.value;drawBuilder()});
+  // rules
+  const ids=rs.map(s=>picks[s.n]).filter(Boolean);
+  const res=[];
+  res.push(['R3','Every slot has one element',ids.length===n,`${ids.length} of ${n} filled`]);
+  const small=rs.filter(s=>picks[s.n]&&(s.w<EL[picks[s.n]].min_w||s.h<EL[picks[s.n]].min_h));
+  res.push(['R4','Each element fits its slot',small.length===0,small.length?small.map(s=>'S'+s.n).join(', ')+' too small':'all fit']);
+  res.push(['R5','Something carries the template',ids.some(i=>EL[i].role!=='support'),ids.length?'':'no elements yet']);
+  const sm=rs.filter(s=>picks[s.n]&&SMALL.includes(picks[s.n])&&(n===1||s.n===big));
+  res.push(['R6','Small assets stay small',sm.length===0,sm.length?'S'+sm[0].n+' holds a small asset':'']);
+  const c=id=>ids.filter(i=>i===id).length,ch=ids.filter(i=>CHARTS.includes(i)).length;
+  res.push(['R7','Within the limits',c('callout')<=1&&c('icon')<=1&&ch<=2,`${c('callout')} callout, ${c('icon')} icon, ${ch} chart${ch===1?'':'s'}`]);
+  const dup=ids.filter((i,k)=>ids.indexOf(i)!==k&&!CHARTS.includes(i)&&i!=='stat');
+  res.push(['R8','No repeated elements',dup.length===0,dup.length?EL[dup[0]].name+' repeats':'']);
+  const pass=res.filter(x=>x[2]).length;
+  $('verdict').textContent=pass===res.length?'Passes all checks':`${res.length-pass} check${res.length-pass>1?'s':''} to fix`;
+  $('checks').innerHTML=res.map(x=>`<li><b>${x[0]}</b><span>${x[1]}${x[3]?`<br><span style="color:var(--mute)">${esc(x[3])}</span>`:''}</span><span class="${x[2]?'ok':'bad'}">${x[2]?'Pass':'Fix'}</span></li>`).join('');
+}
+$('bl').onchange=()=>{resetPicks();drawBuilder()};
+$('bh').onchange=$('bf').onchange=()=>{const old={...picks};drawBuilder()};
+$('breset').onclick=()=>{resetPicks();drawBuilder()};
+resetPicks();drawBuilder();
+
+/* ---------- growth counts ---------- */
+[1,2,3,4].forEach(k=>$('g'+k).textContent=D.layouts.filter(l=>l.slots.length===k).length);
+
+/* ---------- nav highlight ---------- */
+const links=[...document.querySelectorAll('nav.side a')];
+const io=new IntersectionObserver(es=>{es.forEach(en=>{if(en.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.dataset.s===en.target.id))}})},{rootMargin:'-30% 0px -60% 0px'});
+SECTIONS.forEach(s=>io.observe($(s[0])));
+</script>
+</body>
+</html>

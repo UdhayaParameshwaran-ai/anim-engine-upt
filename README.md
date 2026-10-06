@@ -39,6 +39,13 @@ water = icon:droplet
 | `apps/render` | ✅ MP4 exporter | Same engine stepped frame by frame in headless Chrome, parallel H.264 segments + mixed narration |
 | `apps/studio` | ✅ Studio | Editor with diagnostics, timeline panel, inspector, bounds overlay, generate-and-play while later scenes are still being written |
 
+## Scene layouts
+
+A scene picks one of two layout systems. The LLM never writes coordinates in either:
+
+- `template=`: 9 diagram templates (`title`, `compare`, `steps`, `cycle`, `flow`, `timeline`, `hub`, `grid`, `spotlight`).
+- `grid=`: editorial pages from the [Template Rule Book v2](docs/rulebook-v2.html). It has 27 slot layouts on a 12-column grid, 6 frame modes (header and footer on or off), and 32 elements (stats, charts, tables, lists, quotes, steppers, flowcharts, maps…), each with its own motion. Rules R1–R11 are checked and auto-fixed where possible. See `examples/rulebook-gallery.txt` for every element.
+
 ## Generate from a prompt
 
 ```sh
