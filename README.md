@@ -32,8 +32,8 @@ water = icon:droplet
 | `packages/ir` | ✅ types | VideoIR, word timings, ResolvedTimeline |
 | `packages/validate` | ✅ L2–L4 checks + auto-fix | Schema, reference, template and visibility checks |
 | `packages/compiler` | ✅ layout + lowering + CLI | DSL → VideoIR; the layout engine decides every coordinate |
-| `packages/tts` | planned | Provider-neutral TTS + aligner |
-| `packages/timeline` | planned | Anchor resolution → frame-quantized tweens |
+| `packages/tts` | ✅ interface, mock, aligner, cache | Provider-neutral TTS; any timing granularity → word timings |
+| `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
 | `packages/engine` | planned | Browser SVG/HTML engine, `render(t)` |
 | `apps/render` | planned | Headless Chromium + ffmpeg exporter |
 | `apps/studio` | planned | Debug/preview UI |
@@ -48,6 +48,7 @@ pnpm typecheck
 pnpm test
 pnpm check examples/photosynthesis.txt          # diagnostics
 pnpm check my-script.txt --fixed --ir           # auto-fixed script + IR
+pnpm check my-script.txt --timeline=tl.json     # mock TTS + resolved timeline
 ```
 
 ## Git account for this repo

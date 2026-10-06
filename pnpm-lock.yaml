@@ -29,6 +29,12 @@ importers:
       '@anim/registry':
         specifier: workspace:*
         version: link:../registry
+      '@anim/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+      '@anim/tts':
+        specifier: workspace:*
+        version: link:../tts
       '@anim/validate':
         specifier: workspace:*
         version: link:../validate
@@ -42,6 +48,21 @@ importers:
   packages/ir: {}
 
   packages/registry: {}
+
+  packages/timeline:
+    dependencies:
+      '@anim/ir':
+        specifier: workspace:*
+        version: link:../ir
+      '@anim/registry':
+        specifier: workspace:*
+        version: link:../registry
+
+  packages/tts:
+    dependencies:
+      '@anim/ir':
+        specifier: workspace:*
+        version: link:../ir
 
   packages/validate:
     dependencies:

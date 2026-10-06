@@ -110,34 +110,76 @@ export interface WordTiming {
   precision: TimingPrecision;
 }
 
+/**
+ * Synthesized narration for one scene: the TTS → resolver hand-off.
+ * Speech beats are joined with single spaces into `text`.
+ */
+export interface SceneSpeech {
+  scene: string;
+  /** Audio artifact path (content-addressed). */
+  src: string;
+  duration: Seconds;
+  text: string;
+  words: WordTiming[];
+  /** Char range of each speech beat in `text`, in beat order (wait beats excluded). */
+  beats: { start: number; end: number }[];
+}
+
 // ------------------------------------------------------- ResolvedTimeline ---
 
+/**
+ * Animatable properties. x/y are the element's center; camera is a Box
+ * (the visible region of the canvas).
+ */
 export type Prop = "opacity" | "x" | "y" | "scale" | "rotate" | "draw" | "reveal" | "tint" | "camera";
 
 export interface Tween {
-  /** Element id, `id.part`, or "camera". */
+  /** `scene/id`, `scene/id.part`, or `scene/camera`. */
   target: string;
-  prop: Prop | string;
+  prop: Prop;
   t0: Seconds;
+  /** t1 === t0 means an instant set. */
   t1: Seconds;
   /** Baked by the resolver so evaluation is stateless (seek anywhere). */
   from: number | Box;
   to: number | Box;
   ease: string;
+  /** Verb-specific rendering hints (highlight color/style, write `by`). */
+  meta?: Record<string, string | number | boolean>;
+  verb: string;
   /** Source action line, for the inspector. */
   line: number;
+}
+
+export interface ResolvedScene {
+  id: string;
+  t0: Seconds;
+  t1: Seconds;
+  transitionIn: { type: string; duration: Seconds };
+  transitionOut: { type: string; duration: Seconds };
+  steps: { id?: string; t0: Seconds; t1: Seconds }[];
+  beats: { t0: Seconds; t1: Seconds; speechEnd: Seconds; hold: Seconds; line: number }[];
+}
+
+export interface AudioClip {
+  src: string;
+  /** Seconds into the source file. */
+  offset: Seconds;
+  t0: Seconds;
+  duration: Seconds;
 }
 
 export interface ResolvedTimeline {
   irVersion: typeof IR_VERSION;
   fps: number;
   duration: Seconds;
-  scenes: { id: string; t0: Seconds; t1: Seconds; steps: { id?: string; t0: Seconds; t1: Seconds }[] }[];
-  audio: { src: string; t0: Seconds; duration: Seconds }[];
-  cues: { scene: string; beat: number; id: string; t: Seconds; tEnd?: Seconds; precision: TimingPrecision }[];
-  words: { text: string; t0: Seconds; t1: Seconds }[];
-  /** Initial property values per element, before any tween. */
-  initial: Record<string, Record<string, number | Box>>;
+  scenes: ResolvedScene[];
+  audio: AudioClip[];
+  cues: { scene: string; beat: number; id: string; t: Seconds; tEnd?: Seconds; precision: TimingPrecision; line: number }[];
+  words: { scene: string; text: string; t0: Seconds; t1: Seconds }[];
+  /** Initial property values per target, before any tween. */
+  initial: Record<string, Partial<Record<Prop, number | Box>>>;
+  /** Sorted by t0, then source order. */
   tracks: Tween[];
   report: SyncReportItem[];
 }

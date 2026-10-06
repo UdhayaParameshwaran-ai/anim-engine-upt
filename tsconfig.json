@@ -15,6 +15,12 @@
     },
     {
       "path": "packages/compiler"
+    },
+    {
+      "path": "packages/tts"
+    },
+    {
+      "path": "packages/timeline"
     }
   ]
 }
