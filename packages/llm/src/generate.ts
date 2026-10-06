@@ -15,8 +15,12 @@ export interface GenerateOptions {
   /** Scenes written/repaired at once. */
   concurrency?: number;
   temperature?: number;
-  /** Each finished (validated) scene, in order, as soon as it and all earlier scenes are ready. */
-  onScene?: (sceneText: string, index: number) => void;
+  /**
+   * Each finished (validated) scene, in order, as soon as it and all earlier
+   * scenes are ready, with the video header: `header` plus the scenes so far
+   * is a playable script prefix (progressive playback).
+   */
+  onScene?: (sceneText: string, index: number, header: string) => void;
   onLog?: (message: string) => void;
 }
 
@@ -50,9 +54,9 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
   const assets = opts.assets ?? new AssetLibrary();
   const ctx: Ctx = { opts, system: systemPrompt(retrieveAssets(topic, assets)), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0 };
   const range = opts.scenes ?? { min: 2, max: 4 };
-  const emit = orderedEmitter(opts.onScene);
+  let header = "";
+  const emit = orderedEmitter((text, i) => opts.onScene?.(text, i, header));
 
-  let header: string;
   let scenes: string[];
   if ((opts.mode ?? "outline") === "outline") {
     const outline = clean(await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }]));
@@ -84,7 +88,7 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
         }),
       );
     };
-    const splitter = streamSplitter((h) => (headerText = ensureHeader(h, topic)), onSceneText);
+    const splitter = streamSplitter((h) => (header = headerText = ensureHeader(h, topic)), onSceneText);
     const full = await chat(ctx, [request], (delta) => splitter.push(delta));
     splitter.end();
     headerText ??= ensureHeader(split(clean(full)).header, topic);
@@ -223,11 +227,10 @@ function streamSplitter(onHeader: (h: string) => void, onScene: (text: string) =
 }
 
 /** Calls `fn` for each finished scene in index order, even when they finish out of order. */
-function orderedEmitter(fn?: (text: string, i: number) => void) {
+function orderedEmitter(fn: (text: string, i: number) => void) {
   const ready = new Map<number, string>();
   let next = 0;
   return (text: string, i: number) => {
-    if (!fn) return;
     ready.set(i, text);
     while (ready.has(next)) {
       fn(ready.get(next)!, next);

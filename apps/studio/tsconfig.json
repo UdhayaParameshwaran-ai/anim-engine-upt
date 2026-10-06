@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist", "noEmit": false, "emitDeclarationOnly": true, "declaration": true, "types": [], "lib": ["ES2023", "DOM", "DOM.Iterable"] },
+  "include": ["src"],
+  "references": [{ "path": "../../packages/engine" }, { "path": "../../packages/ir" }, { "path": "../../packages/registry" }, { "path": "../../packages/timeline" }]
+}

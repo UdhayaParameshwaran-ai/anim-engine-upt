@@ -54,6 +54,7 @@ export class Stage {
   private readonly width: number;
   private readonly height: number;
   private time = 0;
+  private resizer: ResizeObserver | undefined;
 
   constructor(
     private readonly container: HTMLElement,
@@ -118,7 +119,7 @@ export class Stage {
     if (opts.autoFit ?? true) {
       this.fit();
       const RO = (globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
-      if (RO) new RO(() => this.fit()).observe(container);
+      if (RO) (this.resizer = new RO(() => this.fit())).observe(container);
     }
     this.render(0);
   }
@@ -339,6 +340,7 @@ export class Stage {
 
   /** Detaches the stage from its container. */
   destroy(): void {
+    this.resizer?.disconnect();
     this.root.remove();
   }
 }

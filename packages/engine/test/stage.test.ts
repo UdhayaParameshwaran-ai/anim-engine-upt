@@ -6,7 +6,7 @@ import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { resolve } from "@anim/timeline";
 import { MockTtsProvider, speakVideo } from "@anim/tts";
 import { beforeEach, describe, expect, it } from "vitest";
-import { exposeForRender, Stage } from "../src/index.js";
+import { exposeForRender, Player, Stage } from "../src/index.js";
 
 const EXAMPLES = join(import.meta.dirname, "../../../examples");
 
@@ -135,5 +135,64 @@ describe("stage", () => {
     expect(hook.frames).toBe(Math.round(tl.duration * tl.fps));
     hook.frame(hook.frames - 1);
     expect(stage.currentTime).toBeCloseTo((hook.frames - 1) / tl.fps, 6);
+  });
+});
+
+describe("live player", () => {
+  const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+  const twoScenes = () => readFileSync(join(EXAMPLES, "photosynthesis.txt"), "utf8");
+  async function timelines() {
+    const src = twoScenes();
+    const cut = src.indexOf("\nscene ", src.indexOf("\nscene ") + 1);
+    const build = async (text: string) => {
+      const ir = compile(text).ir!;
+      return { ir, tl: resolve(ir, await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) })) };
+    };
+    return [await build(src.slice(0, cut + 1)), await build(src)] as const;
+  }
+
+  it("holds at the end of a growing timeline and resumes when it is extended", async () => {
+    const [part, full] = await timelines();
+    const waits: boolean[] = [];
+    let ended = false;
+    const stage = new Stage(container, part.ir, part.tl, { autoFit: false });
+    const player = new Player(stage, part.tl, { live: true, onWait: (w) => waits.push(w), onEnd: () => (ended = true) });
+    player.seek(part.tl.duration - 0.03);
+    player.play();
+    await sleep(120);
+    expect(player.isWaiting).toBe(true);
+    expect(player.isPlaying).toBe(true); // still "playing" from the user's point of view
+    expect(player.time).toBeCloseTo(part.tl.duration, 6);
+    expect(ended).toBe(false);
+
+    stage.destroy();
+    const bigger = new Stage(container, full.ir, full.tl, { autoFit: false });
+    await player.extend(bigger, full.tl, true);
+    expect(player.isWaiting).toBe(false);
+    await sleep(60);
+    expect(player.time).toBeGreaterThan(part.tl.duration);
+    expect(bigger.currentTime).toBeGreaterThan(part.tl.duration);
+    expect(waits).toEqual([true, false]);
+
+    // Final timeline: reaching the end now ends playback.
+    player.seek(full.tl.duration - 0.03);
+    await sleep(120);
+    expect(ended).toBe(true);
+    expect(player.isPlaying).toBe(false);
+    player.pause();
+  });
+
+  it("ends a waiting player when the stream is closed", async () => {
+    const [part] = await timelines();
+    let ended = false;
+    const stage = new Stage(container, part.ir, part.tl, { autoFit: false });
+    const player = new Player(stage, part.tl, { live: true, onEnd: () => (ended = true) });
+    player.seek(part.tl.duration - 0.02);
+    player.play();
+    await sleep(100);
+    expect(player.isWaiting).toBe(true);
+    player.finish();
+    expect(ended).toBe(true);
+    expect(player.isPlaying).toBe(false);
   });
 });

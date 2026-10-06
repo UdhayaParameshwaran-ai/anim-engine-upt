@@ -36,9 +36,8 @@ water = icon:droplet
 | `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
 | `packages/llm` | ✅ OpenRouter + Groq, generation pipeline | Prompt → outline → scenes → validate → LLM repair → auto-fix |
 | `packages/engine` | ✅ stage, components, player | Browser SVG/HTML engine; stateless `render(t)`, audio-clocked player |
-| `apps/preview` | ✅ dev preview | Edit a script, rebuild, play with audible word ticks, jump between cues |
 | `apps/render` | ✅ MP4 exporter | Same engine stepped frame by frame in headless Chrome, parallel H.264 segments + mixed narration |
-| `apps/studio` | planned | Debug/preview UI |
+| `apps/studio` | ✅ Studio | Editor with diagnostics, timeline panel, inspector, bounds overlay, generate-and-play while later scenes are still being written |
 
 ## Generate from a prompt
 
@@ -60,13 +59,23 @@ pnpm test
 pnpm check examples/photosynthesis.txt          # diagnostics
 pnpm check my-script.txt --fixed --ir           # auto-fixed script + IR
 pnpm check my-script.txt --timeline=tl.json     # mock TTS + resolved timeline
-pnpm preview                                    # http://localhost:5199
+pnpm studio                                     # http://localhost:5199
 pnpm render examples/cells.txt -o out/cells.mp4 # export MP4 (--workers=N --from=s --to=s --jpeg)
 ```
 
 Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmpeg from `$FFMPEG_PATH`, the system `PATH`, or the bundled `ffmpeg-static` build.
 
-The preview uses the mock voice, which plays a soft tick at the start of every word. Each visual should land on its tick.
+## Studio
+
+`pnpm studio` opens the debugging UI at http://localhost:5199.
+
+- **Script tab:** edit a script and press Ctrl+Enter to rebuild. Lines with diagnostics are marked in the gutter, and the line being played is highlighted.
+- **Generate tab:** enter a topic and play the video while the LLM writes it. Playback starts as soon as scene 1 is validated. Later scenes are appended without moving what has already played, and the player waits on the last frame if it catches up with generation. Without API keys, "replay an example" streams an example script through the same pipeline.
+- **Timeline panel:** shows scenes, beats (inserted holds are hatched), words, cues (approximate ones in amber), sync-report flags, and one track per element with its tweens colored by verb category. Click to seek, click a bar to jump to its source line, and Ctrl+wheel to zoom.
+- **Inspector:** shows the current scene, step, beat and word, each element's values, and the tween driving it. Click to jump to the source.
+- **Bounds overlay** (O): shows each element's current box and id, following the camera.
+
+The Studio uses the mock voice, which plays a soft tick at the start of every word. Each visual should land on its tick.
 
 ## Git account for this repo
 

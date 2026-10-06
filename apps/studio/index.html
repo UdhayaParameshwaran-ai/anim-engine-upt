@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anim Studio</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <section class="side">
+        <nav class="tabs" role="tablist">
+          <button role="tab" data-tab="script" class="on">Script</button>
+          <button role="tab" data-tab="generate">Generate</button>
+        </nav>
+
+        <div id="tab-script" class="tab on">
+          <header>
+            <select id="examples" aria-label="Example script"></select>
+            <label class="speed">voice speed <input id="speed" type="number" min="0.5" max="2" step="0.1" value="1" /></label>
+            <button id="build" class="primary" title="Ctrl+Enter">Build</button>
+          </header>
+          <div class="code">
+            <pre id="gutter" aria-hidden="true"></pre>
+            <textarea id="source" spellcheck="false" aria-label="DSL script" wrap="off"></textarea>
+          </div>
+          <ul id="diagnostics" aria-label="Diagnostics"></ul>
+        </div>
+
+        <div id="tab-generate" class="tab">
+          <form id="gen-form">
+            <label>Topic <textarea id="topic" rows="3" placeholder="how vaccines train the immune system"></textarea></label>
+            <div class="row">
+              <label>Provider
+                <select id="provider">
+                  <option value="auto">auto (OpenRouter → Groq)</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="groq">Groq</option>
+                  <option value="replay">replay an example (offline)</option>
+                </select>
+              </label>
+              <label>Mode
+                <select id="mode">
+                  <option value="outline">outline, then scenes</option>
+                  <option value="single">single streamed pass</option>
+                </select>
+              </label>
+            </div>
+            <label id="replay-row" hidden>Example <select id="replay-example"></select></label>
+            <p id="keys" class="hint"></p>
+            <div class="row">
+              <button id="generate" class="primary" type="submit">Generate &amp; play</button>
+              <button id="stop" type="button" disabled>Stop</button>
+            </div>
+          </form>
+          <ol id="gen-log" aria-label="Generation log"></ol>
+        </div>
+      </section>
+
+      <section class="viewer">
+        <div id="stage"><div id="waiting" hidden>writing the next scene…</div></div>
+        <div class="transport">
+          <button id="prev" title="Previous cue (←)">⏮</button>
+          <button id="play" title="Play / pause (space)">▶</button>
+          <button id="next" title="Next cue (→)">⏭</button>
+          <input id="scrub" type="range" min="0" max="1" step="0.001" value="0" aria-label="Timeline" />
+          <span id="clock">0.00 / 0.00</span>
+          <label class="toggle" title="Show element bounds and ids (O)"><input id="overlay-toggle" type="checkbox" /> bounds</label>
+        </div>
+        <p id="narration" aria-live="off"></p>
+        <div id="timeline" aria-label="Timeline"></div>
+        <div class="panels">
+          <div class="inspector"><h3>Inspector</h3><div id="inspector"></div></div>
+          <div><h3>Cues</h3><ol id="cues"></ol></div>
+          <div><h3>Sync report</h3><ul id="report"></ul></div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -14,3 +14,4 @@ export {
 } from "./client.js";
 export { checkScene, clean, generate, split, type GenerateOptions, type GenerateResult } from "./generate.js";
 export { fullPrompt, outlinePrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
+export { ReplayClient, type ReplayOptions } from "./replay.js";

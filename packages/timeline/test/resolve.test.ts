@@ -162,6 +162,23 @@ describe("scenes", () => {
     expect(() => resolve(c.ir!, [])).toThrow(/no synthesized speech/);
   });
 
+  for (const file of examples.filter((f) => readFileSync(join(EXAMPLES, f), "utf8").match(/^scene /gm)!.length > 1)) {
+    it(`${file}: appending scenes never moves earlier ones (progressive playback)`, async () => {
+      const src = readFileSync(join(EXAMPLES, file), "utf8");
+      const cut = src.indexOf("\nscene ", src.indexOf("\nscene ") + 1);
+      const [prefix, full] = [await build(src.slice(0, cut + 1)), await build(src)];
+      const first = prefix.tl.scenes.map((s) => s.id);
+      const mine = (tl: ResolvedTimeline) => ({
+        scenes: tl.scenes.filter((s) => first.includes(s.id)),
+        tracks: tl.tracks.filter((t) => first.includes(t.target.split("/")[0]!)),
+        cues: tl.cues.filter((c) => first.includes(c.scene)),
+        audio: tl.audio.slice(0, prefix.tl.audio.length),
+      });
+      expect(mine(full.tl)).toEqual(mine(prefix.tl));
+      expect(full.tl.duration).toBeGreaterThan(prefix.tl.duration);
+    });
+  }
+
   it("exposes tracks sorted by start time", async () => {
     const { tl } = await build(readFileSync(join(EXAMPLES, "learn-to-code.txt"), "utf8"));
     const sorted = [...tl.tracks].sort((x: Tween, y: Tween) => x.t0 - y.t0);

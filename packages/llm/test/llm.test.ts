@@ -8,6 +8,7 @@ import {
   generate,
   LlmError,
   OpenAICompatibleClient,
+  ReplayClient,
   retrieveAssets,
   systemPrompt,
   type ChatRequest,
@@ -220,5 +221,40 @@ describe("generate", () => {
     const r = await generate("x", { client: new ScriptedLlm((last) => (last.startsWith("Plan") ? outline : scene)), maxRepairs: 1 });
     expect(r.ok).toBe(false);
     expect(r.diagnostics.some((d) => d.code === "NAR407" && d.severity === "error")).toBe(true);
+  });
+});
+
+describe("progressive output", () => {
+  it("hands each scene over with the header, so every prefix is a playable script", async () => {
+    const llm = new ScriptedLlm((last) => {
+      if (last.startsWith("Plan a narrated")) return OUTLINE;
+      return last.includes('Write scene "need"') ? NEED_OK : LEAF_OK;
+    });
+    const prefixes: string[] = [];
+    const parts: string[] = [];
+    await generate("plants", {
+      client: llm,
+      onScene: (text, i, header) => {
+        parts[i] = text;
+        prefixes.push(`${header}\n\n${parts.slice(0, i + 1).join("\n\n")}\n`);
+      },
+    });
+    expect(prefixes).toHaveLength(2);
+    expect(prefixes[0]).toMatch(/^video 1 "Plants"\ntheme paper\n\nscene need/);
+    for (const p of prefixes) expect(compile(p).ok).toBe(true);
+    expect(compile(prefixes[0]!).ir!.scenes.map((s) => s.id)).toEqual(["need"]);
+    expect(compile(prefixes[1]!).ir!.scenes.map((s) => s.id)).toEqual(["need", "leaf"]);
+  });
+
+  it("replays a script as a stream for offline runs", async () => {
+    const script = `video 1 "Plants"\ntheme paper\n\n${NEED_OK}\n\n${LEAF_OK}\n`;
+    const waits: number[] = [];
+    const client = new ReplayClient(script, { chunk: 10, delayMs: 5, sleep: async (ms) => void waits.push(ms) });
+    const ready: number[] = [];
+    const r = await generate("x", { client, mode: "single", onScene: (_, i) => ready.push(i) });
+    expect(r.ok).toBe(true);
+    expect(r.calls).toBe(1);
+    expect(ready).toEqual([0, 1]);
+    expect(waits.length).toBe(Math.ceil(script.length / 10) - 1);
   });
 });

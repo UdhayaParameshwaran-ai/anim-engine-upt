@@ -48,10 +48,15 @@ export function createEvaluator(timeline: Pick<ResolvedTimeline, "initial" | "tr
     e.tweens.push(tw); // tracks are sorted by t0, then source order
   }
 
-  function valueAt(target: string, prop: Prop, t: number): Value | undefined {
+  /** The tween that sets a property at t (undefined: the initial value applies). */
+  function governing(target: string, prop: Prop, t: number): Tween | undefined {
     const e = index.get(`${target}\u0000${prop}`);
-    const governing = e && lastStartedBy(e.tweens, t);
-    return governing ? tweenValue(governing, t) : timeline.initial[target]?.[prop];
+    return e && lastStartedBy(e.tweens, t);
+  }
+
+  function valueAt(target: string, prop: Prop, t: number): Value | undefined {
+    const tw = governing(target, prop, t);
+    return tw ? tweenValue(tw, t) : timeline.initial[target]?.[prop];
   }
 
   function at(t: number): FrameState {
@@ -67,7 +72,7 @@ export function createEvaluator(timeline: Pick<ResolvedTimeline, "initial" | "tr
     return state;
   }
 
-  return { at, valueAt };
+  return { at, valueAt, governing };
 }
 
 /** Last tween with t0 ≤ t (binary search; ties resolved by array order). */
