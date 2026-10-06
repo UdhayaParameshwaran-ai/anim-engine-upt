@@ -34,10 +34,20 @@ water = icon:droplet
 | `packages/compiler` | ✅ layout + lowering + CLI | DSL → VideoIR; the layout engine decides every coordinate |
 | `packages/tts` | ✅ interface, mock, aligner, cache | Provider-neutral TTS; any timing granularity → word timings |
 | `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
+| `packages/llm` | ✅ OpenRouter + Groq, generation pipeline | Prompt → outline → scenes → validate → LLM repair → auto-fix |
 | `packages/engine` | ✅ stage, components, player | Browser SVG/HTML engine; stateless `render(t)`, audio-clocked player |
 | `apps/preview` | ✅ dev preview | Edit a script, rebuild, play with audible word ticks, jump between cues |
 | `apps/render` | ✅ MP4 exporter | Same engine stepped frame by frame in headless Chrome, parallel H.264 segments + mixed narration |
 | `apps/studio` | planned | Debug/preview UI |
+
+## Generate from a prompt
+
+```sh
+cp .env.example .env          # add OPENROUTER_API_KEY and/or GROQ_API_KEY
+pnpm generate "how vaccines train the immune system" --render
+```
+
+OpenRouter is the primary provider and Groq the fallback. Change the order with `--provider=groq,openrouter` or `ANIM_LLM_PROVIDERS`, and the model with `--model=<id>` or `ANIM_OPENROUTER_MODEL` / `ANIM_GROQ_MODEL`. `--single` writes the whole script in one streamed pass instead of outline → scenes.
 
 ## Develop
 

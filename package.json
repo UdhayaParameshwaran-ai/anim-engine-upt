@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "check": "tsc -b && node packages/compiler/dist/cli.js",
     "preview": "vite --config apps/preview/vite.config.ts",
-    "render": "tsc -b && node apps/render/dist/cli.js"
+    "render": "tsc -b && node apps/render/dist/cli.js",
+    "generate": "tsc -b && node packages/llm/dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

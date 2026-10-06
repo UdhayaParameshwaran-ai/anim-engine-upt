@@ -104,6 +104,21 @@ importers:
 
   packages/ir: {}
 
+  packages/llm:
+    dependencies:
+      '@anim/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@anim/dsl':
+        specifier: workspace:*
+        version: link:../dsl
+      '@anim/registry':
+        specifier: workspace:*
+        version: link:../registry
+      '@anim/render':
+        specifier: workspace:*
+        version: link:../../apps/render
+
   packages/registry: {}
 
   packages/timeline:

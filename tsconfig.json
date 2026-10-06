@@ -27,6 +27,9 @@
     },
     {
       "path": "apps/render"
+    },
+    {
+      "path": "packages/llm"
     }
   ]
 }
