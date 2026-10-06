@@ -312,7 +312,9 @@ export class Stage {
       c.head.style.opacity = String(round(clamp01((draw - 0.85) / 0.15), 3));
     }
     if (c.label) {
-      const off = 22;
+      // Clear the line by half the label's extent along the line's normal (estimated glyph width).
+      const halfW = ((c.label.textContent ?? "").length * 0.55 * 26) / 2;
+      const off = 10 + Math.abs(nx) * halfW + Math.abs(ny) * 13;
       c.label.setAttribute("x", String(round(ctrl[0] + nx * off)));
       c.label.setAttribute("y", String(round(ctrl[1] + ny * off + 8)));
     }

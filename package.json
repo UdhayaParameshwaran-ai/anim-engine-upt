@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc -b && node packages/compiler/dist/cli.js",
-    "preview": "vite --config apps/preview/vite.config.ts"
+    "preview": "vite --config apps/preview/vite.config.ts",
+    "render": "tsc -b && node apps/render/dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

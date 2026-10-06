@@ -9,6 +9,6 @@ const alias = Object.fromEntries(readdirSync(packages).map((name) => [`@anim/${n
 export default defineConfig({
   resolve: { alias },
   test: {
-    include: ["packages/*/test/**/*.test.ts"],
+    include: ["packages/*/test/**/*.test.ts", "apps/*/test/**/*.test.ts"],
   },
 });

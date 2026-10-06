@@ -7,7 +7,7 @@
 
 export const ICONS: Record<string, string> = {
   sun: `<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>`,
-  droplet: `<path d="M12 2.7C12 2.7 5.5 9.6 5.5 14.2a6.5 6.5 0 0 0 13 0C18.5 9.6 12 2.7 12 2.7z" data-fill="accent"/>`,
+  droplet: `<path d="M12 2.7C12 2.7 5.5 9.6 5.5 14.2a6.5 6.5 0 0 0 13 0C18.5 9.6 12 2.7 12 2.7z" data-fill="cool"/>`,
   wind: `<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h7"/>`,
   cube: `<path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/>`,
   bolt: `<path d="M13 2L4 14h7l-1 8 10-13h-7z" data-fill="accent"/>`,

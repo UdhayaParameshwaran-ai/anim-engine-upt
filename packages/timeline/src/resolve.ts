@@ -34,6 +34,8 @@ export interface ResolveOptions {
   holdPad?: number;
   /** Shortest animation; `fit`/`until` spans shorter than this are clamped. */
   minDuration?: number;
+  /** Shortest elastic highlight, so emphasis on one short word still reads. */
+  minEmphasis?: number;
   transitions?: Record<string, number>;
 }
 
@@ -79,6 +81,7 @@ class Resolver {
   private readonly tailPad: number;
   private readonly holdPad: number;
   private readonly minDuration: number;
+  private readonly minEmphasis: number;
   private readonly transitions: Record<string, number>;
 
   private readonly tracks: Tween[] = [];
@@ -104,6 +107,7 @@ class Resolver {
     this.tailPad = opts.tailPad ?? 0.6;
     this.holdPad = opts.holdPad ?? 0.15;
     this.minDuration = opts.minDuration ?? 0.15;
+    this.minEmphasis = opts.minEmphasis ?? 0.8;
     this.transitions = { ...DEFAULT_TRANSITIONS, ...opts.transitions };
   }
 
@@ -209,6 +213,7 @@ class Resolver {
               if (elastic) this.note(TimelineCodes.DurationClamped, "warning", `\`${call.verb}\` span is ${round(Math.max(0, end - t))}s; clamped to ${this.minDuration}s`, action.line, t);
               end = this.q(t + this.minDuration);
             }
+            if (elastic && call.verb === "highlight") end = Math.max(end, this.q(t + this.minEmphasis));
             const dur = end - t;
             const n = call.targets.includes("*") ? 1 : Math.max(1, call.targets.length);
             const callEnd = this.q(t + (n - 1) * call.stagger + dur);

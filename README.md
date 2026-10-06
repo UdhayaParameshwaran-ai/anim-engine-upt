@@ -36,7 +36,7 @@ water = icon:droplet
 | `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
 | `packages/engine` | ✅ stage, components, player | Browser SVG/HTML engine; stateless `render(t)`, audio-clocked player |
 | `apps/preview` | ✅ dev preview | Edit a script, rebuild, play with audible word ticks, jump between cues |
-| `apps/render` | planned | Headless Chromium + ffmpeg exporter |
+| `apps/render` | ✅ MP4 exporter | Same engine stepped frame by frame in headless Chrome, parallel H.264 segments + mixed narration |
 | `apps/studio` | planned | Debug/preview UI |
 
 ## Develop
@@ -51,7 +51,10 @@ pnpm check examples/photosynthesis.txt          # diagnostics
 pnpm check my-script.txt --fixed --ir           # auto-fixed script + IR
 pnpm check my-script.txt --timeline=tl.json     # mock TTS + resolved timeline
 pnpm preview                                    # http://localhost:5199
+pnpm render examples/cells.txt -o out/cells.mp4 # export MP4 (--workers=N --from=s --to=s --jpeg)
 ```
+
+Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmpeg from `$FFMPEG_PATH`, the system `PATH`, or the bundled `ffmpeg-static` build.
 
 The preview uses the mock voice, which plays a soft tick at the start of every word. Each visual should land on its tick.
 
