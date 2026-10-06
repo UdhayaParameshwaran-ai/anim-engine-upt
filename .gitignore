@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.env
+.env.*
+!.env.example
+# render/TTS artifacts
+.cache/
+out/
+*.mp4
+*.wav

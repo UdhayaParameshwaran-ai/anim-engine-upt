@@ -1,0 +1,22 @@
+video 1 "Should I Learn to Code?"
+theme paper
+voice narrator
+
+scene decide "One question" template=flow
+n1 = node "Should I learn to code?"
+n2 = node "Pick one language"
+n3 = node "Try a free tutorial"
+n4 = node "Build something small"
+e1 = n1 -> n2 "yes"
+e2 = n1 -> n3 "not sure"
+e3 = n2 -> n4
+e4 = n3 -> n4
+
+> It all starts with {1}one question: should I learn to code?
+1 pop n1
+> If the answer is {1}yes, pick one language. If you're {2}not sure, try a free tutorial.
+1 draw e1 then pop n2
+2 draw e2 then pop n3
+> Either way, the next step is the same: {1 build something small}.
+1 draw e3,e4 then pop n4
+end highlight n4 1.5

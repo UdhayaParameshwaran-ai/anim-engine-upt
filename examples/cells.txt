@@ -1,0 +1,29 @@
+video 1 "Plant vs Animal Cells"
+theme chalk
+voice narrator
+
+scene compare "Two kinds of cell" template=compare in=fade
+title = title "Plant vs Animal Cells"
+left  = asset:cell.plant "Plant cell"
+right = asset:cell.animal "Animal cell"
+
+> Cells come in {1}two familiar kinds.
+start write title
+1 draw left,right /0.3
+> A {1 plant cell} has a rigid wall and green chloroplasts.
+1 highlight left.wall fit
+end highlight left.chloroplast 1
+> An {1 animal cell} has no wall, so it can change shape.
+1 highlight right fit
+1 dim left
+
+scene recap "Recap" template=steps
+title = title "Remember"
+s1 = card "Wall" "Plants only"
+s2 = card "Chloroplasts" "Plants only"
+s3 = card "Membrane" "Both"
+> Remember: the {1}wall and the {2}chloroplasts belong to plants, but {3}both have a membrane.
+start fade title
+1 pop s1
+2 pop s2
+3 pop s3 then pulse s3

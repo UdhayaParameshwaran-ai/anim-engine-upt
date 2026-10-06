@@ -1,0 +1,43 @@
+video 1 "How Photosynthesis Works"
+theme chalk
+voice narrator
+size 1920x1080 30
+
+scene need "What a plant needs" in=fade
+layout row
+sun   = icon:sun
+water = icon:droplet
+co2   = text "CO₂"
+leaf  = asset:leaf @C
+a1    = arrow sun->leaf
+a2    = arrow water->leaf
+a3    = arrow co2->leaf
+
+> Every plant needs three ingredients: {1}sunlight, {2}water, and {3}carbon dioxide.
+1 pop sun
+2 pop water
+3 write co2
+> All three flow into the {1 leaf}.
+1 draw leaf
+1 draw a1,a2,a3 /0.15
+end pulse leaf
+
+step inside "Inside the leaf"
+focus leaf
+chl = label "chloroplast" @right-of:leaf
+> Inside each leaf are tiny factories called {1 chloroplasts}.
+1 write chl then highlight leaf fit
+wait 0.5
+
+scene output "What it makes" in=slide
+layout split
+eq   = formula "6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂" @T
+sug  = icon:cube "glucose" @L
+oxy  = icon:wind "oxygen" @R
+> Using light energy, the plant builds {1}sugar and releases {2}oxygen.
+start write eq 1.2
+1 pop sug
+2 pop oxy then move oxy @TR
+> That {1 sugar} is the plant's food.
+1 highlight sug fit
+1 dim eq,oxy
