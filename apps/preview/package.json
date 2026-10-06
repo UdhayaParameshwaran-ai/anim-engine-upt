@@ -1,0 +1,16 @@
+{
+  "name": "@anim/preview",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@anim/compiler": "workspace:*",
+    "@anim/engine": "workspace:*",
+    "@anim/ir": "workspace:*",
+    "@anim/timeline": "workspace:*",
+    "@anim/tts": "workspace:*"
+  }
+}

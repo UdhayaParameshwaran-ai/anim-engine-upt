@@ -8,8 +8,11 @@ export interface MockOptions {
   speed?: number;
   /** Granularity of returned timings, to exercise the aligner. */
   timing?: TimingUnit | "none";
-  /** Emit real (silent) WAV data. Off in tests that don't need it. */
-  audio?: boolean;
+  /**
+   * Audio to emit: true = silent WAV, "beeps" = a soft tick at the start of
+   * every word (makes sync audible in previews), false = none (tests).
+   */
+  audio?: boolean | "beeps";
 }
 
 /**
@@ -23,14 +26,14 @@ export class MockTtsProvider implements TtsProvider {
   private readonly charDuration: number;
   private readonly speed: number;
   private readonly timing: TimingUnit | "none";
-  private readonly audio: boolean;
+  private readonly audio: boolean | "beeps";
 
   constructor(opts: MockOptions = {}) {
     this.charDuration = opts.charDuration ?? 0.06;
     this.speed = opts.speed ?? 1;
     this.timing = opts.timing ?? "char";
     this.audio = opts.audio ?? true;
-    this.id = `mock:${this.charDuration}:${this.speed}:${this.timing}`;
+    this.id = `mock:${this.charDuration}:${this.speed}:${this.timing}:${this.audio}`;
     this.capabilities = { timing: this.timing, ssml: false, maxChars: 100_000 };
   }
 
@@ -48,7 +51,7 @@ export class MockTtsProvider implements TtsProvider {
     }
     const duration = round(t + 0.05);
     const result: TtsResult = {
-      audio: this.audio ? wav(duration) : new Uint8Array(),
+      audio: this.audio === "beeps" ? beeps(req.text, chars, duration) : this.audio ? wav(duration) : new Uint8Array(),
       format: "wav",
       sampleRate: 16000,
       duration,
@@ -78,4 +81,18 @@ export class MockTtsProvider implements TtsProvider {
 
 function round(n: number): number {
   return Math.round(n * 1e4) / 1e4;
+}
+
+/** A short decaying 660 Hz tick at each word start. */
+function beeps(text: string, chars: { t0: number }[], duration: number, rate = 16000): Uint8Array {
+  const samples = new Int16Array(Math.round(duration * rate));
+  for (const m of text.matchAll(/\S+/g)) {
+    const start = Math.round(chars[m.index!]!.t0 * rate);
+    const len = Math.round(0.07 * rate);
+    for (let i = 0; i < len && start + i < samples.length; i++) {
+      const env = Math.exp((-6 * i) / len);
+      samples[start + i] = Math.round(Math.sin((2 * Math.PI * 660 * i) / rate) * env * 6000);
+    }
+  }
+  return wav(duration, rate, samples);
 }

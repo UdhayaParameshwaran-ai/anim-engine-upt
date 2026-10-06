@@ -34,7 +34,8 @@ water = icon:droplet
 | `packages/compiler` | ✅ layout + lowering + CLI | DSL → VideoIR; the layout engine decides every coordinate |
 | `packages/tts` | ✅ interface, mock, aligner, cache | Provider-neutral TTS; any timing granularity → word timings |
 | `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
-| `packages/engine` | planned | Browser SVG/HTML engine, `render(t)` |
+| `packages/engine` | ✅ stage, components, player | Browser SVG/HTML engine; stateless `render(t)`, audio-clocked player |
+| `apps/preview` | ✅ dev preview | Edit a script, rebuild, play with audible word ticks, jump between cues |
 | `apps/render` | planned | Headless Chromium + ffmpeg exporter |
 | `apps/studio` | planned | Debug/preview UI |
 
@@ -49,7 +50,10 @@ pnpm test
 pnpm check examples/photosynthesis.txt          # diagnostics
 pnpm check my-script.txt --fixed --ir           # auto-fixed script + IR
 pnpm check my-script.txt --timeline=tl.json     # mock TTS + resolved timeline
+pnpm preview                                    # http://localhost:5199
 ```
+
+The preview uses the mock voice, which plays a soft tick at the start of every word. Each visual should land on its tick.
 
 ## Git account for this repo
 

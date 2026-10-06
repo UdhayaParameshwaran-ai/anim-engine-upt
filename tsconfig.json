@@ -21,6 +21,9 @@
     },
     {
       "path": "packages/timeline"
+    },
+    {
+      "path": "packages/engine"
     }
   ]
 }

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anim Preview</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <section class="editor">
+        <header>
+          <select id="examples" aria-label="Example script"></select>
+          <label class="speed">voice speed <input id="speed" type="number" min="0.5" max="2" step="0.1" value="1" /></label>
+          <button id="build" title="Ctrl+Enter">Build</button>
+        </header>
+        <textarea id="source" spellcheck="false" aria-label="DSL script"></textarea>
+        <ul id="diagnostics" aria-label="Diagnostics"></ul>
+      </section>
+      <section class="viewer">
+        <div id="stage"></div>
+        <div class="transport">
+          <button id="prev" title="Previous cue">⏮</button>
+          <button id="play" title="Play / pause (space)">▶</button>
+          <button id="next" title="Next cue">⏭</button>
+          <input id="scrub" type="range" min="0" max="1" step="0.001" value="0" aria-label="Timeline" />
+          <span id="clock">0.00 / 0.00</span>
+        </div>
+        <p id="narration" aria-live="off"></p>
+        <div class="panels">
+          <div><h3>Cues</h3><ol id="cues"></ol></div>
+          <div><h3>Sync report</h3><ul id="report"></ul></div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

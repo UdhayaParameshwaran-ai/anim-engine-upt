@@ -9,11 +9,14 @@
     "typecheck": "tsc -b --pretty",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "tsc -b && node packages/compiler/dist/cli.js"
+    "check": "tsc -b && node packages/compiler/dist/cli.js",
+    "preview": "vite --config apps/preview/vite.config.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "happy-dom": "^20.14.5",
     "typescript": "^5.6.0",
+    "vite": "^8.3.2",
     "vitest": "^3.0.0"
   }
 }
