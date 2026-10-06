@@ -64,7 +64,7 @@ function mount(ir: VideoIR, tl: ResolvedTimeline, live = false): Session {
   const player = new Player(stage, tl, {
     live,
     onTime: update,
-    onEnd: () => (playBtn.textContent = "▶"),
+    onEnd: () => setPlaying(false),
     onWait: (w) => (waiting.hidden = !w),
   });
   session = { ir, tl, stage, player, ev: createEvaluator(tl), overlay: new Overlay(stage) };
@@ -82,7 +82,7 @@ async function extend(ir: VideoIR, tl: ResolvedTimeline, final: boolean): Promis
     const s = mount(ir, tl, !final);
     await loadAudio(s.player);
     s.player.play();
-    playBtn.textContent = "⏸";
+    setPlaying(true);
     return;
   }
   const old = session;
@@ -104,7 +104,7 @@ function teardown(): void {
   session?.stage.destroy();
   session = undefined;
   waiting.hidden = true;
-  playBtn.textContent = "▶";
+  setPlaying(false);
 }
 
 async function loadAudio(player: Player): Promise<void> {
@@ -136,8 +136,9 @@ function update(t: number): void {
   if (!s) return;
   const { tl } = s;
   scrub.value = String(t);
-  clock.textContent = `${t.toFixed(2)} / ${tl.duration.toFixed(2)}`;
-  playBtn.textContent = s.player.isPlaying ? "⏸" : "▶";
+  scrub.style.setProperty("--p", `${tl.duration ? (t / tl.duration) * 100 : 0}%`);
+  clock.innerHTML = `${fmtTime(t)} <span>/ ${fmtTime(tl.duration)}</span>`;
+  setPlaying(s.player.isPlaying);
 
   // Narration follow-along: the beat being spoken, current word highlighted.
   const words = tl.words;
@@ -158,6 +159,16 @@ function update(t: number): void {
   s.overlay.enabled = overlayToggle.checked;
   s.overlay.update(m);
   editor.setNow(lineAt(m));
+}
+
+function setPlaying(playing: boolean): void {
+  playBtn.dataset.state = playing ? "playing" : "paused";
+  playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+}
+
+function fmtTime(t: number): string {
+  const m = Math.floor(t / 60);
+  return `${m}:${(t - m * 60).toFixed(1).padStart(4, "0")}`;
 }
 
 function selectLine(line: number): void {
@@ -228,7 +239,7 @@ function startGeneration(): void {
   let firstFrame = 0;
   const es = (events = new EventSource(`/api/generate?${q}`));
   genBtn.disabled = true;
-  stopBtn.disabled = false;
+  stopBtn.hidden = false;
   const json = (e: Event) => JSON.parse((e as MessageEvent<string>).data);
   // Scene updates are applied strictly in order.
   const then = (fn: () => Promise<void> | void) => (queue = queue.then(fn).catch((e) => log(String(e), "error")));
@@ -242,7 +253,7 @@ function startGeneration(): void {
       showDiagnostics(d.diagnostics);
       if (!d.ok || !d.ir || !d.timeline) return log(`scene ${d.index + 1} didn't compile; waiting for the next one`, "warning");
       if (!firstFrame) firstFrame = performance.now();
-      log(`▶ scene ${d.index + 1} ready (${((performance.now() - started) / 1000).toFixed(1)}s) — ${d.timeline.duration.toFixed(1)}s of video`, "ok");
+      log(`scene ${d.index + 1} ready (${((performance.now() - started) / 1000).toFixed(1)}s) — ${d.timeline.duration.toFixed(1)}s of video`, "ok");
       await extend(d.ir, d.timeline, false);
     });
   });
@@ -279,7 +290,7 @@ function finishStream(es: EventSource): void {
   es.close();
   if (events === es) events = undefined;
   genBtn.disabled = false;
-  stopBtn.disabled = true;
+  stopBtn.hidden = true;
 }
 
 function stopGeneration(): void {
@@ -293,7 +304,7 @@ async function loadProviders(): Promise<void> {
   const p: { openrouter: boolean; groq: boolean; examples: string[] } = await (await fetch("/api/providers")).json();
   replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
   $<HTMLParagraphElement>("keys").innerHTML =
-    `OpenRouter key ${p.openrouter ? "✓" : "✗"} · Groq key ${p.groq ? "✓" : "✗"}` +
+    `OpenRouter ${p.openrouter ? "connected" : "not set"} · Groq ${p.groq ? "connected" : "not set"}` +
     (p.openrouter || p.groq ? "" : ` — add keys to <code>.env</code>, or replay an example offline.`);
   if (!p.openrouter && !p.groq) provider.value = "replay";
   $<HTMLLabelElement>("replay-row").hidden = provider.value !== "replay";
@@ -360,6 +371,33 @@ $<HTMLFormElement>("gen-form").addEventListener("submit", (e) => {
   startGeneration();
 });
 stopBtn.addEventListener("click", () => stopGeneration());
+$<HTMLTextAreaElement>("topic").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
+    e.preventDefault();
+    if (!genBtn.disabled) startGeneration();
+  }
+});
+
+// Theme: light by default, else the system preference, remembered per browser.
+const themeKey = "anim-studio-theme";
+function applyTheme(theme: "light" | "dark"): void {
+  document.documentElement.dataset.theme = theme;
+}
+try {
+  const saved = localStorage.getItem(themeKey);
+  applyTheme(saved === "dark" || saved === "light" ? saved : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+} catch {
+  applyTheme("light");
+}
+$<HTMLButtonElement>("theme").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  try {
+    localStorage.setItem(themeKey, next);
+  } catch {
+    // storage unavailable: the choice lasts for this page only
+  }
+});
 document.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
   if (e.code === "Space") {
