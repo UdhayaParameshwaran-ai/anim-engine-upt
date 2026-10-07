@@ -39,7 +39,7 @@ scene d "Z pattern" compose=z
 s1 = icon:sun "Light in"
 s2 = icon:cube "Sugar made"
 s3 = icon:wind "Oxygen out"
-s4 = icon:leaf "Plant grows"
+s4 = asset:leaf "Plant grows"
 > Light {1}goes in, {2}sugar is made, {3}oxygen goes out, and the {4}plant grows.
 1 pop s1
 2 pop s2
