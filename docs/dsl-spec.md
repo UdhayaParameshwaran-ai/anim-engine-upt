@@ -33,7 +33,7 @@ The first token decides the statement type.
 | Statement | Syntax | Where |
 |---|---|---|
 | Header | `video <version> ["title"]` | First line, required, once |
-| Setting | `theme <name>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
+| Setting | `theme <look>` · `motion <personality>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
 | Scene | `scene <id> ["title"] [template=<t>] [in=<transition>] [out=<transition>] [keep=<id,id>]` | Top level |
 | Step | `step [<id>] ["title"]` | Inside a scene |
 | Layout | `layout <name>` | Inside a scene/step (when no template does the layout) |
@@ -126,6 +126,25 @@ The registry (`packages/registry`) is the source of truth for verbs, their param
 | NAR429 | R11 | Shown order ≠ slot order (warning) | Reorder the declarations |
 | NAR430 | — | Both `grid=` and `template=` | Drop `template` |
 | NAR431 | — | `@` placement in a grid scene (warning) | Drop it |
+
+## 6b. Looks and motion personalities
+
+A script's visual style comes from two video-wide settings. Neither changes the script's content, layout or timing anchors, so any script can be restyled by changing one line.
+
+- **`theme <look>`** picks a token set: palette, fonts, heading style, corner radius, stroke weight, shadows, emphasis style and how data widgets are filled. Looks: `chalk` `paper` `dark` `light` `editorial` `neo-brutal` `soft-pastel` `tech-neon` `magazine` `bold-pop` `crayon` `midnight-luxe` `blueprint`. Fonts are bundled (Fontsource, OFL), so the preview and the MP4 match on every machine.
+- **`motion <personality>`** decides how the verbs move. It rescales default durations and explicit staggers, reinterprets ease names (`out` under *cinematic* is a long exponential ease), and gives enter verbs their own entrance:
+
+| Motion | Feel | `fade` enters by | `pop` |
+|---|---|---|---|
+| `standard` (default) | balanced | opacity only | 0.6 → 1, spring |
+| `playful` | bouncy, overshooting | rising from below | 0.3 → 1, elastic |
+| `corporate` | quick, clean | a short rise | 0.94 → 1 |
+| `cinematic` | slow, smooth (×1.5) | blurring into focus | 1.08 → 1 with blur |
+| `energetic` | fast, punchy (×0.65) | sliding in from the left | 0.2 → 1, snap |
+| `minimal` | calm | opacity only | opacity only |
+| `dramatic` | weighty (×1.25) | zooming in from depth | 1.6 → 1 with blur |
+
+Narration timing never changes: only default durations scale, and explicit durations, `fit` and `until=` are kept. Unknown names are fixed to the closest one (NAR214).
 
 ## 7. Diagnostics (parser, L1)
 

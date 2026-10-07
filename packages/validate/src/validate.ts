@@ -7,6 +7,7 @@ import {
   findTemplate,
   findVerb,
   LAYOUTS,
+  MOTIONS,
   partsOf,
   RELATIONS,
   SCENE_ATTRS,
@@ -160,6 +161,16 @@ class Validator {
           const near = arg ? closest(arg, THEMES) : undefined;
           this.warn(C.BadSetting, `unknown theme \`${arg ?? ""}\` (themes: ${THEMES.join(", ")})`, s.span, {
             desc: near ? `used \`${near}\`` : "removed; default theme applies",
+            apply: () => (near ? (s.args = [near]) : remove(settings, s)),
+          });
+          break;
+        }
+        case "motion": {
+          const names = MOTIONS.map((m) => m.name);
+          if (arg && names.includes(arg)) break;
+          const near = arg ? closest(arg, names) : undefined;
+          this.warn(C.BadSetting, `unknown motion \`${arg ?? ""}\` (motions: ${names.join(", ")})`, s.span, {
+            desc: near ? `used \`${near}\`` : "removed; standard motion applies",
             apply: () => (near ? (s.args = [near]) : remove(settings, s)),
           });
           break;

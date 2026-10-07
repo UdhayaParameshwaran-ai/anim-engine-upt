@@ -9,6 +9,8 @@ import {
   slotRects,
   SLOTS,
   TEMPLATES,
+  MOTIONS,
+  THEME_SUMMARIES,
   THEMES,
   TRANSITIONS,
   VERBS,
@@ -41,6 +43,7 @@ export function retrieveAssets(text: string, assets: AssetLibrary, limit = 40): 
 
 const EXAMPLE = `video 1 "Plant vs Animal Cells"
 theme chalk
+motion playful
 
 scene compare "Two kinds of cell" template=compare in=fade
 title = title "Plant vs Animal Cells"
@@ -109,7 +112,8 @@ Reply with Narrascript only — no prose, no markdown fences.
 
 STATEMENTS (one per line; the first word decides the type)
 video 1 "Title"                      first line of a full script
-theme ${THEMES.join("|")}
+theme <look>                         see STYLE
+motion <personality>                 see STYLE
 scene <id> "Title" [template=<t>] [in=${TRANSITIONS.join("|")}]
 step <id> "Title"                    optional sub-scene on the same stage
 <id> = <kind>[:<name>] ["text"] [key=value] [@slot]   declares an element (hidden until an action shows it)
@@ -146,6 +150,8 @@ QUALITY
 VERBS
 ${verbs}
 ARGS: 0.8 duration · fit (= length of the span cue) · +0.2 delay · /0.15 stagger · until=<cue> · ease=in|out|inout|spring · color=accent|warn|good|cool|muted · move needs @slot or @right-of:<id> · write sync=true reveals words as spoken
+
+${styleSection()}
 
 TEMPLATES
 ${templates}
@@ -197,9 +203,12 @@ Reply with Narrascript lines only — no prose, no markdown fences.
 
 LINES
 video 1 "Title"
-theme ${THEMES.join("|")}
+theme <look>
+motion <personality>
 scene <id> "Title" template=<t> | grid=<layout code>  [in=${TRANSITIONS.join("|")}]
 # goal: <one line>
+
+${styleSection()}
 
 TEMPLATES (diagrams)
 ${templates}
@@ -216,13 +225,24 @@ PLANNING RULES
 - Plan only facts you are sure of.`;
 }
 
+/** Looks and motion personalities with one line each, so the model can match them to the topic. */
+function styleSection(): string {
+  const looks = THEMES.map((t) => `  ${t.padEnd(14)} ${THEME_SUMMARIES[t]}`).join("\n");
+  const motions = MOTIONS.map((m) => `  ${m.name.padEnd(14)} ${m.summary}`).join("\n");
+  return `STYLE (once per video, before the first scene; pick what suits the topic and audience)
+theme <look>:
+${looks}
+motion <personality>:
+${motions}`;
+}
+
 /** First pass: plan the scenes without writing narration. */
 export function outlinePrompt(topic: string, scenes: { min: number; max: number }): string {
   return `Plan a narrated explainer video about:
 ${topic}
 
 Output only:
-- the "video 1" line and a "theme" line
+- the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# goal: <what this scene explains and which visuals it uses>"
 No elements, narration or actions yet.`;
 }

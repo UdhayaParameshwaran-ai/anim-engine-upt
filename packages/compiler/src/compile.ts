@@ -8,6 +8,11 @@ export interface CompileOptions {
   assets?: AssetLibrary;
   /** Apply deterministic auto-fixes. Turn off to collect raw errors for an LLM repair prompt. */
   autofix?: boolean;
+  /**
+   * Video-wide settings that win over the script's (`{ theme: "magazine", motion: "playful" }`):
+   * restyle a script without editing it. Validated like settings written in the script.
+   */
+  settings?: Record<string, string>;
 }
 
 export interface CompileResult {
@@ -26,6 +31,12 @@ export interface CompileResult {
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
   const assets = options.assets ?? new AssetLibrary();
   const parsed = parse(source);
+  for (const [key, value] of Object.entries(options.settings ?? {})) {
+    const at = parsed.script.settings.findIndex((s) => s.key === key);
+    const setting = { key, args: [value], span: at >= 0 ? parsed.script.settings[at]!.span : { line: 1, col: 1, endCol: 1 } };
+    if (at >= 0) parsed.script.settings[at] = setting;
+    else parsed.script.settings.push(setting);
+  }
   const validated = validate(parsed.script, { assets, autofix: options.autofix ?? true });
   const diagnostics = [...parsed.diagnostics, ...validated.diagnostics];
   const ok = !diagnostics.some((d) => d.severity === "error" && !d.fixed);

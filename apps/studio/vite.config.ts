@@ -30,9 +30,13 @@ function api(): Plugin {
           if (url.pathname === "/api/examples") return json(res, readdirSync(examples).filter((f) => f.endsWith(".txt")));
           if (url.pathname === "/api/source") return send(res, "text/plain; charset=utf-8", readFileSync(join(examples, basename(url.searchParams.get("file") ?? "")), "utf8"));
           if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), ttsOf(url)));
-          if (url.pathname === "/api/providers") return json(res, providers());
+          if (url.pathname === "/api/providers") return json(res, await providers(server));
           if (url.pathname === "/api/generate") return await generateStream(server, url, req, res);
           if (url.pathname.startsWith("/audio/")) return send(res, "audio/wav", readFileSync(join(ttsDir, basename(url.pathname))));
+          if (url.pathname.startsWith("/fonts/")) {
+            const [pkg, file] = url.pathname.slice("/fonts/".length).split("/");
+            return send(res, "font/woff2", readFileSync(join(repo, "node_modules", "@fontsource", basename(pkg ?? ""), "files", basename(file ?? ""))));
+          }
         } catch (e) {
           res.statusCode = 500;
           return json(res, { error: e instanceof Error ? (e.stack ?? e.message) : String(e) });
@@ -43,7 +47,8 @@ function api(): Plugin {
   };
 }
 
-type Tts = { name: "kokoro" | "beeps"; speed: number };
+/** Voice plus look/motion overrides ("" keeps what the script says). */
+type Tts = { name: "kokoro" | "beeps"; speed: number; style: Record<string, string> };
 
 /** Narration voice: "kokoro" (local neural TTS) or "beeps" (instant mock that ticks on every word). */
 function defaultTts(): Tts["name"] {
@@ -52,7 +57,12 @@ function defaultTts(): Tts["name"] {
 
 function ttsOf(url: URL): Tts {
   const name = url.searchParams.get("tts");
-  return { name: name === "beeps" || name === "kokoro" ? name : defaultTts(), speed: Number(url.searchParams.get("speed") ?? 1) || 1 };
+  const style: Record<string, string> = {};
+  for (const key of ["theme", "motion"]) {
+    const v = url.searchParams.get(key);
+    if (v) style[key] = v;
+  }
+  return { name: name === "beeps" || name === "kokoro" ? name : defaultTts(), speed: Number(url.searchParams.get("speed") ?? 1) || 1, style };
 }
 
 // One Kokoro instance for the server's lifetime: the model stays loaded.
@@ -75,7 +85,7 @@ async function build(server: ViteDevServer, source: string, tts: Tts) {
   const { compile, report } = await server.ssrLoadModule("@anim/compiler");
   const { FileCache, speakVideo } = await server.ssrLoadModule("@anim/tts");
   const { resolve } = await server.ssrLoadModule("@anim/timeline");
-  const compiled = compile(source);
+  const compiled = compile(source, { settings: tts.style });
   const diagnostics: string[] = compiled.diagnostics.length ? report(compiled.diagnostics).split("\n") : [];
   if (!compiled.ir) return { ok: false, diagnostics };
   const provider = await voice(server, tts.name, tts.speed);
@@ -87,8 +97,11 @@ async function build(server: ViteDevServer, source: string, tts: Tts) {
   return { ok: true, diagnostics, ir: compiled.ir, timeline };
 }
 
-function providers() {
+async function providers(server: ViteDevServer) {
+  const { THEMES, THEME_SUMMARIES, MOTIONS } = await server.ssrLoadModule("@anim/registry");
   return {
+    themes: THEMES.map((name: keyof typeof THEME_SUMMARIES) => ({ name, summary: THEME_SUMMARIES[name] })),
+    motions: MOTIONS.map((m: { name: string; summary: string }) => ({ name: m.name, summary: m.summary })),
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
     tts: defaultTts(),

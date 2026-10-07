@@ -24,6 +24,8 @@ export interface VideoIR {
   title?: string;
   canvas: { width: number; height: number; fps: number };
   theme: string;
+  /** Motion personality (registry MOTIONS): how verbs move. */
+  motion: string;
   voice: string;
   lang: string;
   scenes: SceneIR[];
@@ -131,7 +133,7 @@ export interface SceneSpeech {
  * Animatable properties. x/y are the element's center; camera is a Box
  * (the visible region of the canvas).
  */
-export type Prop = "opacity" | "x" | "y" | "scale" | "rotate" | "draw" | "reveal" | "tint" | "camera";
+export type Prop = "opacity" | "x" | "y" | "scale" | "rotate" | "draw" | "reveal" | "tint" | "blur" | "camera";
 
 export interface Tween {
   /** `scene/id`, `scene/id.part`, or `scene/camera`. */

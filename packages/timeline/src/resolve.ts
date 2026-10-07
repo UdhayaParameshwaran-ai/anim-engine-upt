@@ -14,7 +14,7 @@ import {
   type VideoIR,
   type WordTiming,
 } from "@anim/ir";
-import { findVerb } from "@anim/registry";
+import { findMotion, findVerb, type MotionProfile } from "@anim/registry";
 import { tweenValue, type Value } from "./evaluate.js";
 import { focusBox, PRIMITIVES, type TweenSpec } from "./primitives.js";
 
@@ -77,6 +77,7 @@ interface CueTime {
 
 class Resolver {
   private readonly fps: number;
+  private readonly motion: MotionProfile;
   private readonly leadIn: number;
   private readonly tailPad: number;
   private readonly holdPad: number;
@@ -103,6 +104,7 @@ class Resolver {
     opts: ResolveOptions,
   ) {
     this.fps = video.canvas.fps;
+    this.motion = findMotion(video.motion);
     this.leadIn = opts.leadIn ?? 0.3;
     this.tailPad = opts.tailPad ?? 0.6;
     this.holdPad = opts.holdPad ?? 0.15;
@@ -317,7 +319,8 @@ class Resolver {
         const target = `${scene.id}/camera`;
         const id = s.targets[0]!;
         const box = id === "reset" ? { x: 0, y: 0, w: canvas.width, h: canvas.height } : focusBox(this.currentBox(scene, elements.get(id), s.t0), canvas);
-        this.add(target, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: box, ease: String(s.params.ease ?? "inout") }, s);
+        const camEase = String(s.params.ease ?? "inout");
+        this.add(target, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: box, ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
         continue;
       }
       const targets = s.verb === "clear" || s.targets.includes("*") ? [...visible] : s.targets;
@@ -337,6 +340,7 @@ class Resolver {
           canvas,
           ...(s.dest && { dest: s.dest }),
           ...(s.words && { words: s.words }),
+          motion: this.motion,
         }) ?? [];
         for (const spec of specs) this.add(target, spec, s);
         if (!isPart && ENTER.has(verb)) visible.add(base);

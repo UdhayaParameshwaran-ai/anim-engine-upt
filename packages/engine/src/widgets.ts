@@ -37,6 +37,9 @@ interface Ctx {
 export function buildWidget(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {
   const { w, h } = el.box;
   const c: Ctx = { doc, inst, theme, el, g, w, h, L: -w / 2, T: -h / 2 };
+  // Builds are synchronous, so text() and textHeight() measure alike.
+  charW = theme.charW;
+  fontScale = theme.fontScale;
   const kind = el.kind === "chart" ? `chart:${el.component.split(":")[1] ?? "bar"}` : el.kind;
   const build = BUILDERS[kind] ?? BUILDERS.body!;
   inst.motion = build(c);
@@ -79,14 +82,17 @@ interface TextOpts {
 }
 
 /** Text whose first line's baseline sits at y + size·0.8 (so y is the top of the text). */
-function text(c: Ctx, content: string, x: number, y: number, o: TextOpts, parent: Element = c.g): SVGTextElement {
+function text(c: Ctx, content: string, x: number, y: number, opts: TextOpts, parent: Element = c.g): SVGTextElement {
+  const o = scaled(opts);
   const str = o.upper ? content.toUpperCase() : content;
   const lh = o.lineHeight ?? 1.25;
-  const fitted = o.maxW ? fitText(str, o.size, o.maxW, o.maxH ?? o.size * lh * 8) : { lines: [str], font: o.size };
+  const fitted = o.maxW ? fitText(str, o.size, o.maxW, o.maxH ?? o.size * lh * 8, charW) : { lines: [str], font: o.size };
+  // Bold text (values, headings) uses the look's display face.
+  const display = !o.mono && (o.weight ?? 400) >= 700;
   const t = node<SVGTextElement>(c, "text", {
     "font-size": round(fitted.font),
-    "font-family": o.mono ? c.theme.mono : c.theme.font,
-    "font-weight": o.weight ?? 400,
+    "font-family": o.mono ? (o.size >= 56 ? c.theme.numbers : c.theme.mono) : display ? c.theme.headingFont : c.theme.font,
+    "font-weight": display ? Math.max(o.weight ?? 400, c.theme.headingWeight) : (o.weight ?? 400),
     "text-anchor": o.anchor ?? "start",
     fill: o.fill ?? c.theme.fg,
     stroke: "none",
@@ -101,12 +107,18 @@ function text(c: Ctx, content: string, x: number, y: number, o: TextOpts, parent
 }
 
 /** Height a wrapped text block will take. */
-function textHeight(content: string, o: TextOpts): number {
+function textHeight(content: string, opts: TextOpts): number {
+  const o = scaled(opts);
   const lh = o.lineHeight ?? 1.25;
   if (!o.maxW) return o.size * lh;
-  const f = fitText(content, o.size, o.maxW, o.maxH ?? o.size * lh * 8);
+  const f = fitText(content, o.size, o.maxW, o.maxH ?? o.size * lh * 8, charW);
   return f.lines.length * f.font * lh;
 }
+
+/** The current look's glyph width estimate and size multiplier (set per build). */
+let charW = 0.55;
+let fontScale = 1;
+const scaled = (o: TextOpts): TextOpts => (fontScale === 1 ? o : { ...o, size: o.size * fontScale });
 
 const rule = (c: Ctx, x1: number, y1: number, x2: number, y2: number, parent: Element = c.g, width = 1.5) =>
   node(c, "line", { x1: round(x1), y1: round(y1), x2: round(x2), y2: round(y2), stroke: c.theme.muted, "stroke-opacity": 0.45, "stroke-width": width }, parent);
@@ -176,7 +188,7 @@ const numberOf = (s: string) => parseFloat(s.replace(/[^\d.-]/g, "")) || 0;
 /** Tones from ink to paper, for series and slices. */
 function tone(c: Ctx, i: number): string {
   const mix = [100, 62, 38, 22, 12][i % 5]!;
-  return `color-mix(in srgb, ${c.theme.fg} ${mix}%, ${c.theme.bg})`;
+  return `color-mix(in srgb, ${c.theme.ink} ${mix}%, ${c.theme.toneBase === "fg" ? c.theme.fg : c.theme.bg})`;
 }
 
 // --------------------------------------------------------------- builders ---
@@ -246,7 +258,7 @@ const BUILDERS: Record<string, Builder> = {
       return `M${round(x0)} ${round(y0)}A${round(r)} ${round(r)} 0 ${sweep * to > Math.PI ? 1 : 0} 1 ${round(x1)} ${round(y1)}`;
     };
     node(c, "path", { d: arc(1), stroke: c.theme.muted, "stroke-opacity": 0.3, "stroke-width": Math.max(10, r * 0.12), fill: "none", "stroke-linecap": "butt" });
-    const valueArc = drawn(c, "path", { d: arc(Math.max(frac, 0.001)), stroke: c.theme.fg, "stroke-width": Math.max(10, r * 0.12), "stroke-linecap": "butt" });
+    const valueArc = drawn(c, "path", { d: arc(Math.max(frac, 0.001)), stroke: c.theme.ink, "stroke-width": Math.max(10, r * 0.12), "stroke-linecap": "butt" });
     const size = Math.min(r * 0.6, (r * 1.4) / Math.max(1, value.length * 0.62));
     const t = text(c, value, 0, cy - size * 0.55, { size, weight: 700, mono: true, anchor: "middle" });
     if (label) text(c, label, 0, c.h / 2 - labelH + 8, { size: 26, fill: c.theme.muted, anchor: "middle", maxW: c.w * 0.9, maxH: 40 });
@@ -272,7 +284,7 @@ const BUILDERS: Record<string, Builder> = {
     for (let i = 0; i < max; i++) {
       const it = item(c, String(i + 1));
       node(c, "rect", { x: round(c.L + 24 + i * (m + 12)), y: round(y), width: round(m), height: round(m), fill: "none", stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
-      marks.push(node(c, "rect", { x: round(c.L + 24 + i * (m + 12) + 5), y: round(y + 5), width: round(m - 10), height: round(m - 10), fill: c.theme.fg, stroke: "none" }, it.inner));
+      marks.push(node(c, "rect", { x: round(c.L + 24 + i * (m + 12) + 5), y: round(y + 5), width: round(m - 10), height: round(m - 10), fill: c.theme.ink, stroke: "none" }, it.inner));
     }
     if (label) text(c, label, c.L + 24, y + m + 18, { size: 26, fill: c.theme.muted, maxW: c.w - 48, maxH: 40 });
     return (k) =>
@@ -291,7 +303,7 @@ const BUILDERS: Record<string, Builder> = {
     if (label) text(c, label, c.L + 8, y - 64, { size: 28, maxW: c.w * 0.7, maxH: 40 });
     const t = text(c, value, c.L + c.w - 8, y - 64, { size: 30, weight: 700, mono: true, anchor: "end" });
     node(c, "rect", { x: round(c.L + 8), y: round(y), width: round(c.w - 16), height: round(barH), fill: c.theme.surface, stroke: c.theme.muted, "stroke-opacity": 0.45, "stroke-width": 1.5 });
-    const fill = node(c, "rect", { x: round(c.L + 8), y: round(y), width: 0, height: round(barH), fill: c.theme.fg, stroke: "none" });
+    const fill = node(c, "rect", { x: round(c.L + 8), y: round(y), width: 0, height: round(barH), fill: c.theme.ink, stroke: "none" });
     const span = t.firstElementChild!;
     return (k) => {
       fill.setAttribute("width", String(round((c.w - 16) * frac * out(k))));
@@ -321,7 +333,7 @@ const BUILDERS: Record<string, Builder> = {
     const size = Math.max(30, Math.min(48, c.h * 0.16));
     const qh = textHeight(words, { size, maxW: c.w - 96, maxH: c.h - 120, lineHeight: 1.3 });
     const top = -(qh + (source ? 60 : 0)) / 2;
-    node(c, "rect", { x: round(c.L + 8), y: round(top), width: 8, height: round(qh + (source ? 60 : 0)), fill: c.theme.fg, stroke: "none" });
+    node(c, "rect", { x: round(c.L + 8), y: round(top), width: 8, height: round(qh + (source ? 60 : 0)), fill: c.theme.ink, stroke: "none" });
     text(c, `“${words}”`, c.L + 48, top, { size, weight: 600, maxW: c.w - 96, maxH: c.h - 120, lineHeight: 1.3 });
     if (source) text(c, `— ${source}`, c.L + 48, top + qh + 22, { size: 20, mono: true, upper: true, fill: c.theme.muted, maxW: c.w - 96 });
     const w = wipe(c, c.L, -c.h / 2, c.w, c.h);
@@ -333,7 +345,7 @@ const BUILDERS: Record<string, Builder> = {
     const th = textHeight(c.el.texts[0] ?? "", { size, maxW: c.w - 96, maxH: c.h - 48 });
     const bh = Math.min(c.h, th + 56);
     node(c, "rect", { x: round(c.L), y: round(-bh / 2), width: round(c.w), height: round(bh), fill: c.theme.surface, stroke: "none" });
-    node(c, "rect", { x: round(c.L), y: round(-bh / 2), width: 12, height: round(bh), fill: c.theme.fg, stroke: "none" });
+    node(c, "rect", { x: round(c.L), y: round(-bh / 2), width: 12, height: round(bh), fill: c.theme.ink, stroke: "none" });
     text(c, c.el.texts[0] ?? "", c.L + 44, -th / 2, { size, weight: 600, maxW: c.w - 96, maxH: c.h - 48 });
     const w = wipe(c, c.L, -c.h / 2, c.w, c.h);
     return (k) => w(k);
@@ -433,9 +445,9 @@ const BUILDERS: Record<string, Builder> = {
       const d = s.map((v, i) => `${i ? "L" : "M"}${round(px(i))} ${round(py(v))}`).join("");
       // The second series is dashed (pattern, not hue); dashes can't also animate the draw, so it fades in.
       const g = item(c, si ? "series2" : "series1").inner;
-      const draw = si ? undefined : drawn(c, "path", { d, stroke: c.theme.fg, "stroke-width": 4 }, g);
+      const draw = si ? undefined : drawn(c, "path", { d, stroke: c.theme.ink, "stroke-width": 4 }, g);
       if (si) node(c, "path", { d, fill: "none", stroke: c.theme.fg, "stroke-width": 3, "stroke-dasharray": "10 8" }, g);
-      const dots = s.map((v, i) => node(c, "circle", { cx: round(px(i)), cy: round(py(v)), r: si ? 5 : 7, fill: si ? c.theme.bg : c.theme.fg, stroke: c.theme.fg, "stroke-width": 2 }, g));
+      const dots = s.map((v, i) => node(c, "circle", { cx: round(px(i)), cy: round(py(v)), r: si ? 5 : 7, fill: si ? c.theme.bg : c.theme.ink, stroke: si ? c.theme.fg : c.theme.ink, "stroke-width": 2 }, g));
       return { g, draw, dots, n: s.length };
     });
     return (k) => lines.forEach((l) => {
@@ -494,7 +506,7 @@ const BUILDERS: Record<string, Builder> = {
     const anims = rows.map((r, ri) => {
       const it = item(c, ri ? String(ri) : "head");
       const y = top + ri * rh;
-      const keyBg = ri && ri === key ? node(c, "rect", { x: round(c.L), y: round(y), width: round(c.w), height: round(rh), fill: c.theme.fg, stroke: "none", opacity: 0 }, it.inner) : undefined;
+      const keyBg = ri && ri === key ? node(c, "rect", { x: round(c.L), y: round(y), width: round(c.w), height: round(rh), fill: c.theme.ink, stroke: "none", opacity: 0 }, it.inner) : undefined;
       const cells = r.map((cell, ci) =>
         text(c, cell, c.L + ci * cw + 16, y + (rh - size * 1.1) / 2, { size: ri ? size : size * 0.8, weight: ri ? (ci ? 400 : 600) : 600, mono: !ri || /^[\d$€£%.,+-]+$/.test(cell), upper: !ri, fill: ri ? c.theme.fg : c.theme.muted, maxW: cw - 24, maxH: rh - 8 }, it.inner),
       );
@@ -507,7 +519,7 @@ const BUILDERS: Record<string, Builder> = {
       if (a.keyBg) {
         const f = phase(k, 0.85, 1);
         a.keyBg.setAttribute("opacity", String(round(f, 3)));
-        for (const t of a.cells) t.setAttribute("fill", f > 0.5 ? c.theme.bg : c.theme.fg);
+        for (const t of a.cells) t.setAttribute("fill", f > 0.5 ? c.theme.onInk : c.theme.fg);
       }
     });
   },
@@ -520,8 +532,8 @@ const BUILDERS: Record<string, Builder> = {
     const sides = [a, b].map((head, si) => {
       const it = item(c, si ? "2" : "1");
       const x = c.L + si * (cw + 32);
-      node(c, "rect", { x: round(x), y: round(c.T), width: round(cw), height: 72, fill: si ? c.theme.surface : c.theme.fg, stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
-      text(c, head, x + 20, c.T + 20, { size: 30, weight: 700, fill: si ? c.theme.fg : c.theme.bg, maxW: cw - 40, maxH: 40 }, it.inner);
+      node(c, "rect", { x: round(x), y: round(c.T), width: round(cw), height: 72, fill: si ? c.theme.surface : c.theme.ink, stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
+      text(c, head, x + 20, c.T + 20, { size: 30, weight: 700, fill: si ? c.theme.fg : c.theme.onInk, maxW: cw - 40, maxH: 40 }, it.inner);
       rows.forEach((r, ri) => {
         const y = c.T + 90 + ri * rh;
         text(c, r[si] ?? "", x + 20, y + (rh - 34) / 2, { size: 26, maxW: cw - 40, maxH: rh - 8 }, it.inner);
@@ -547,7 +559,7 @@ const BUILDERS: Record<string, Builder> = {
       const it = item(c, String(i + 1));
       const x = c.L + i * cw;
       const conn = i < n - 1 ? drawn(c, "line", { x1: round(x + d + 12), y1: round(cy), x2: round(x + cw - 12), y2: round(cy), stroke: c.theme.fg, "stroke-width": 2 }) : undefined;
-      node(c, "rect", { x: round(x), y: round(cy - d / 2), width: round(d), height: round(d), fill: c.theme.fg, stroke: "none" }, it.inner);
+      node(c, "rect", { x: round(x), y: round(cy - d / 2), width: round(d), height: round(d), fill: c.theme.ink, stroke: "none" }, it.inner);
       text(c, String(i + 1).padStart(2, "0"), x + d / 2, cy - d * 0.28, { size: d * 0.42, weight: 700, mono: true, anchor: "middle", fill: c.theme.bg }, it.inner);
       text(c, title, x, cy + d / 2 + 24, { size: 30, weight: 700, maxW: cw - 24, maxH: 76 }, it.inner);
       if (line) text(c, line, x, cy + d / 2 + 24 + textHeight(title, { size: 30, maxW: cw - 24, maxH: 76 }) + 10, { size: 24, fill: c.theme.muted, maxW: cw - 24, maxH: c.h * 0.4 }, it.inner);
@@ -573,7 +585,7 @@ const BUILDERS: Record<string, Builder> = {
       const it = item(c, String(i + 1));
       const x = x0 + cw * (i + 0.5);
       const up = i % 2 === 0;
-      node(c, "rect", { x: round(x - 9), y: round(y - 9), width: 18, height: 18, fill: c.theme.fg, stroke: "none" }, it.inner);
+      node(c, "rect", { x: round(x - 9), y: round(y - 9), width: 18, height: 18, fill: c.theme.ink, stroke: "none" }, it.inner);
       node(c, "line", { x1: round(x), y1: round(up ? y - 16 : y + 16), x2: round(x), y2: round(up ? y - 40 : y + 40), stroke: c.theme.fg, "stroke-width": 1.5 }, it.inner);
       const wh = textHeight(what, { size: 24, maxW: cw * 1.6 - 16, maxH: c.h / 2 - 110 });
       const top = up ? y - 52 - 40 - wh : y + 52;
@@ -626,10 +638,10 @@ const BUILDERS: Record<string, Builder> = {
       const it = item(c, String(i + 1));
       const decision = name.endsWith("?");
       if (decision) node(c, "path", { d: `M${round(p.x)} ${round(p.y - p.h / 2)}L${round(p.x + p.w / 2)} ${round(p.y)}L${round(p.x)} ${round(p.y + p.h / 2)}L${round(p.x - p.w / 2)} ${round(p.y)}Z`, fill: c.theme.surface, stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
-      else node(c, "rect", { x: round(p.x - p.w / 2), y: round(p.y - p.h / 2), width: round(p.w), height: round(p.h), fill: i === 0 ? c.theme.fg : c.theme.surface, stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
+      else node(c, "rect", { x: round(p.x - p.w / 2), y: round(p.y - p.h / 2), width: round(p.w), height: round(p.h), fill: i === 0 ? c.theme.ink : c.theme.surface, stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
       const fs = Math.min(26, p.h * 0.32);
       const th = textHeight(name, { size: fs, maxW: p.w * (decision ? 0.6 : 0.88), maxH: p.h * 0.8 });
-      text(c, name, p.x, p.y - th / 2, { size: fs, weight: 600, anchor: "middle", fill: i === 0 && !decision ? c.theme.bg : c.theme.fg, maxW: p.w * (decision ? 0.6 : 0.88), maxH: p.h * 0.8 }, it.inner);
+      text(c, name, p.x, p.y - th / 2, { size: fs, weight: 600, anchor: "middle", fill: i === 0 && !decision ? c.theme.onInk : c.theme.fg, maxW: p.w * (decision ? 0.6 : 0.88), maxH: p.h * 0.8 }, it.inner);
       return it.inner;
     });
     const edgeAnims = edges.map((e) => {
@@ -641,7 +653,7 @@ const BUILDERS: Record<string, Builder> = {
         : [a.x, a.y + a.h / 2, b.x, b.y - b.h / 2 - 10];
       const d = horizontal ? `M${round(ax)} ${round(ay)}C${round((ax + bx) / 2)} ${round(ay)} ${round((ax + bx) / 2)} ${round(by)} ${round(bx)} ${round(by)}` : `M${round(ax)} ${round(ay)}C${round(ax)} ${round((ay + by) / 2)} ${round(bx)} ${round((ay + by) / 2)} ${round(bx)} ${round(by)}`;
       const draw = drawn(c, "path", { d, stroke: c.theme.fg, "stroke-width": 2 });
-      const head = node(c, "path", { d: horizontal ? `M${round(bx + 10)} ${round(by)}l-14 -7v14z` : `M${round(bx)} ${round(by + 10)}l-7 -14h14z`, fill: c.theme.fg, stroke: "none" });
+      const head = node(c, "path", { d: horizontal ? `M${round(bx + 10)} ${round(by)}l-14 -7v14z` : `M${round(bx)} ${round(by + 10)}l-7 -14h14z`, fill: c.theme.ink, stroke: "none" });
       const label = e.label ? text(c, e.label, (ax + bx) / 2, (ay + by) / 2 - 30, { size: 18, mono: true, upper: true, anchor: "middle", fill: c.theme.muted }) : undefined;
       return { draw, head, label, from: e.from, to: e.to };
     });
@@ -683,7 +695,7 @@ const BUILDERS: Record<string, Builder> = {
       const wBot = fw * (1 - ((i + 1) / n) * 0.7);
       const x = c.L + fw / 2;
       node(c, "path", { d: `M${round(x - wTop / 2)} ${round(y)}H${round(x + wTop / 2)}L${round(x + wBot / 2)} ${round(y + sh)}H${round(x - wBot / 2)}Z`, fill: tone(c, i), stroke: c.theme.fg, "stroke-width": 1.5 }, it.inner);
-      if (value) text(c, value, x, y + sh / 2 - 16, { size: Math.min(30, sh * 0.4), weight: 700, mono: true, anchor: "middle", fill: i < 2 ? c.theme.bg : c.theme.fg }, it.inner);
+      if (value) text(c, value, x, y + sh / 2 - 16, { size: Math.min(30, sh * 0.4), weight: 700, mono: true, anchor: "middle", fill: i < 2 ? c.theme.onInk : c.theme.fg }, it.inner);
       text(c, name, c.L + fw + 32, y + sh / 2 - 16, { size: Math.min(28, sh * 0.38), maxW: c.w - fw - 40, maxH: sh }, it.inner);
       return it.inner;
     });
@@ -709,7 +721,7 @@ const BUILDERS: Record<string, Builder> = {
       const hx = Math.cos(a1) * R;
       const hy = Math.sin(a1) * R;
       const tang = a1 + Math.PI / 2;
-      const head = node(c, "path", { d: `M${round(hx + Math.cos(tang) * 8)} ${round(hy + Math.sin(tang) * 8)}L${round(hx - Math.cos(tang) * 8 + Math.cos(a1) * 7)} ${round(hy - Math.sin(tang) * 8 + Math.sin(a1) * 7)}L${round(hx - Math.cos(tang) * 8 - Math.cos(a1) * 7)} ${round(hy - Math.sin(tang) * 8 - Math.sin(a1) * 7)}Z`, fill: c.theme.fg, stroke: "none" });
+      const head = node(c, "path", { d: `M${round(hx + Math.cos(tang) * 8)} ${round(hy + Math.sin(tang) * 8)}L${round(hx - Math.cos(tang) * 8 + Math.cos(a1) * 7)} ${round(hy - Math.sin(tang) * 8 + Math.sin(a1) * 7)}L${round(hx - Math.cos(tang) * 8 - Math.cos(a1) * 7)} ${round(hy - Math.sin(tang) * 8 - Math.sin(a1) * 7)}Z`, fill: c.theme.ink, stroke: "none" });
       const it = item(c, String(i + 1));
       const disc = node(c, "circle", { cx: round(x), cy: round(y), r: round(nr), fill: c.theme.surface, stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
       const fs = Math.min(24, nr * 0.34);
@@ -723,8 +735,8 @@ const BUILDERS: Record<string, Builder> = {
       setVis(a.inner, e, 0, 0, 0.8 + 0.2 * e, a.x, a.y);
       // The stage "lights up" (fills with ink) as it arrives, then settles.
       const lit = p > 0.3 && p < 0.9;
-      a.disc.setAttribute("fill", lit ? c.theme.fg : c.theme.surface);
-      a.label.setAttribute("fill", lit ? c.theme.bg : c.theme.fg);
+      a.disc.setAttribute("fill", lit ? c.theme.ink : c.theme.surface);
+      a.label.setAttribute("fill", lit ? c.theme.onInk : c.theme.fg);
       a.arc(phase(p, 0.5, 1));
       a.head.setAttribute("opacity", p >= 0.98 ? "1" : "0");
     });
@@ -749,7 +761,7 @@ const BUILDERS: Record<string, Builder> = {
       const x = x0 + (size * clamp01(vx / 10));
       const y = y0 + size - size * clamp01(vy / 10);
       const it = item(c, String(i + 1));
-      node(c, "circle", { cx: round(x), cy: round(y), r: 11, fill: c.theme.fg, stroke: "none" }, it.inner);
+      node(c, "circle", { cx: round(x), cy: round(y), r: 11, fill: c.theme.ink, stroke: "none" }, it.inner);
       text(c, name, x + 18, y - 16, { size: 22, weight: 600 }, it.inner);
       return { inner: it.inner, x, y };
     });
@@ -820,7 +832,7 @@ const BUILDERS: Record<string, Builder> = {
   footer(c) {
     rule(c, c.L, c.T, c.L + c.w, c.T, c.g, 1.5);
     const brand = String(c.el.params.brand ?? "");
-    node(c, "rect", { x: round(c.L), y: round(c.T + 14), width: 14, height: 14, fill: c.theme.fg, stroke: "none" });
+    node(c, "rect", { x: round(c.L), y: round(c.T + 14), width: 14, height: 14, fill: c.theme.ink, stroke: "none" });
     if (brand) text(c, brand, c.L + 26, c.T + 12, { size: 16, mono: true, upper: true, weight: 600, maxW: c.w * 0.3, maxH: 20 });
     if (c.el.texts[0]) text(c, c.el.texts[0], 0, c.T + 12, { size: 16, mono: true, anchor: "middle", fill: c.theme.muted, maxW: c.w * 0.45, maxH: 20 });
     text(c, String(c.el.params.page ?? "").padStart(2, "0"), c.L + c.w, c.T + 12, { size: 16, mono: true, weight: 600, anchor: "end" });
@@ -840,7 +852,7 @@ function listWidget(c: Ctx, style: "bullet" | "number" | "check"): Motion {
     const it = item(c, String(i + 1));
     const y = top + i * lh + (lh - heights[i]!) / 2;
     let tick: ((k: number) => void) | undefined;
-    if (style === "bullet") node(c, "rect", { x: round(c.L + 8), y: round(y + size * 0.36), width: 12, height: 12, fill: c.theme.fg, stroke: "none" }, it.inner);
+    if (style === "bullet") node(c, "rect", { x: round(c.L + 8), y: round(y + size * 0.36), width: 12, height: 12, fill: c.theme.ink, stroke: "none" }, it.inner);
     if (style === "number") text(c, String(i + 1).padStart(2, "0"), c.L + 8, y, { size, weight: 700, mono: true }, it.inner);
     if (style === "check") {
       const b = size * 1.1;
@@ -876,7 +888,7 @@ function picture(c: Ctx, video: boolean): Motion {
   // Subject in the middle 60%: a simple horizon-and-sun glyph, or a play button.
   const s = Math.min(c.w, c.h) * 0.3;
   if (video) {
-    node(c, "circle", { cx: 0, cy: 0, r: round(s / 2), fill: c.theme.fg, stroke: "none" }, inner);
+    node(c, "circle", { cx: 0, cy: 0, r: round(s / 2), fill: c.theme.ink, stroke: "none" }, inner);
     node(c, "path", { d: `M${round(-s * 0.14)} ${round(-s * 0.2)}L${round(s * 0.22)} 0L${round(-s * 0.14)} ${round(s * 0.2)}Z`, fill: c.theme.bg, stroke: "none" }, inner);
   } else {
     node(c, "path", { d: `M${round(-s)} ${round(s * 0.5)}L${round(-s * 0.35)} ${round(-s * 0.2)}L${round(0)} ${round(s * 0.2)}L${round(s * 0.35)} ${round(-s * 0.05)}L${round(s)} ${round(s * 0.5)}`, fill: "none", stroke: c.theme.muted, "stroke-width": 3 }, inner);

@@ -1,6 +1,6 @@
 import type { Box, ElementIR } from "@anim/ir";
 import { ICONS, ILLUSTRATIONS } from "./art.js";
-import { color, type Theme } from "./theme.js";
+import { color, shadowFilter, type Theme } from "./theme.js";
 import { buildWidget, WIDGET_KINDS } from "./widgets.js";
 
 export const SVG_NS = "http://www.w3.org/2000/svg";
@@ -61,7 +61,8 @@ export function build(doc: Document, el: ElementIR, theme: Theme): Instance {
     case "box":
     case "node":
     case "placeholder": {
-      const r = svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: el.kind === "node" ? 18 : 14, "data-fill": "surface" });
+      const r = svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(theme.radius + (el.kind === "node" ? 4 : 0), h / 2), "data-fill": "surface" });
+      shadow(g, theme);
       if (el.kind === "placeholder") r.setAttribute("stroke-dasharray", "10 8");
       g.append(stroke(inst, r));
       const label = el.texts[0];
@@ -71,6 +72,7 @@ export function build(doc: Document, el: ElementIR, theme: Theme): Instance {
     case "circle": {
       const r = Math.min(w, h) / 2;
       g.append(stroke(inst, svg(doc, "circle", { cx: 0, cy: 0, r, "data-fill": "surface" })));
+      shadow(g, theme);
       if (el.texts[0]) g.append(text(doc, inst, el.texts[0], FONT.circle!, r * 1.5, r * 1.2, theme, { inner: true }));
       break;
     }
@@ -84,9 +86,15 @@ export function build(doc: Document, el: ElementIR, theme: Theme): Instance {
       connector(doc, inst, g, el, theme);
       break;
     default:
-      g.append(stroke(inst, svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: 12 })));
+      g.append(stroke(inst, svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(theme.radius, h / 2) })));
   }
   return inst;
+}
+
+/** The look's shape shadow on a group (none, soft or hard). */
+function shadow(g: SVGGElement, theme: Theme): void {
+  const f = shadowFilter(theme);
+  if (f) g.setAttribute("data-shadow", f);
 }
 
 // ------------------------------------------------------------------ text ---
@@ -102,15 +110,15 @@ interface TextOpts {
 }
 
 /** Wraps by estimated glyph width (same estimate as the layout engine), shrinking to fit the box. */
-export function fitText(content: string, font: number, maxW: number, maxH: number): { lines: string[]; font: number } {
+export function fitText(content: string, font: number, maxW: number, maxH: number, charW = CHAR_W): { lines: string[]; font: number } {
   let f = font;
   for (let i = 0; i < 40; i++) {
-    const perLine = Math.max(1, Math.floor(maxW / (CHAR_W * f)));
+    const perLine = Math.max(1, Math.floor(maxW / (charW * f)));
     const lines = wrap(content, perLine);
     if (lines.length * f * 1.25 <= maxH || f < 10) return { lines, font: f };
     f *= 0.94;
   }
-  return { lines: wrap(content, Math.max(1, Math.floor(maxW / (CHAR_W * f)))), font: f };
+  return { lines: wrap(content, Math.max(1, Math.floor(maxW / (charW * f)))), font: f };
 }
 
 function wrap(content: string, perLine: number): string[] {
@@ -131,14 +139,18 @@ function wrap(content: string, perLine: number): string[] {
 }
 
 function text(doc: Document, inst: Instance, content: string, font: number, maxW: number, maxH: number, theme: Theme, opts: TextOpts = {}): SVGTextElement {
+  const upper = opts.heading && theme.headingCase === "upper";
+  // Capitals and tracking widen the text; fit with the wider estimate.
+  const charW = theme.charW * (upper ? 1.15 : 1) + (opts.heading ? theme.headingTracking : 0);
   // `wrap` measures without brackets, so part markers don't affect line breaks.
-  const fitted = fitText(content, font, maxW, maxH);
+  const fitted = fitText(upper ? content.toUpperCase() : content, font * theme.fontScale, maxW, maxH, charW);
   const left = opts.align === "left";
   const t = svg(doc, "text", {
     "text-anchor": left ? "start" : "middle",
     "font-size": round(fitted.font),
     "font-family": opts.heading ? theme.headingFont : theme.font,
-    "font-weight": opts.heading ? 700 : 400,
+    "font-weight": opts.heading ? theme.headingWeight : 400,
+    ...(opts.heading && theme.headingTracking && { "letter-spacing": `${theme.headingTracking}em` }),
     fill: opts.fill ?? theme.fg,
     stroke: "none",
   }) as SVGTextElement;
@@ -175,7 +187,7 @@ function list(doc: Document, inst: Instance, content: string, w: number, h: numb
   const items = content.split(";").map((s) => s.trim()).filter(Boolean);
   const g = svg<SVGGElement>(doc, "g", {});
   const lh = Math.min(h / Math.max(1, items.length), FONT.list! * 1.5);
-  const font = Math.min(FONT.list!, lh / 1.4);
+  const font = Math.min(FONT.list! * theme.fontScale, (lh / 1.4) * Math.min(theme.fontScale, 1.15));
   items.forEach((item, i) => {
     const row = svg(doc, "g", { "data-part": String(i + 1) });
     const y = -((items.length - 1) * lh) / 2 + i * lh;
@@ -265,10 +277,11 @@ function buildHtml(doc: Document, el: ElementIR, theme: Theme, inst: Instance): 
     transformOrigin: "50% 50%",
   });
   if (el.kind === "card") {
-    Object.assign(div.style, { background: theme.surface, border: `${theme.stroke}px solid ${theme.fg}`, borderRadius: "18px", padding: "24px 28px", gap: "10px", textAlign: "left" });
+    Object.assign(div.style, { background: theme.surface, border: `${theme.stroke}px solid ${theme.fg}`, borderRadius: `${theme.radius + 4}px`, padding: "24px 28px", gap: "10px", textAlign: "left" });
+    if (shadowFilter(theme)) div.dataset.shadow = shadowFilter(theme);
     const head = doc.createElement("div");
     head.textContent = el.texts[0] ?? "";
-    Object.assign(head.style, { fontFamily: theme.headingFont, fontWeight: "700", fontSize: "38px", lineHeight: "1.15" });
+    Object.assign(head.style, { fontFamily: theme.headingFont, fontWeight: String(theme.headingWeight), fontSize: "38px", lineHeight: "1.15", textTransform: theme.headingCase === "upper" ? "uppercase" : "none" });
     const body = doc.createElement("div");
     body.textContent = el.texts[1] ?? "";
     Object.assign(body.style, { fontSize: "28px", lineHeight: "1.3", color: theme.muted });

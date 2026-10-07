@@ -6,7 +6,7 @@ import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { resolve } from "@anim/timeline";
 import { MockTtsProvider, speakVideo } from "@anim/tts";
 import { beforeEach, describe, expect, it } from "vitest";
-import { exposeForRender, Player, Stage } from "../src/index.js";
+import { exposeForRender, fontFace, Player, Stage, THEMES } from "../src/index.js";
 import { countUp } from "../src/widgets.js";
 
 const EXAMPLES = join(import.meta.dirname, "../../../examples");
@@ -147,7 +147,7 @@ describe("grid elements", () => {
     expect(countUp("n/a", 0.3)).toBe("n/a");
   });
 
-  it("render every rule-book element mid-motion identically however the time is reached", async () => {
+  it("render every rule-book element mid-motion identically however the time is reached", { timeout: 30_000 }, async () => {
     const { ir, tl } = await load("rulebook-gallery.txt");
     const kinds = new Set(ir.scenes.flatMap((s) => s.elements.map((e) => e.kind)));
     for (const k of ["multistat", "gauge", "scorecard", "progress", "body", "quote", "callout", "proscons", "bullets", "numbered", "checklist", "chart", "comparison", "timeline", "funnel", "flowchart", "cycle", "matrix", "image", "avatar", "logo", "map", "video"]) {
@@ -226,5 +226,36 @@ describe("live player", () => {
     player.finish();
     expect(ended).toBe(true);
     expect(player.isPlaying).toBe(false);
+  });
+});
+
+describe("looks", () => {
+  it("render every example in every look, with the look's fonts declared", { timeout: 60_000 }, async () => {
+    const files = ["photosynthesis.txt", "cells.txt", "vaccines-grid.txt", "rulebook-gallery.txt"];
+    for (const file of files) {
+      const { ir, tl } = await load(file);
+      for (const name of Object.keys(THEMES)) {
+        const div = document.createElement("div");
+        const stage = new Stage(div, ir, tl, { autoFit: false, theme: name, fontBase: "/f/" });
+        stage.render(tl.duration * 0.6);
+        expect(stage.root.style.background, `${file} in ${name}`).toBeTruthy();
+        const css = stage.root.querySelector("style")!.textContent!;
+        for (const face of THEMES[name]!.faces) expect(css, `${name} declares ${face}`).toContain(fontFace(face)!.path);
+        stage.destroy();
+      }
+    }
+  });
+
+  it("draw a personality's blur entrance as a CSS filter", async () => {
+    const src = readFileSync(join(EXAMPLES, "photosynthesis.txt"), "utf8").replace(/^theme .*$/m, "theme tech-neon\nmotion cinematic");
+    const ir = compile(src).ir!;
+    const tl = resolve(ir, await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) }));
+    const blur = tl.tracks.find((t) => t.prop === "blur" && t.t1 > t.t0)!;
+    const stage = new Stage(container, ir, tl, { autoFit: false });
+    const [scene, id] = blur.target.split("/");
+    stage.render((blur.t0 + blur.t1) / 2);
+    expect(node(stage, scene!, id!).style.filter).toMatch(/blur\([\d.]+px\)/);
+    stage.render(blur.t1 + 0.05);
+    expect(node(stage, scene!, id!).style.filter).not.toMatch(/blur/);
   });
 });

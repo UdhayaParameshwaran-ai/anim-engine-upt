@@ -48,11 +48,67 @@ export const VERBS: readonly VerbManifest[] = [
   { name: "focus", version: 1, category: "camera", summary: "zoom the camera to an element, or `reset`", defaultDuration: 0.9, mustFinish: false, targets: "required", supportsFit: true, params: { ease: { ...EASE, default: "inout" } } },
 ];
 
+/**
+ * A motion personality: how the same verbs move. Scripts never change; the
+ * personality rescales default durations, reinterprets ease names and gives
+ * enter verbs their own entrance (rise, blur, slide, zoom).
+ */
+export interface MotionProfile {
+  name: string;
+  summary: string;
+  /** Multiplies verb default durations (explicit, fit and until durations are kept). */
+  durScale: number;
+  /** Multiplies explicit staggers. */
+  staggerScale: number;
+  /** Ease name in the script → ease the engine uses. */
+  ease: Partial<Record<"in" | "out" | "inout" | "spring" | "linear", string>>;
+  /** How `fade` (and non-drawable `draw`) enters, besides opacity. */
+  fade: "plain" | "rise" | "blur" | "slide" | "zoom";
+  /** How `pop` enters: starting scale, ease, optional starting blur (px). */
+  pop: { from: number; ease: string; blur?: number };
+  /** Distance for rise/slide entrances, in px on a 1920-wide canvas. */
+  distance: number;
+  /** Peak scale of `pulse`. */
+  pulse: number;
+}
+
+export const MOTIONS: readonly MotionProfile[] = [
+  // The original behavior: older scripts render exactly as before.
+  { name: "standard", summary: "balanced fades and springy pops", durScale: 1, staggerScale: 1, ease: {}, fade: "plain", pop: { from: 0.6, ease: "spring" }, distance: 0, pulse: 1.15 },
+  { name: "playful", summary: "bouncy and overshooting; things hop in", durScale: 0.9, staggerScale: 1, ease: { out: "back", spring: "elastic" }, fade: "rise", pop: { from: 0.3, ease: "elastic" }, distance: 48, pulse: 1.25 },
+  { name: "corporate", summary: "quick, clean, subtle rise-ins", durScale: 0.8, staggerScale: 0.8, ease: { out: "quart", spring: "quart" }, fade: "rise", pop: { from: 0.94, ease: "quart" }, distance: 18, pulse: 1.06 },
+  { name: "cinematic", summary: "slow and smooth; blur-to-focus reveals", durScale: 1.5, staggerScale: 1.6, ease: { out: "expo", spring: "expo", inout: "sine" }, fade: "blur", pop: { from: 1.08, ease: "expo", blur: 14 }, distance: 0, pulse: 1.08 },
+  { name: "energetic", summary: "fast, punchy slides that snap into place", durScale: 0.65, staggerScale: 0.7, ease: { out: "back", spring: "back", inout: "quart" }, fade: "slide", pop: { from: 0.2, ease: "back" }, distance: 90, pulse: 1.3 },
+  { name: "minimal", summary: "calm, quiet fades only", durScale: 1.1, staggerScale: 1.2, ease: { out: "sine", spring: "sine", inout: "sine" }, fade: "plain", pop: { from: 1, ease: "sine" }, distance: 0, pulse: 1.04 },
+  { name: "dramatic", summary: "weighty zoom-ins from depth", durScale: 1.25, staggerScale: 1.3, ease: { out: "expo", spring: "back" }, fade: "zoom", pop: { from: 1.6, ease: "expo", blur: 8 }, distance: 0, pulse: 1.2 },
+];
+
+export function findMotion(name: string | undefined): MotionProfile {
+  return MOTIONS.find((m) => m.name === name) ?? MOTIONS[0]!;
+}
+
 export const SLOTS = ["TL", "T", "TR", "L", "C", "R", "BL", "B", "BR"] as const;
 export const RELATIONS = ["right-of", "left-of", "above", "below", "inside"] as const;
 export const LAYOUTS = ["center", "row", "col", "grid", "split", "stack", "cycle"] as const;
 export const TRANSITIONS = ["cut", "fade", "slide"] as const;
-export const THEMES = ["chalk", "paper", "dark", "light", "editorial"] as const;
+/** Looks: token sets the engine defines (fonts, palette, shapes, emphasis). Picked per video with `theme`. */
+export const THEMES = ["chalk", "paper", "dark", "light", "editorial", "neo-brutal", "soft-pastel", "tech-neon", "magazine", "bold-pop", "crayon", "midnight-luxe", "blueprint"] as const;
+/** One line per look, for the LLM and the style director. */
+export const THEME_SUMMARIES: Record<(typeof THEMES)[number], string> = {
+  chalk: "hand-drawn chalkboard, friendly classroom",
+  paper: "warm off-white, clean and neutral",
+  dark: "dark slate, calm and modern",
+  light: "bright white, crisp product style",
+  editorial: "monochrome print layout, black on white",
+  "neo-brutal": "cream, thick black outlines, hard shadows, loud orange",
+  "soft-pastel": "lavender pastels, rounded and gentle",
+  "tech-neon": "near-black with neon cyan glow, mono labels",
+  magazine: "serif headlines, cream paper, burgundy accent",
+  "bold-pop": "saturated blue, heavy rounded type, yellow pop",
+  crayon: "kids' notebook, crayon colors, handwriting",
+  "midnight-luxe": "deep navy, gold accents, elegant serif",
+  blueprint: "engineering blueprint, white lines on blue grid",
+};
 export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
 export const SCENE_ATTRS = ["template", "grid", "in", "out", "keep"] as const;

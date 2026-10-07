@@ -12,7 +12,18 @@ export const EASES: Record<string, Ease> = {
   inout: (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2),
   /** Ease-out with a small overshoot. */
   spring: (x) => 1 + (BACK + 1) * (x - 1) ** 3 + BACK * (x - 1) ** 2,
+  // Motion personalities (registry MOTIONS) map the names above onto these.
+  quart: (x) => 1 - (1 - x) ** 4,
+  expo: (x) => (x >= 1 ? 1 : 1 - 2 ** (-10 * x)),
+  sine: (x) => -(Math.cos(Math.PI * x) - 1) / 2,
+  /** Bigger overshoot than `spring`. */
+  back: (x) => 1 + 3.4 * (x - 1) ** 3 + 2.4 * (x - 1) ** 2,
+  /** Damped wobble that settles on 1. */
+  elastic: (x) => (x <= 0 ? 0 : x >= 1 ? 1 : 2 ** (-9 * x) * Math.sin((x * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1),
 };
+
+/** Eases that leave [0, 1]; progress-like properties (draw, reveal) can't overshoot. */
+export const OVERSHOOT = new Set(["spring", "back", "elastic"]);
 
 export function lerp(from: Value, to: Value, k: number): Value {
   if (typeof from === "number" && typeof to === "number") return from + (to - from) * k;

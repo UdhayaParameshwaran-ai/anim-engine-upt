@@ -1,6 +1,7 @@
 import type { Box, Prop, ResolvedScene, ResolvedTimeline, SceneIR, Tween, VideoIR } from "@anim/ir";
 import { createEvaluator, EASES, type FrameState, type Value } from "@anim/timeline";
 import { build, paintFills, round, svg, SVG_NS, type Instance } from "./components.js";
+import { fontFace, fontFaceCss } from "./fonts.js";
 import { color, getTheme, type Theme } from "./theme.js";
 
 export interface StageOptions {
@@ -8,6 +9,8 @@ export interface StageOptions {
   theme?: string;
   /** Scale the stage to fill its container (and follow resizes). Default true. */
   autoFit?: boolean;
+  /** URL prefix the bundled font files are served from (see fonts.ts). Default "/fonts/". */
+  fontBase?: string;
 }
 
 interface SceneView {
@@ -80,6 +83,10 @@ export class Stage {
     // Absolutely positioned so the fixed-size stage never affects its container's layout.
     Object.assign(this.root.style, { position: "absolute", left: "0px", top: "0px", width: `${this.width}px`, height: `${this.height}px`, overflow: "hidden", background: this.theme.bg, transformOrigin: "0 0" });
 
+    const fonts = doc.createElement("style");
+    fonts.textContent = fontFaceCss(this.theme.faces, opts.fontBase ?? "/fonts/");
+    this.root.append(fonts);
+
     this.svgRoot = svg(doc, "svg", { viewBox: `0 0 ${this.width} ${this.height}`, width: this.width, height: this.height }) as SVGSVGElement;
     Object.assign(this.svgRoot.style, { position: "absolute", left: "0", top: "0" });
     if (this.theme.emphasis === "mark") this.svgRoot.append(this.markFilters(doc));
@@ -126,6 +133,14 @@ export class Stage {
       if (RO) (this.resizer = new RO(() => this.fit())).observe(container);
     }
     this.render(0);
+  }
+
+  /** Resolves once the look's fonts have loaded; capture frames only after this. */
+  async fontsReady(): Promise<void> {
+    const fonts = (this.root.ownerDocument as Document & { fonts?: FontFaceSet }).fonts;
+    if (!fonts?.load) return;
+    const faces = this.theme.faces.map(fontFace).filter((f) => f !== undefined);
+    await Promise.all(faces.map((f) => fonts.load(`${f.weight} 32px "${f.family}"`).catch(() => [])));
   }
 
   get duration(): number {
@@ -251,7 +266,9 @@ export class Stage {
     // tint (highlight)
     const tint = num(p.tint, 0);
     const c = color(this.theme, this.tintMeta(target).color);
-    style.push(["filter", this.emphasis(tint, c, 4, 14)]);
+    const blur = num(p.blur, 0);
+    const filters = [root.getAttribute("data-shadow") ?? "", blur > 0.05 ? `blur(${round(blur, 2)}px)` : "", this.emphasis(tint, c, 4, 14)];
+    style.push(["filter", filters.filter(Boolean).join(" ")]);
     if (textual) {
       for (const t of root.querySelectorAll("text")) t.setAttribute("fill", tint > 0.01 ? `color-mix(in srgb, ${c} ${Math.round(tint * 100)}%, ${this.theme.fg})` : this.theme.fg);
     }
@@ -356,7 +373,7 @@ export class Stage {
     const defs = svg(doc, "defs", {}) as SVGDefsElement;
     for (let level = 1; level <= 4; level++) {
       const f = svg(doc, "filter", { id: `${this.markId}-${level}`, x: -0.04, y: -0.12, width: 1.08, height: 1.24 });
-      f.append(svg(doc, "feFlood", { "flood-color": this.theme.fg, "flood-opacity": round(0.1 * level / 4, 3), result: "mark" }));
+      f.append(svg(doc, "feFlood", { "flood-color": this.theme.markColor, "flood-opacity": round((this.theme.markOpacity * level) / 4, 3), result: "mark" }));
       const merge = svg(doc, "feMerge", {});
       merge.append(svg(doc, "feMergeNode", { in: "mark" }), svg(doc, "feMergeNode", { in: "SourceGraphic" }));
       f.append(merge);

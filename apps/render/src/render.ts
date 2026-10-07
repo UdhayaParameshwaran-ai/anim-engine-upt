@@ -1,13 +1,13 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
-import { dirname, join, resolve as resolvePath } from "node:path";
+import { basename, dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { compile, report } from "@anim/compiler";
 import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { resolve } from "@anim/timeline";
 import { FileCache, MockTtsProvider, speakVideo, type TtsProvider } from "@anim/tts";
 import { KokoroTtsProvider } from "@anim/tts-kokoro";
-import { chromium, type Browser } from "playwright-core";
+import { chromium, type Browser, type Page } from "playwright-core";
 import { mixNarration } from "./audio.js";
 import { encoder, ffmpeg, write } from "./ffmpeg.js";
 
@@ -63,7 +63,23 @@ export async function pageBundle(): Promise<string> {
 export function pageHtml(bundle: string, data: Prepared): string {
   const { width, height } = data.ir.canvas;
   const json = JSON.stringify(data).replace(/</g, "\\u003c");
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}#stage{position:relative;width:${width}px;height:${height}px}</style></head><body><div id="stage"></div><script>window.__DATA__=${json}</script><script>${bundle.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}#stage{position:relative;width:${width}px;height:${height}px}</style></head><body><div id="stage"></div><script>window.__DATA__=${json};window.__FONTS__=${JSON.stringify(FONT_HOST)}</script><script>${bundle.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
+}
+
+/** Pages load fonts from this made-up origin; requests to it are answered from node_modules/@fontsource. */
+const FONT_HOST = "https://fonts.anim.local/";
+
+/** Serves the bundled font files to a page (a setContent page has no origin of its own). */
+async function serveFonts(page: Page): Promise<void> {
+  await page.route(`${FONT_HOST}**`, async (route) => {
+    const [pkg, file] = new URL(route.request().url()).pathname.slice(1).split("/");
+    try {
+      const body = await readFile(join(repo, "node_modules", "@fontsource", basename(pkg ?? ""), "files", basename(file ?? "")));
+      await route.fulfill({ status: 200, contentType: "font/woff2", body });
+    } catch {
+      await route.fulfill({ status: 404, body: "" });
+    }
+  });
 }
 
 const CHROME_ARGS = ["--force-color-profile=srgb", "--font-render-hinting=none", "--disable-lcd-text", "--hide-scrollbars", "--disable-gpu-rasterization"];
@@ -127,6 +143,7 @@ export async function renderVideo(data: Prepared, opts: RenderOptions): Promise<
       ranges.map(async ([a, b], k) => {
         const segment = tmpFile(`segment-${k}.mp4`);
         const page = await browser.newPage({ viewport: { width: data.ir.canvas.width, height: data.ir.canvas.height }, deviceScaleFactor: 1 });
+        await serveFonts(page);
         await page.setContent(html, { waitUntil: "load" });
         await page.evaluate(() => (window as unknown as { __ready: Promise<boolean> }).__ready);
         const enc = encoder(segment, fps, opts.crf ?? 18);
@@ -167,6 +184,7 @@ export async function renderFrames(data: Prepared, frames: number[], outDir: str
   const browser = await launch();
   try {
     const page = await browser.newPage({ viewport: { width: data.ir.canvas.width, height: data.ir.canvas.height }, deviceScaleFactor: 1 });
+    await serveFonts(page);
     await page.setContent(pageHtml(await pageBundle(), data), { waitUntil: "load" });
     await page.evaluate(() => (window as unknown as { __ready: Promise<boolean> }).__ready);
     const files: string[] = [];

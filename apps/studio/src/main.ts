@@ -30,6 +30,10 @@ const renderMode = params.has("render");
 const examples = $<HTMLSelectElement>("examples");
 const speed = $<HTMLInputElement>("speed");
 const tts = $<HTMLSelectElement>("tts");
+const look = $<HTMLSelectElement>("look");
+const motion = $<HTMLSelectElement>("motion");
+/** Voice, look and motion as query parameters (empty look/motion = what the script says). */
+const style = () => new URLSearchParams({ speed: speed.value, tts: tts.value, theme: look.value, motion: motion.value });
 const diagnostics = $<HTMLUListElement>("diagnostics");
 const stageBox = $<HTMLDivElement>("stage");
 const waiting = $<HTMLDivElement>("waiting");
@@ -182,7 +186,7 @@ function selectLine(line: number): void {
 
 async function build(): Promise<void> {
   stopGeneration();
-  const res = await fetch(`/api/build?speed=${speed.value}&tts=${tts.value}`, { method: "POST", body: editor.value });
+  const res = await fetch(`/api/build?${style()}`, { method: "POST", body: editor.value });
   const result: BuildResult = await res.json();
   showDiagnostics(result.error ? [result.error] : result.diagnostics);
   if (!result.ok || !result.ir || !result.timeline) return;
@@ -234,8 +238,7 @@ function startGeneration(): void {
     provider: provider.value,
     mode: $<HTMLSelectElement>("mode").value,
     example: replayExample.value,
-    speed: speed.value,
-    tts: tts.value,
+    ...Object.fromEntries(style()),
   });
   const started = performance.now();
   let firstFrame = 0;
@@ -302,9 +305,14 @@ function stopGeneration(): void {
   session?.player.finish();
 }
 
+type Choice = { name: string; summary: string };
+
 async function loadProviders(): Promise<void> {
-  const p: { openrouter: boolean; groq: boolean; tts: string; examples: string[] } = await (await fetch("/api/providers")).json();
+  const p: { openrouter: boolean; groq: boolean; tts: string; examples: string[]; themes: Choice[]; motions: Choice[] } = await (await fetch("/api/providers")).json();
   tts.value = p.tts;
+  const options = (list: Choice[]) => list.map((c) => `<option value="${c.name}" title="${c.summary}">${c.name}</option>`).join("");
+  look.insertAdjacentHTML("beforeend", options(p.themes));
+  motion.insertAdjacentHTML("beforeend", options(p.motions));
   replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
   $<HTMLParagraphElement>("keys").innerHTML =
     `OpenRouter ${p.openrouter ? "connected" : "not set"} · Groq ${p.groq ? "connected" : "not set"}` +
@@ -347,6 +355,7 @@ async function init(): Promise<void> {
 
 document.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab!)));
 examples.addEventListener("change", () => void loadExample());
+for (const pick of [look, motion]) pick.addEventListener("change", () => void build());
 $<HTMLButtonElement>("build").addEventListener("click", () => void build());
 editor.source.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {

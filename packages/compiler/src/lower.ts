@@ -1,6 +1,6 @@
 import type { Action, Args, Diagnostic, ElementDecl, Script, Setting } from "@anim/dsl";
 import { IR_VERSION, type ActionIR, type BeatIR, type Box, type ElementIR, type SceneIR, type VideoIR } from "@anim/ir";
-import { COMPONENTS, findComponent, findVerb, partsOf, type AssetLibrary, type ParamSpec } from "@anim/registry";
+import { COMPONENTS, findComponent, findMotion, findVerb, partsOf, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
 import { layoutScene, type SceneLayout } from "./layout.js";
 
 export const DEFAULTS = {
@@ -8,6 +8,7 @@ export const DEFAULTS = {
   height: 1080,
   fps: 30,
   theme: "paper",
+  motion: "standard",
   voice: "narrator",
   lang: "en",
   transitionIn: "fade",
@@ -27,6 +28,7 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
   const setting = (settings: Setting[], key: string) => settings.find((s) => s.key === key)?.args;
   const size = setting(script.settings, "size");
   const [w, h] = size?.[0]?.split("x").map(Number) ?? [DEFAULTS.width, DEFAULTS.height];
+  const motion = findMotion(setting(script.settings, "motion")?.[0]);
   const fps = Number(setting(script.settings, "fps")?.[0] ?? size?.[1] ?? DEFAULTS.fps);
   const ctx = { width: w!, height: h!, assets };
 
@@ -69,7 +71,7 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
         ...(step.layout && { layout: step.layout.name }),
         ...(step.focus && { focus: step.focus.name }),
         beats: step.beats.map((beat): BeatIR => {
-          const actions = beat.actions.map((a) => lowerAction(a, elements, layout));
+          const actions = beat.actions.map((a) => lowerAction(a, elements, layout, motion));
           return beat.type === "speech"
             ? { type: "speech", text: beat.text, cues: beat.cues.map((c) => ({ id: c.id, start: c.start, ...(c.end !== undefined && { end: c.end }) })), actions, line: beat.span.line }
             : { type: "wait", seconds: beat.seconds, actions, line: beat.span.line };
@@ -89,6 +91,7 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
       canvas: { width: w!, height: h!, fps },
       // Grid scenes are designed for the monochrome editorial theme.
       theme: setting(script.settings, "theme")?.[0] ?? (script.scenes.some((s) => s.attrs.grid !== undefined) ? "editorial" : DEFAULTS.theme),
+      motion: motion.name,
       voice: setting(script.settings, "voice")?.[0] ?? DEFAULTS.voice,
       lang: setting(script.settings, "lang")?.[0] ?? DEFAULTS.lang,
       scenes,
@@ -125,7 +128,7 @@ function lowerElement(el: ElementDecl, step: number, layout: SceneLayout, assets
   };
 }
 
-function lowerAction(action: Action, elements: ElementIR[], layout: SceneLayout): ActionIR {
+function lowerAction(action: Action, elements: ElementIR[], layout: SceneLayout, motion: MotionProfile): ActionIR {
   return {
     anchor: action.anchor,
     line: action.span.line,
@@ -143,7 +146,7 @@ function lowerAction(action: Action, elements: ElementIR[], layout: SceneLayout)
       else if (verb.name === "write") {
         const chars = Math.max(...call.targets.map((t) => elements.find((e) => e.id === t.split(".")[0])?.texts[0]?.length ?? 0), 0);
         duration = round2(Math.max(DEFAULTS.minWrite, chars / DEFAULTS.writeCps));
-      } else duration = verb.defaultDuration;
+      } else duration = round2(verb.defaultDuration * motion.durScale);
 
       const dest = verb.name === "move" && args.place && call.targets[0] ? layout.destination(call.targets[0], args.place) : undefined;
       return {
@@ -152,7 +155,7 @@ function lowerAction(action: Action, elements: ElementIR[], layout: SceneLayout)
         targets: call.targets,
         duration,
         delay: args.delay ?? 0,
-        stagger: args.stagger ?? 0,
+        stagger: round2((args.stagger ?? 0) * motion.staggerScale),
         ...(args.to !== undefined && { to: args.to }),
         ...(dest && { dest }),
         params,

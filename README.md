@@ -85,6 +85,17 @@ Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmp
 
 The Studio and the renderer narrate with the local Kokoro voice by default. **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
 
+## Looks and motion
+
+Every script can be restyled without touching its content:
+
+```
+theme magazine        # 13 looks: palette, bundled fonts, shapes, shadows, emphasis
+motion cinematic      # 7 personalities: how the same verbs move
+```
+
+The Studio's Script tab has **Look** and **Motion** menus that override the script, so you can flip one script through every combination. The LLM picks a look and a motion to suit each topic. See `docs/dsl-spec.md` §6b.
+
 ## Voice (local TTS)
 
 Narration is synthesized on your machine with [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped) (Apache-2.0) through ONNX Runtime. There is no Python, GPU or API key involved.
