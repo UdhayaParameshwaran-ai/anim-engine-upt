@@ -56,6 +56,15 @@ end highlight left.chloroplast 1
 1 highlight right fit
 1 dim left
 
+scene energy "Where the energy comes from" in=fade
+layout row
+sun = icon:sun "Sunlight"
+leaf = asset:leaf "Leaf"
+beam = arrow sun->leaf
+> Plants run on {1}sunlight, carried {2 straight into the leaf}.
+1 pop sun
+2 draw beam fit then draw leaf
+
 scene numbers "By the numbers" grid=L3-02 in=fade
 title = title "Microscopes changed biology"
 chart = chart:bar data=2,40,300 labels=1700,1900,2000
@@ -123,6 +132,16 @@ RULES
 - Prefer a template. Element ids that equal slot names fill those slots; other elements fill items in order.
 - Use only the assets listed below, exactly as written. For anything else use box "Label" or text.
 - Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …
+- Connectors join two declared ids with "->" and no spaces: a1 = arrow sun->leaf (never "arrow sun to leaf").
+- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.
+- Cue ids restart at 1 on every "> " line, and the actions under a line anchor only on that line's cues.
+- Grid elements (stat, bullets, timeline, quote, …) only go in grid= scenes; template scenes use ELEMENT KINDS. A template's name is not an element.
+
+QUALITY
+- Show, don't label: use an icon or asset whose meaning matches its label (e.g. icon:sun "Sunlight"). Use box only for abstract ideas no listed asset fits; never fill a scene with boxes alone.
+- Be factually correct. Use real, well-known figures; if unsure of a number, describe the trend in words instead of inventing data.
+- Never invent quotes or attributions. Quote only real, famous people with words they actually said; otherwise use callout or body.
+- Each scene adds something new: don't repeat what other scenes cover.
 
 VERBS
 ${verbs}
@@ -165,6 +184,38 @@ GRID ELEMENTS (syntax · role · minimum slot · limits)
 ${elements}`;
 }
 
+/**
+ * System prompt for the outline pass: only what planning needs (scene
+ * types, themes, the asset names), about a fifth of the full prompt.
+ */
+export function outlineSystemPrompt(assets: AssetManifest[]): string {
+  const templates = TEMPLATES.map((t) => `  ${t.name.padEnd(10)} ${t.summary}`).join("\n");
+  const layouts = GRID_LAYOUTS.map((l) => `${l.code} ${l.name} (${l.slots.length})`).join(" · ");
+  const elements = [...new Set(GRID_ELEMENTS.map((e) => e.kind))].join(" ");
+  return `You plan narrated 2D explainer videos written in Narrascript, a line-based script language.
+Reply with Narrascript lines only — no prose, no markdown fences.
+
+LINES
+video 1 "Title"
+theme ${THEMES.join("|")}
+scene <id> "Title" template=<t> | grid=<layout code>  [in=${TRANSITIONS.join("|")}]
+# goal: <one line>
+
+TEMPLATES (diagrams)
+${templates}
+
+GRID LAYOUTS (editorial pages; number of content slots in brackets; elements: ${elements})
+${layouts}
+
+ASSETS AVAILABLE: ${assets.map((a) => `${a.kind}:${a.name}`).join(" ")}
+
+PLANNING RULES
+- Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
+- Pick the template or grid that fits the content: processes → steps/flow, comparisons → compare, loops → cycle, numbers/quotes/lists → grid.
+- Vary scene types; plan visuals from the assets above.
+- Plan only facts you are sure of.`;
+}
+
 /** First pass: plan the scenes without writing narration. */
 export function outlinePrompt(topic: string, scenes: { min: number; max: number }): string {
   return `Plan a narrated explainer video about:
@@ -176,13 +227,32 @@ Output only:
 No elements, narration or actions yet.`;
 }
 
-/** Second pass: one complete scene, written against the whole outline. */
-export function scenePrompt(outline: string, sceneId: string): string {
+/**
+ * Second pass: one complete scene, written against the whole outline and,
+ * when earlier scenes are already written, what they say.
+ */
+export function scenePrompt(outline: string, sceneId: string, earlier = ""): string {
+  const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
   return `Video outline:
-${outline}
+${outline}${said}
 
 Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
+Cover only this scene's goal; other scenes cover the rest.
 Output only this scene, starting with its "scene" line.`;
+}
+
+/** The narration of written scenes, without cues: the context later scenes need. */
+export function narrationOf(scenes: string[]): string {
+  return scenes
+    .map((s) => {
+      const id = /^\s*scene\s+(\S+)/.exec(s)?.[1] ?? "?";
+      const lines = s
+        .split("\n")
+        .filter((l) => l.trimStart().startsWith(">"))
+        .map((l) => l.trimStart().slice(1).replace(/\{\w+\s?/g, "").replace(/\}/g, "").trim());
+      return `${id}: ${lines.join(" ")}`;
+    })
+    .join("\n");
 }
 
 /** Single pass: the whole script at once (also used for streaming). */
@@ -194,15 +264,19 @@ Start with the "video 1" line.`;
 }
 
 /** Repair: the failing scene plus compact diagnostics with scene-relative line numbers. */
-export function repairPrompt(sceneText: string, diagnostics: string): string {
+export function repairPrompt(sceneText: string, diagnostics: string, kind: "errors" | "quality" = "errors"): string {
   const numbered = sceneText
     .split("\n")
     .map((l, i) => `${String(i + 1).padStart(3)}| ${l}`)
     .join("\n");
-  return `This scene has errors. Fix every error and reply with the corrected scene only (no line numbers).
+  const ask =
+    kind === "errors"
+      ? "This scene has errors. Fix every error and reply with the corrected scene only (no line numbers)."
+      : "This scene is valid but has quality problems. Fix them, keep everything else that works, and reply with the improved scene only (no line numbers).";
+  return `${ask}
 
 ${numbered}
 
-Errors:
+${kind === "errors" ? "Errors" : "Problems"}:
 ${diagnostics}`;
 }

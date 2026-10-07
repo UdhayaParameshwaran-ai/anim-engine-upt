@@ -172,7 +172,7 @@ Run `pnpm check <file>` to see them. Most come with a deterministic auto-fix. A 
 | NAR217 | schema | `fit` anchored on a point cue | Remove `fit` |
 | NAR301 | reference | Undeclared element (or one declared in a later step) | Closest id, else drop the target |
 | NAR302 | reference | Duplicate element id in a scene | Drop the duplicate |
-| NAR303 | reference | Anchor is not a cue of this beat | Drop the action |
+| NAR303 | reference | Anchor is not a cue of this beat | Re-anchor onto the beat's unused cues in order (for cues numbered across the scene), else drop the action |
 | NAR304 | reference | Cue with no action (warning) | — |
 | NAR305 | reference | Connector endpoint not declared | Closest id, else drop the connector |
 | NAR306 | reference | Asset not in the library (warning) | Synonym, closest name, else labeled placeholder |

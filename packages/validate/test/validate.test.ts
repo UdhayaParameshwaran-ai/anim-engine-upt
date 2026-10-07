@@ -57,6 +57,20 @@ describe("references", () => {
     expect(r.printed).not.toContain("2 pulse");
   });
 
+  it("re-anchors actions numbered across the scene onto the beat's unused cues", () => {
+    // What a model wrote: cues restart at {1}, anchors keep counting.
+    const r = check("sun = icon:sun\nsky = icon:cloud\n> The {1}sun rises.\n1 pop sun\n> Then the {1}sky {2 turns blue}.\n2 pop sky\n3 highlight sky fit\n4 pulse sun");
+    const anchors = r.diagnostics.filter((d) => d.code === C.UnknownCue);
+    expect(anchors.map((d) => d.fixed)).toEqual(["anchored on cue `1`", "removed the action"]);
+    expect(r.printed).toContain("1 highlight sky");
+    expect(r.printed).toContain("2 pop sky");
+    expect(r.printed).not.toContain("pulse sun");
+
+    const shifted = check("sky = icon:cloud\nsun = icon:sun\n> First the {1}sky.\n2 pop sky\n> Then the {1}sun {2 sets slowly}.\n3 pop sun\n4 highlight sun fit");
+    expect(shifted.diagnostics.filter((d) => d.code === C.UnknownCue).map((d) => d.fixed)).toEqual(["anchored on cue `1`", "anchored on cue `1`", "anchored on cue `2`"]);
+    expect(shifted.codes).toEqual([C.UnknownCue, C.UnknownCue, C.UnknownCue]);
+  });
+
   it("flags elements used before the step that declares them", () => {
     const r = check("a = icon:sun\n> One {1}thing.\n1 pop a,b\nstep two\nb = icon:heart\n> Two {1}things.\n1 pop b");
     expect(r.codes).toEqual([C.UndeclaredElement]);

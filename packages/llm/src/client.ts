@@ -29,6 +29,8 @@ export interface ChatResult {
 
 export interface LlmClient {
   readonly name: string;
+  /** Requests this provider handles well at once (free tiers have low tokens-per-minute caps). */
+  readonly concurrency?: number;
   chat(req: ChatRequest): Promise<ChatResult>;
   /** Streams the reply; `onDelta` receives text as it arrives. */
   stream(req: ChatRequest, onDelta: (text: string) => void): Promise<ChatResult>;
@@ -51,6 +53,8 @@ export interface ProviderPreset {
   keyEnv: string;
   modelEnv: string;
   headers?: Record<string, string>;
+  /** Parallel requests; omitted = no limit beyond the caller's. */
+  concurrency?: number;
 }
 
 export const PROVIDERS: Record<"openrouter" | "groq", ProviderPreset> = {
@@ -63,9 +67,11 @@ export const PROVIDERS: Record<"openrouter" | "groq", ProviderPreset> = {
   },
   groq: {
     baseUrl: "https://api.groq.com/openai/v1",
-    defaultModel: "llama-3.3-70b-versatile",
+    defaultModel: "openai/gpt-oss-120b",
     keyEnv: "GROQ_API_KEY",
     modelEnv: "ANIM_GROQ_MODEL",
+    // The free tier allows ~8k tokens per minute and each call sends a ~4k-token prompt.
+    concurrency: 1,
   },
 };
 
@@ -77,6 +83,7 @@ export interface CompatOptions {
   apiKey: string;
   model: string;
   headers?: Record<string, string>;
+  concurrency?: number;
   /** Retries for 429/5xx/network errors, with backoff. */
   retries?: number;
   timeoutMs?: number;
@@ -88,11 +95,13 @@ export interface CompatOptions {
 /** OpenAI-compatible chat-completions client (OpenRouter, Groq, ...). */
 export class OpenAICompatibleClient implements LlmClient {
   readonly name: string;
+  readonly concurrency?: number;
   private readonly fetchFn: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(private readonly opts: CompatOptions) {
     this.name = `${opts.name}:${opts.model}`;
+    if (opts.concurrency) this.concurrency = opts.concurrency;
     this.fetchFn = opts.fetch ?? fetch;
     this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
@@ -175,7 +184,9 @@ export class OpenAICompatibleClient implements LlmClient {
       try {
         return await fn();
       } catch (e) {
-        if (!(e instanceof LlmError) || !e.retryable || attempt >= retries) throw e;
+        // Rate limits clear within a minute (free tiers have low tokens-per-minute caps), so they get a bigger budget.
+        const budget = e instanceof LlmError && e.status === 429 ? Math.max(retries, 6) : retries;
+        if (!(e instanceof LlmError) || !e.retryable || attempt >= budget) throw e;
         const after = (e as LlmError & { retryAfter?: number }).retryAfter;
         await this.sleep(after ? after * 1000 : 1000 * 2 ** attempt);
       }
@@ -186,10 +197,14 @@ export class OpenAICompatibleClient implements LlmClient {
 /** Tries each client in order; the first success wins. */
 export class FallbackClient implements LlmClient {
   readonly name: string;
+  readonly concurrency?: number;
 
   constructor(private readonly clients: LlmClient[]) {
     if (!clients.length) throw new Error("FallbackClient needs at least one client");
     this.name = clients.map((c) => c.name).join(" → ");
+    // Any client may end up serving a request, so the strictest limit applies.
+    const limits = clients.map((c) => c.concurrency).filter((n): n is number => n !== undefined);
+    if (limits.length) this.concurrency = Math.min(...limits);
   }
 
   chat(req: ChatRequest): Promise<ChatResult> {
@@ -248,6 +263,7 @@ export function clientFromEnv(opts: FromEnvOptions = {}): LlmClient {
         apiKey,
         model: (i === 0 && opts.model) || env[preset.modelEnv] || preset.defaultModel,
         ...(preset.headers && { headers: preset.headers }),
+        ...(preset.concurrency && { concurrency: preset.concurrency }),
         ...(opts.fetch && { fetch: opts.fetch }),
       }),
     );

@@ -427,11 +427,21 @@ class Validator {
       if (words > this.maxBeatWords) this.warn(C.BeatTooLong, `beat has ${words} words; keep one idea per beat (≤${this.maxBeatWords})`, beat.span);
     }
 
+    // Writers often number cues across the whole scene (`{1}` in the text, `2 pop x` below it).
+    // Pair unknown anchors with this beat's unused cues, both in order of appearance.
+    const isUnknown = (a: string) => a !== "start" && a !== "end" && !cueIds.has(a);
+    const unknown = [...new Set(beat.actions.map((a) => a.anchor).filter(isUnknown))];
+    const anchored = new Set(beat.actions.map((a) => a.anchor));
+    const unused = beat.type === "speech" ? beat.cues.map((c) => c.id).filter((id) => !anchored.has(id)) : [];
+    const remap = new Map(unknown.slice(0, unused.length).map((a, i) => [a, unused[i]!]));
+
     for (const action of [...beat.actions]) {
-      if (action.anchor !== "start" && action.anchor !== "end" && !cueIds.has(action.anchor)) {
+      if (isUnknown(action.anchor)) {
         const where = beat.type === "wait" ? "a `wait` only has `start` and `end`" : `cues here: ${[...cueIds].join(", ") || "none"}`;
-        this.error(C.UnknownCue, `anchor \`${action.anchor}\` is not a cue of this beat (${where})`, action.span, drop(beat.actions, action, "removed the action"));
-        continue;
+        const to = remap.get(action.anchor);
+        const fix = to ? { desc: `anchored on cue \`${to}\``, apply: () => (action.anchor = to) } : drop(beat.actions, action, "removed the action");
+        this.error(C.UnknownCue, `anchor \`${action.anchor}\` is not a cue of this beat (${where})`, action.span, fix);
+        if (!to || !this.autofix) continue;
       }
       for (const call of [...action.calls]) this.call(call, action, beat, known, declared);
       if (!action.calls.length && this.autofix) remove(beat.actions, action);

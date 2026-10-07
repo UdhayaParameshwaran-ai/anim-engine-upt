@@ -2,7 +2,8 @@ import { compile, report } from "@anim/compiler";
 import { print, type Diagnostic } from "@anim/dsl";
 import { AssetLibrary } from "@anim/registry";
 import type { ChatMessage, LlmClient, Usage } from "./client.js";
-import { fullPrompt, outlinePrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
+import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
+import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
   client: LlmClient;
@@ -12,8 +13,10 @@ export interface GenerateOptions {
   scenes?: { min: number; max: number };
   /** LLM repair attempts per scene before falling back to auto-fix. */
   maxRepairs?: number;
-  /** Scenes written/repaired at once. */
+  /** Scenes written/repaired at once; default the client's limit, else 3. */
   concurrency?: number;
+  /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
+  qualityRepairs?: boolean;
   temperature?: number;
   /**
    * Each finished (validated) scene, in order, as soon as it and all earlier
@@ -34,6 +37,8 @@ export interface GenerateResult {
   repairs: number;
   calls: number;
   usage: Usage;
+  /** Quality problems left in the final script (see quality.ts). */
+  quality: string[];
 }
 
 interface Ctx {
@@ -52,14 +57,16 @@ interface Ctx {
  */
 export async function generate(topic: string, opts: GenerateOptions): Promise<GenerateResult> {
   const assets = opts.assets ?? new AssetLibrary();
-  const ctx: Ctx = { opts, system: systemPrompt(retrieveAssets(topic, assets)), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0 };
+  const relevant = retrieveAssets(topic, assets);
+  const ctx: Ctx = { opts, system: systemPrompt(relevant), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0 };
   const range = opts.scenes ?? { min: 2, max: 4 };
   let header = "";
   const emit = orderedEmitter((text, i) => opts.onScene?.(text, i, header));
 
   let scenes: string[];
   if ((opts.mode ?? "outline") === "outline") {
-    const outline = clean(await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }]));
+    // Planning only needs scene types and asset names, not the whole language.
+    const outline = clean(await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }], undefined, outlineSystemPrompt(relevant)));
     const plan = split(outline);
     if (!plan.scenes.length) {
       opts.onLog?.("outline had no scenes; falling back to a single pass");
@@ -67,10 +74,14 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
     }
     header = ensureHeader(plan.header, topic);
     opts.onLog?.(`outline: ${plan.scenes.map((s) => s.id).join(", ")}`);
-    scenes = await pool(plan.scenes, opts.concurrency ?? 3, async (s, i) => {
-      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id) };
+    const written: string[] = [];
+    scenes = await pool(plan.scenes, opts.concurrency ?? opts.client.concurrency ?? 3, async (s, i) => {
+      // Earlier scenes that are already written (all of them when scenes run one at a time).
+      const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
+      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier) };
       const text = sceneOnly(clean(await chat(ctx, [first])), s.id);
       const fixed = await repairLoop(ctx, header, text, [first]);
+      written[i] = fixed;
       emit(fixed, i);
       return fixed;
     });
@@ -107,21 +118,40 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
     repairs: ctx.repairs,
     calls: ctx.calls,
     usage: ctx.usage,
+    quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text).map((q) => `${sc.id}: ${q.message}`)),
   };
 }
 
-/** Validates one scene in isolation and asks the LLM to fix errors, up to maxRepairs times. */
+/**
+ * Validates one scene in isolation and asks the LLM to fix errors, up to
+ * maxRepairs times. A scene without errors but with quality problems gets
+ * one improvement pass, kept only if it stays error-free and gets better.
+ */
 async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[]): Promise<string> {
-  let current = text;
-  for (let attempt = 0; attempt < (ctx.opts.maxRepairs ?? 2); attempt++) {
-    const problems = checkScene(header, current);
-    if (!problems.errors) return current;
+  const ask = async (current: string, report: string, kind: "errors" | "quality") => {
     ctx.repairs++;
-    ctx.opts.onLog?.(`repairing scene (attempt ${attempt + 1}):\n${problems.report}`);
-    const reply = await chat(ctx, [...history, { role: "assistant", content: current }, { role: "user", content: repairPrompt(current, problems.report) }]);
-    current = sceneOnly(clean(reply));
+    const reply = await chat(ctx, [...history, { role: "assistant", content: current }, { role: "user", content: repairPrompt(current, report, kind) }]);
+    return sceneOnly(clean(reply));
+  };
+  let current = text;
+  let errors = checkScene(header, current);
+  for (let attempt = 0; errors.errors && attempt < (ctx.opts.maxRepairs ?? 2); attempt++) {
+    ctx.opts.onLog?.(`repairing scene (attempt ${attempt + 1}):\n${errors.report}`);
+    current = await ask(current, errors.report, "errors");
+    errors = checkScene(header, current);
   }
-  return current;
+  if (errors.errors || ctx.opts.qualityRepairs === false) return current;
+
+  const issues = qualityIssues(header, current);
+  if (!issues.length) return current;
+  const report = qualityReport(issues);
+  ctx.opts.onLog?.(`improving scene:\n${report}`);
+  const better = await ask(current, report, "quality");
+  if (checkScene(header, better).errors || qualityIssues(header, better).length >= issues.length) {
+    ctx.opts.onLog?.("the improvement didn't help; keeping the previous version");
+    return current;
+  }
+  return better;
 }
 
 /**
@@ -141,9 +171,9 @@ export function checkScene(header: string, sceneText: string): { errors: number;
 
 // ------------------------------------------------------------- helpers ---
 
-async function chat(ctx: Ctx, messages: ChatMessage[], onDelta?: (d: string) => void): Promise<string> {
+async function chat(ctx: Ctx, messages: ChatMessage[], onDelta?: (d: string) => void, system = ctx.system): Promise<string> {
   ctx.calls++;
-  const req = { messages: [{ role: "system" as const, content: ctx.system }, ...messages], temperature: ctx.opts.temperature ?? 0.4 };
+  const req = { messages: [{ role: "system" as const, content: system }, ...messages], temperature: ctx.opts.temperature ?? 0.4 };
   const result = onDelta ? await ctx.opts.client.stream(req, onDelta) : await ctx.opts.client.chat(req);
   if (result.usage) {
     ctx.usage.prompt += result.usage.prompt;

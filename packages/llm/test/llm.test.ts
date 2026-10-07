@@ -8,6 +8,7 @@ import {
   generate,
   LlmError,
   OpenAICompatibleClient,
+  qualityIssues,
   ReplayClient,
   retrieveAssets,
   systemPrompt,
@@ -137,7 +138,7 @@ describe("OpenAI-compatible client", () => {
   });
 
   it("builds clients from the environment, skipping providers without keys", () => {
-    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b" } }).name).toBe("openrouter:anthropic/claude-sonnet-4.5 → groq:llama-3.3-70b-versatile");
+    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b" } }).name).toBe("openrouter:anthropic/claude-sonnet-4.5 → groq:openai/gpt-oss-120b");
     expect(clientFromEnv({ env: { GROQ_API_KEY: "b", ANIM_GROQ_MODEL: "x/y" } }).name).toBe("groq:x/y");
     expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b", ANIM_LLM_PROVIDERS: "groq,openrouter" }, model: "fast" }).name).toBe("groq:fast → openrouter:anthropic/claude-sonnet-4.5");
     expect(() => clientFromEnv({ env: {} })).toThrow(/OPENROUTER_API_KEY or GROQ_API_KEY/);
@@ -256,5 +257,101 @@ describe("progressive output", () => {
     expect(r.calls).toBe(1);
     expect(ready).toEqual([0, 1]);
     expect(waits.length).toBe(Math.ceil(script.length / 10) - 1);
+  });
+});
+
+describe("generation fixes from the traced run", () => {
+  const HEADER = 'video 1 "Plants"';
+  const tracker = (inner: ScriptedLlm, concurrency?: number): LlmClient & { peak: number } => {
+    let busy = 0;
+    const c = {
+      name: "tracked",
+      ...(concurrency && { concurrency }),
+      peak: 0,
+      chat: async (req: ChatRequest) => {
+        c.peak = Math.max(c.peak, ++busy);
+        await new Promise((ok) => setTimeout(ok, 5));
+        try {
+          return await inner.chat(req);
+        } finally {
+          busy--;
+        }
+      },
+      stream: (req: ChatRequest, d: (t: string) => void) => inner.stream(req, d),
+    };
+    return c;
+  };
+  const plain = (last: string) => (last.startsWith("Plan") ? OUTLINE : last.includes('"need"') ? NEED_OK : LEAF_OK);
+
+  it("waits out rate limits for longer than other failures", async () => {
+    const waits: number[] = [];
+    let calls = 0;
+    const client = new OpenAICompatibleClient({
+      name: "groq",
+      baseUrl: "https://x/v1",
+      apiKey: "k",
+      model: "m",
+      sleep: async (ms) => void waits.push(ms),
+      fetch: async () => (++calls <= 5 ? jsonResponse({ error: "tpm" }, 429, { "retry-after": "2" }) : jsonResponse({ choices: [{ message: { content: "ok" } }] })),
+    });
+    expect((await client.chat({ messages: [] })).text).toBe("ok");
+    expect(waits).toEqual([2000, 2000, 2000, 2000, 2000]);
+  });
+
+  it("writes scenes one at a time on providers with a concurrency limit", async () => {
+    expect(clientFromEnv({ env: { GROQ_API_KEY: "k" } }).concurrency).toBe(1);
+    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b" } }).concurrency).toBe(1);
+    const limited = tracker(new ScriptedLlm(plain), 1);
+    await generate("plants", { client: limited });
+    expect(limited.peak).toBe(1);
+    const open = tracker(new ScriptedLlm(plain));
+    await generate("plants", { client: open });
+    expect(open.peak).toBe(2);
+  });
+
+  it("plans with a short system prompt", async () => {
+    const llm = new ScriptedLlm(plain);
+    await generate("plants", { client: llm });
+    const [outline, scene] = llm.requests;
+    expect(outline!.messages[0]!.content).toContain("PLANNING RULES");
+    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 3);
+  });
+
+  it("tells later scenes what earlier scenes already said", async () => {
+    const llm = new ScriptedLlm(plain);
+    await generate("plants", { client: { name: "seq", concurrency: 1, chat: (r) => llm.chat(r), stream: (r, d) => llm.stream(r, d) } });
+    const second = llm.requests.find((q) => q.messages.at(-1)!.content.includes('Write scene "leaf"'))!;
+    expect(second.messages.at(-1)!.content).toContain("Already narrated in earlier scenes");
+    expect(second.messages.at(-1)!.content).toContain("need: Plants need light and water.");
+  });
+
+  it("flags valid but weak scenes", () => {
+    const boxes = 'scene a "A" template=compare\nleft = box "Light in"\nright = box "Light out"\n> Light goes {1}in and {2}out.\n1 fade left\n2 fade right';
+    expect(qualityIssues(HEADER, boxes).map((q) => q.code)).toEqual(["Q1"]);
+    const quote = 'scene q "Q" grid=L1-01\ns1 = quote "The sky is on fire." "— Atmospheric Scientist"\n> As one {1}scientist said.\n1 draw s1';
+    expect(qualityIssues(HEADER, quote)).toMatchObject([{ code: "Q3", line: 2 }]);
+    const missing = 'scene m "M" layout row\nx = asset:zzqqxx "Thing"\ny = icon:sun "Sun"\n> A {1}thing and the {2}sun.\n1 fade x\n2 pop y';
+    expect(qualityIssues(HEADER, missing).map((q) => q.code)).toEqual(["Q2"]);
+    expect(qualityIssues(HEADER, NEED_OK)).toEqual([]);
+  });
+
+  it("gives a weak scene one improvement pass and keeps it only if it is better", async () => {
+    const weak = 'scene need "Needs" template=steps\na = box "Light"\nb = box "Water"\n> Plants need {1}light and {2}water.\n1 fade a\n2 fade b';
+    const answer = (improved: string) => (last: string) =>
+      last.startsWith("This scene is valid") ? improved : last.startsWith("Plan") ? OUTLINE : last.includes('"need"') ? weak : LEAF_OK;
+    const better = new ScriptedLlm(answer(NEED_OK));
+    const r = await generate("plants", { client: better });
+    expect(r.script).toContain("icon:sun");
+    expect(r.quality).toEqual([]);
+    const prompt = better.requests.find((q) => q.messages.at(-1)!.content.startsWith("This scene is valid"))!.messages.at(-1)!.content;
+    expect(prompt).toContain("Q1 quality:");
+
+    const same = await generate("plants", { client: new ScriptedLlm(answer(weak)) });
+    expect(same.script).toContain('box "Light"');
+    expect(same.quality).toHaveLength(1);
+
+    const off = new ScriptedLlm(answer(NEED_OK));
+    await generate("plants", { client: off, qualityRepairs: false });
+    expect(off.requests).toHaveLength(3);
   });
 });
