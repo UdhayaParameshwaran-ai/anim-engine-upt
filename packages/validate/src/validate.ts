@@ -1,6 +1,7 @@
 import type { Action, Beat, Diagnostic, ElementDecl, Place, Scene, Script, Setting, Span, SpeechBeat, Step, VerbCall } from "@anim/dsl";
 import {
   AssetLibrary,
+  BACKGROUNDS,
   CHART_TYPES,
   COMPONENTS,
   findComponent,
@@ -173,6 +174,23 @@ class Validator {
             desc: near ? `used \`${near}\`` : "removed; standard motion applies",
             apply: () => (near ? (s.args = [near]) : remove(settings, s)),
           });
+          break;
+        }
+        case "bg": {
+          // `bg <kind>[+<kind>…] [seed=<n>]`: unknown kinds go to the closest one, or are dropped.
+          const names: readonly string[] = BACKGROUNDS.map((b) => b.name);
+          const kindArg = s.args.find((a) => !a.includes("="));
+          const kinds = (kindArg ?? "").split("+").filter(Boolean);
+          const fixed = kinds.map((k) => (names.includes(k) ? k : closest(k, names))).filter((k): k is string => !!k);
+          if (!kinds.length || fixed.length !== kinds.length || fixed.some((k, i) => k !== kinds[i])) {
+            this.warn(C.BadSetting, `unknown background \`${kindArg ?? ""}\` (backgrounds: ${names.join(", ")})`, s.span, {
+              desc: fixed.length ? `used \`${fixed.join("+")}\`` : "removed; the look's background applies",
+              apply: () => (fixed.length ? (s.args = [fixed.join("+"), ...s.args.filter((a) => a.includes("="))]) : remove(settings, s)),
+            });
+          }
+          for (const a of s.args.filter((x) => x.includes("="))) {
+            if (!/^seed=\d+$/.test(a)) this.warn(C.BadSetting, `bg takes only \`seed=<whole number>\`, not \`${a}\``, s.span, { desc: "ignored", apply: () => (s.args = s.args.filter((x) => x !== a)) });
+          }
           break;
         }
         case "lang":

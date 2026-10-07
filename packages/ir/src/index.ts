@@ -26,6 +26,8 @@ export interface VideoIR {
   theme: string;
   /** Motion personality (registry MOTIONS): how verbs move. */
   motion: string;
+  /** Background generators (registry BACKGROUNDS; "auto" = the look's) and their seed. */
+  background: { kinds: string[]; seed: number };
   voice: string;
   lang: string;
   scenes: SceneIR[];

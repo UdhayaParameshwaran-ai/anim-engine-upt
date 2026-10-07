@@ -32,8 +32,9 @@ const speed = $<HTMLInputElement>("speed");
 const tts = $<HTMLSelectElement>("tts");
 const look = $<HTMLSelectElement>("look");
 const motion = $<HTMLSelectElement>("motion");
+const bgPick = $<HTMLSelectElement>("bg");
 /** Voice, look and motion as query parameters (empty look/motion = what the script says). */
-const style = () => new URLSearchParams({ speed: speed.value, tts: tts.value, theme: look.value, motion: motion.value });
+const style = () => new URLSearchParams({ speed: speed.value, tts: tts.value, theme: look.value, motion: motion.value, bg: bgPick.value });
 const diagnostics = $<HTMLUListElement>("diagnostics");
 const stageBox = $<HTMLDivElement>("stage");
 const waiting = $<HTMLDivElement>("waiting");
@@ -308,11 +309,12 @@ function stopGeneration(): void {
 type Choice = { name: string; summary: string };
 
 async function loadProviders(): Promise<void> {
-  const p: { openrouter: boolean; groq: boolean; tts: string; examples: string[]; themes: Choice[]; motions: Choice[] } = await (await fetch("/api/providers")).json();
+  const p: { openrouter: boolean; groq: boolean; tts: string; examples: string[]; themes: Choice[]; motions: Choice[]; backgrounds: Choice[] } = await (await fetch("/api/providers")).json();
   tts.value = p.tts;
   const options = (list: Choice[]) => list.map((c) => `<option value="${c.name}" title="${c.summary}">${c.name}</option>`).join("");
   look.insertAdjacentHTML("beforeend", options(p.themes));
   motion.insertAdjacentHTML("beforeend", options(p.motions));
+  bgPick.insertAdjacentHTML("beforeend", options(p.backgrounds));
   replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
   $<HTMLParagraphElement>("keys").innerHTML =
     `OpenRouter ${p.openrouter ? "connected" : "not set"} · Groq ${p.groq ? "connected" : "not set"}` +
@@ -355,7 +357,7 @@ async function init(): Promise<void> {
 
 document.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab!)));
 examples.addEventListener("change", () => void loadExample());
-for (const pick of [look, motion]) pick.addEventListener("change", () => void build());
+for (const pick of [look, motion, bgPick]) pick.addEventListener("change", () => void build());
 $<HTMLButtonElement>("build").addEventListener("click", () => void build());
 editor.source.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {

@@ -51,7 +51,9 @@ describe("motion personalities", () => {
     const slow = await timeline("cinematic");
     const dur = (tl: ResolvedTimeline) => tracks(tl, "a/box", "opacity").map((t) => t.t1 - t.t0)[0]!;
     expect(dur(slow) / dur(std)).toBeCloseTo(1.5, 1);
-    expect(slow.words.map((w) => w.t0 - slow.scenes[0]!.t0)).toEqual(std.words.map((w) => w.t0 - std.scenes[0]!.t0));
+    // Speech keeps its pace; only the (slower) transition moves where it starts.
+    const pace = (tl: ResolvedTimeline) => tl.words.map((w) => +(w.t0 - tl.words[0]!.t0).toFixed(3));
+    expect(pace(slow)).toEqual(pace(std));
   });
 
   it("only use eases the engine knows, and keep progress properties in range", async () => {
@@ -68,5 +70,36 @@ describe("motion personalities", () => {
     const r = compile(script("playfull"));
     expect(r.diagnostics.find((d) => d.code === "NAR214")?.fixed).toBe("used `playful`");
     expect(r.ir!.motion).toBe("playful");
+  });
+});
+
+describe("scene transitions and backgrounds", () => {
+  const two = (head: string, attrs = ["", ""]) => `video 1 "Two"\n${head}scene a "A"${attrs[0]}\nlayout row\ns = icon:sun "Sun"\n> The {1}sun.\n1 pop s\nscene b "B"${attrs[1]}\nlayout row\nt = icon:sun "Sun"\n> Again the {1}sun.\n1 pop t\n`;
+  const ir = (src: string) => compile(src).ir!;
+
+  it("keep the original transitions under the standard personality", () => {
+    expect(ir(two("")).scenes.map((s) => [s.transitionIn, s.transitionOut])).toEqual([["fade", "cut"], ["fade", "cut"]]);
+  });
+
+  it("play each scene's transition as the previous scene's exit", () => {
+    const playful = ir(two("motion playful\n"));
+    expect(playful.scenes.map((s) => [s.transitionIn, s.transitionOut])).toEqual([["fade", "iris"], ["cut", "fade"]]);
+    // An explicit in= moves to the boundary too; an explicit out= is never overridden.
+    expect(ir(two("motion playful\n", ["", " in=wipe"])).scenes[0]!.transitionOut).toBe("wipe");
+    expect(ir(two("motion playful\n", [" out=slide", " in=wipe"])).scenes[0]!.transitionOut).toBe("slide");
+  });
+
+  it("seed backgrounds from the title unless a seed is given", () => {
+    const a = ir(two("bg mesh+grain\n"));
+    expect(a.background.kinds).toEqual(["mesh", "grain"]);
+    expect(ir(two("bg mesh+grain\n").replace('"Two"', '"Other"')).background.seed).not.toBe(a.background.seed);
+    expect(ir(two("bg dots seed=42\n")).background).toEqual({ kinds: ["dots"], seed: 42 });
+    expect(ir(two("")).background.kinds).toEqual(["auto"]);
+  });
+
+  it("fix unknown backgrounds", () => {
+    const r = compile(two("bg meshh+grainn seed=3\n"));
+    expect(r.diagnostics.find((d) => d.code === "NAR214")?.fixed).toBe("used `mesh+grain`");
+    expect(r.ir!.background).toEqual({ kinds: ["mesh", "grain"], seed: 3 });
   });
 });

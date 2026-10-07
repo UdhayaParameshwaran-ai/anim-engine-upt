@@ -3,7 +3,7 @@ import { Codes, type Diagnostic } from "./diagnostics.js";
 import { CUE_ID, IDENT, parseNarration, tokenize, type Token } from "./lex.js";
 
 export const SUPPORTED_VERSIONS = [1] as const;
-export const SETTING_KEYS = new Set(["theme", "motion", "voice", "size", "lang", "fps"]);
+export const SETTING_KEYS = new Set(["theme", "motion", "bg", "voice", "size", "lang", "fps"]);
 
 const DURATION = /^\d+(\.\d+)?s?$/;
 const TARGET = /^(\*|[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)?)$/;

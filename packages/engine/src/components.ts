@@ -32,7 +32,8 @@ export interface Instance {
 const CHAR_W = 0.55;
 const FONT: Record<string, number> = { title: 80, text: 44, label: 34, node: 32, list: 40, box: 36, circle: 32, placeholder: 28, edge: 26, arrow: 26, line: 26, icon: 30, asset: 32 };
 
-export function build(doc: Document, el: ElementIR, theme: Theme): Instance {
+/** `ids` prefixes any SVG ids the element defines (clip paths), unique per stage. */
+export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${el.id}`): Instance {
   const inst: Instance = { el, layer: el.layer, root: undefined!, parts: new Map(), strokes: [], fills: [], chars: [], lines: [], innerText: [] };
   if (el.layer === "html") {
     inst.root = buildHtml(doc, el, theme, inst);
@@ -42,7 +43,7 @@ export function build(doc: Document, el: ElementIR, theme: Theme): Instance {
   inst.root = g;
   const { w, h } = el.box;
   if (WIDGET_KINDS.has(el.kind)) {
-    buildWidget(doc, inst, g, el, theme);
+    buildWidget(doc, inst, g, el, theme, ids);
     return inst;
   }
   switch (el.kind) {

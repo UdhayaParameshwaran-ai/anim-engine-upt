@@ -1,6 +1,7 @@
 import type { Box, Prop, ResolvedScene, ResolvedTimeline, SceneIR, Tween, VideoIR } from "@anim/ir";
 import { createEvaluator, EASES, type FrameState, type Value } from "@anim/timeline";
 import { build, paintFills, round, svg, SVG_NS, type Instance } from "./components.js";
+import { buildBackground, type Background } from "./background.js";
 import { fontFace, fontFaceCss } from "./fonts.js";
 import { color, getTheme, type Theme } from "./theme.js";
 
@@ -25,6 +26,18 @@ type Props = Partial<Record<Prop, Value>>;
 type Css = [property: string, value: string][];
 
 let stageCount = 0;
+const SVG_ROOT_BASE = "position: absolute; left: 0px; top: 0px;";
+
+/** How a transition shows a scene at a moment. */
+interface SceneLook {
+  opacity: number;
+  dx: number;
+  dy: number;
+  scale: number;
+  blur: number;
+  /** CSS clip-path on the scene's layers ("" = none). */
+  clip: string;
+}
 const SCENE_HTML_BASE = "position: absolute; inset: 0px;";
 
 /**
@@ -59,6 +72,7 @@ export class Stage {
   private readonly height: number;
   private time = 0;
   private resizer: ResizeObserver | undefined;
+  private readonly background: Background;
   /** Unique per stage, so two stages on one page don't share filter ids. */
   private readonly markId = `anim-mark-${++stageCount}`;
 
@@ -87,10 +101,16 @@ export class Stage {
     fonts.textContent = fontFaceCss(this.theme.faces, opts.fontBase ?? "/fonts/");
     this.root.append(fonts);
 
+    // Behind every scene and outside the camera: backgrounds don't zoom with focus.
+    const bg = ir.background ?? { kinds: ["auto"], seed: 0 };
+    this.background = buildBackground(doc, bg.kinds, bg.seed, this.theme, this.width, this.height, `${this.markId}-bg`);
+    this.root.append(this.background.node);
+
     this.svgRoot = svg(doc, "svg", { viewBox: `0 0 ${this.width} ${this.height}`, width: this.width, height: this.height }) as SVGSVGElement;
-    Object.assign(this.svgRoot.style, { position: "absolute", left: "0", top: "0" });
+    this.svgRoot.style.cssText = SVG_ROOT_BASE;
     if (this.theme.emphasis === "mark") this.svgRoot.append(this.markFilters(doc));
     this.svgCamera = svg(doc, "g", {
+      "data-camera": "",
       stroke: this.theme.fg,
       "stroke-width": this.theme.stroke,
       "stroke-linecap": "round",
@@ -114,7 +134,7 @@ export class Stage {
       // Connectors first so they sit behind what they connect.
       const ordered = [...sceneIr.elements].sort((a, b) => Number(!a.link) - Number(!b.link));
       for (const el of ordered) {
-        const inst = build(doc, el, this.theme);
+        const inst = build(doc, el, this.theme, `${this.markId}-${res.id}-${el.id}`);
         paintFills(inst, this.theme);
         this.baseStyle.set(inst.root, inst.root.style.cssText);
         for (const nodes of inst.parts.values()) for (const n of nodes) this.baseStyle.set(n, (n as SVGElement).style.cssText);
@@ -166,25 +186,35 @@ export class Stage {
   render(t: number): void {
     this.time = Math.min(Math.max(t, 0), this.duration);
     const state = this.evaluator.at(this.time);
+    this.background.update(this.time);
+    // Clip transitions (wipe, iris) act on the active scene's layers, never the background.
+    let clip = "";
     const last = this.scenes[this.scenes.length - 1];
     for (const view of this.scenes) {
       const { t0, t1 } = view.res;
       const active = (this.time >= t0 && this.time < t1) || (view === last && this.time >= t1);
       // Inactive scenes are rendered too, so no node ever keeps state from an earlier frame.
-      this.renderScene(view, state, active);
+      const c = this.renderScene(view, state, active);
+      if (active) clip = c;
     }
+    css(this.svgRoot, SVG_ROOT_BASE, [["clip-path", clip]]);
   }
 
-  private renderScene(view: SceneView, state: FrameState, active: boolean): void {
+  /** Renders one scene's layers; returns the clip-path its transition puts on the stage. */
+  private renderScene(view: SceneView, state: FrameState, active: boolean): string {
     const { res } = view;
-    const sceneState = this.transition(res);
+    const s = this.transition(res);
+    const moved = s.dx || s.dy || s.scale !== 1;
+    const transform = moved ? `translate(${round(s.dx)}px, ${round(s.dy)}px) scale(${round(s.scale, 4)})` : "";
     const sceneCss: Css = [
       ["display", active ? "" : "none"],
-      ["opacity", String(round(sceneState.opacity, 4))],
-      ["transform", sceneState.dx ? `translateX(${round(sceneState.dx)}px)` : ""],
+      ["opacity", String(round(s.opacity, 4))],
+      ["transform-origin", moved ? `${this.width / 2}px ${this.height / 2}px` : ""],
+      ["transform", transform],
+      ["filter", s.blur > 0.05 ? `blur(${round(s.blur, 2)}px)` : ""],
     ];
     css(view.svg, "", sceneCss);
-    css(view.html, SCENE_HTML_BASE, sceneCss);
+    css(view.html, SCENE_HTML_BASE, [...sceneCss, ["clip-path", s.clip]]);
 
     if (active) {
       const cam = (state.get(`${res.id}/camera`)?.camera as Box | undefined) ?? { x: 0, y: 0, w: this.width, h: this.height };
@@ -203,21 +233,50 @@ export class Stage {
       }
     }
     for (const inst of view.instances.values()) if (inst.connector) this.route(inst, view, state);
+    return s.clip;
   }
 
-  /** Scene-level opacity and slide offset from its transitions. */
-  private transition(res: ResolvedScene): { opacity: number; dx: number } {
+  /** Scene-level opacity, offset, scale, blur and clip from its in/out transitions. */
+  private transition(res: ResolvedScene): SceneLook {
     const t = this.time;
-    const inP = res.transitionIn.duration > 0 ? clamp01((t - res.t0) / res.transitionIn.duration) : 1;
-    const outP = res.transitionOut.duration > 0 ? clamp01((res.t1 - t) / res.transitionOut.duration) : 1;
+    const look: SceneLook = { opacity: 1, dx: 0, dy: 0, scale: 1, blur: 0, clip: "" };
     const out = EASES.out!;
-    let opacity = 1;
-    let dx = 0;
-    if (res.transitionIn.type === "fade" || res.transitionIn.type === "slide") opacity = Math.min(opacity, out(inP));
-    if (res.transitionIn.type === "slide") dx += (1 - out(inP)) * this.width * 0.25;
-    if (res.transitionOut.type === "fade" || res.transitionOut.type === "slide") opacity = Math.min(opacity, out(outP));
-    if (res.transitionOut.type === "slide") dx -= (1 - out(outP)) * this.width * 0.25;
-    return { opacity, dx };
+    // k: how far the scene still is from fully shown (1 → 0 entering, 0 → 1 leaving).
+    const apply = (type: string, k: number, leaving: boolean) => {
+      if (k <= 0) return;
+      const dir = leaving ? -1 : 1;
+      switch (type) {
+        case "fade":
+          look.opacity *= 1 - k;
+          break;
+        case "slide":
+          look.opacity *= 1 - k;
+          look.dx += dir * k * this.width * 0.25;
+          break;
+        case "rise":
+          look.opacity *= 1 - k;
+          look.dy += dir * k * this.height * 0.12;
+          break;
+        case "zoom":
+          look.opacity *= 1 - k;
+          look.scale *= leaving ? 1 - k * 0.06 : 1 + k * 0.12;
+          break;
+        case "blur":
+          look.opacity *= 1 - k;
+          look.blur += k * 18;
+          break;
+        case "wipe":
+          // Enters left to right; leaves left to right too.
+          look.clip = leaving ? `inset(0 0 0 ${round(k * 100, 3)}%)` : `inset(0 ${round(k * 100, 3)}% 0 0)`;
+          break;
+        case "iris":
+          look.clip = `circle(${round((1 - k) * 75, 3)}% at 50% 50%)`;
+          break;
+      }
+    };
+    if (res.transitionIn.duration > 0) apply(res.transitionIn.type, 1 - out(clamp01((t - res.t0) / res.transitionIn.duration)), false);
+    if (res.transitionOut.duration > 0) apply(res.transitionOut.type, 1 - out(clamp01((res.t1 - t) / res.transitionOut.duration)), true);
+    return look;
   }
 
   private applyElement(inst: Instance, target: string, p: Props): void {

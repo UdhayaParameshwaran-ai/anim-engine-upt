@@ -11,7 +11,7 @@ export const DEFAULTS = {
   motion: "standard",
   voice: "narrator",
   lang: "en",
-  transitionIn: "fade",
+  transitionIn: "auto",
   transitionOut: "cut",
   /** Characters per second for `write` without an explicit duration. */
   writeCps: 30,
@@ -83,6 +83,8 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
     prevElements = new Map(elements.map((e) => [e.id, e]));
   }
 
+  boundaries(scenes, script, motion);
+
   return {
     ir: {
       irVersion: IR_VERSION,
@@ -92,6 +94,7 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
       // Grid scenes are designed for the monochrome editorial theme.
       theme: setting(script.settings, "theme")?.[0] ?? (script.scenes.some((s) => s.attrs.grid !== undefined) ? "editorial" : DEFAULTS.theme),
       motion: motion.name,
+      background: background(setting(script.settings, "bg"), script.title),
       voice: setting(script.settings, "voice")?.[0] ?? DEFAULTS.voice,
       lang: setting(script.settings, "lang")?.[0] ?? DEFAULTS.lang,
       scenes,
@@ -172,6 +175,42 @@ function typed(raw: Record<string, string>, specs: Record<string, ParamSpec>): R
     out[k] = t === "number" ? Number(v) : t === "bool" ? v === "true" : v;
   }
   return out;
+}
+
+/**
+ * Scene transitions. A new scene starts empty (its elements appear on their
+ * cues), so a transition only shows on the scene being left. With the
+ * standard personality, `in=` keeps its original meaning (`auto` = fade).
+ * With any other personality, a scene's transition (`in=`, or the next one
+ * from the personality's set for `auto`) becomes the previous scene's
+ * exit, unless that scene chose its own `out=`; the video ends with a fade.
+ */
+function boundaries(scenes: SceneIR[], script: Script, motion: MotionProfile): void {
+  const pick = (name: string, i: number) => (name === "auto" ? motion.transitions[i % motion.transitions.length]! : name);
+  if (motion.name === "standard") {
+    for (const s of scenes) s.transitionIn = s.transitionIn === "auto" ? "fade" : s.transitionIn;
+    return;
+  }
+  scenes.forEach((s, i) => {
+    const wanted = pick(s.transitionIn, i);
+    s.transitionIn = i === 0 ? "fade" : "cut";
+    if (i > 0 && script.scenes[i - 1]!.attrs.out === undefined) scenes[i - 1]!.transitionOut = wanted;
+  });
+  const last = scenes.at(-1);
+  if (last && script.scenes.at(-1)!.attrs.out === undefined) last.transitionOut = "fade";
+}
+
+/** `bg mesh+grain seed=7` → generators and seed; the default seed comes from the title, so videos differ. */
+function background(args: string[] | undefined, title: string | undefined): VideoIR["background"] {
+  const kinds = (args?.find((a) => !a.includes("=")) ?? "auto").split("+").filter(Boolean);
+  const seed = Number(args?.find((a) => a.startsWith("seed="))?.slice(5));
+  return { kinds: kinds.length ? kinds : ["auto"], seed: Number.isInteger(seed) ? seed : hash(title ?? "") };
+}
+
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0) % 100000;
 }
 
 function round2(n: number): number {

@@ -47,6 +47,8 @@ export interface Theme {
   shadowColor: string;
   /** Font files the look needs (see fonts.ts). */
   faces: string[];
+  /** Background generators used by `bg auto` (see background.ts), "+"-joined. */
+  background: string;
 }
 
 const HAND = `"Patrick Hand", "Segoe Print", "Comic Sans MS", cursive`;
@@ -78,6 +80,7 @@ function look(s: Spec): Theme {
     shadow: "none",
     shadowColor: "rgba(0,0,0,0.25)",
     faces: ["inter-400", "inter-700", "jetbrains-mono-400"],
+    background: "solid",
     ...s,
   };
 }
@@ -95,7 +98,7 @@ export const THEMES: Record<string, Theme> = {
     ink: "#ff5c00", onInk: "#111111",
     font: GROTESK, headingFont: `"Archivo Black", ${GROTESK}`, headingWeight: 400, headingCase: "upper", headingTracking: 0.01, charW: 0.58,
     emphasis: "mark", markColor: "#ff5c00", markOpacity: 0.55, stroke: 5, radius: 0, shadow: "hard", shadowColor: "#111111",
-    numbers: `"Archivo Black", ${GROTESK}`,
+    numbers: `"Archivo Black", ${GROTESK}`, background: "dots",
     faces: ["space-grotesk-400", "space-grotesk-700", "archivo-black-400", "jetbrains-mono-400"],
   }),
   "soft-pastel": look({
@@ -103,14 +106,14 @@ export const THEMES: Record<string, Theme> = {
     ink: "#b9a6ff", onInk: "#2b2840",
     font: `Nunito, ${SANS}`, headingFont: `Nunito, ${SANS}`, headingWeight: 800, charW: 0.54,
     stroke: 2.5, radius: 28, shadow: "soft", shadowColor: "rgba(110,80,200,0.18)",
-    numbers: `Nunito, ${SANS}`,
+    numbers: `Nunito, ${SANS}`, background: "mesh",
     faces: ["nunito-400", "nunito-800", "jetbrains-mono-400"],
   }),
   "tech-neon": look({
     name: "tech-neon", bg: "#070b14", fg: "#e6f1ff", muted: "#7d8aa6", accent: "#00e5ff", warn: "#ff4d6d", good: "#39ff88", cool: "#7b61ff", surface: "#0f1726",
     ink: "#00e5ff", onInk: "#04121a",
     font: GROTESK, headingFont: GROTESK, headingCase: "upper", headingTracking: 0.06, charW: 0.58,
-    stroke: 2, radius: 6, shadow: "soft", shadowColor: "rgba(0,229,255,0.35)",
+    stroke: 2, radius: 6, shadow: "soft", shadowColor: "rgba(0,229,255,0.35)", background: "aurora+grid",
     faces: ["space-grotesk-400", "space-grotesk-700", "jetbrains-mono-400", "jetbrains-mono-700"],
   }),
   magazine: look({
@@ -118,7 +121,7 @@ export const THEMES: Record<string, Theme> = {
     ink: "#b23a48", onInk: "#fffaf0",
     headingFont: `"Playfair Display", Georgia, serif`,
     emphasis: "mark", markColor: "#b23a48", markOpacity: 0.22, stroke: 2, radius: 2,
-    numbers: `"Playfair Display", Georgia, serif`,
+    numbers: `"Playfair Display", Georgia, serif`, background: "grain",
     faces: ["inter-400", "inter-700", "playfair-display-700", "jetbrains-mono-400"],
   }),
   "bold-pop": look({
@@ -126,13 +129,13 @@ export const THEMES: Record<string, Theme> = {
     ink: "#ffd60a", onInk: "#1a1a6e",
     font: `Poppins, ${SANS}`, headingFont: `Poppins, ${SANS}`, headingWeight: 800, charW: 0.6,
     stroke: 4, radius: 22, shadow: "hard", shadowColor: "rgba(10,10,80,0.55)",
-    numbers: `Poppins, ${SANS}`, toneBase: "fg",
+    numbers: `Poppins, ${SANS}`, toneBase: "fg", background: "shapes",
     faces: ["poppins-400", "poppins-800", "jetbrains-mono-400"],
   }),
   crayon: look({
     name: "crayon", bg: "#fffdf4", fg: "#2b2b2b", muted: "#8a8478", accent: "#ff6b6b", warn: "#f03e3e", good: "#51cf66", cool: "#4dabf7", surface: "#fff3bf",
     ink: "#ffa94d", onInk: "#2b2b2b",
-    font: `Caveat, ${HAND}`, headingFont: `Caveat, ${HAND}`, numbers: `Caveat, ${HAND}`, charW: 0.42, fontScale: 1.4,
+    font: `Caveat, ${HAND}`, headingFont: `Caveat, ${HAND}`, numbers: `Caveat, ${HAND}`, charW: 0.42, fontScale: 1.4, background: "notebook",
     emphasis: "mark", markColor: "#ffe066", markOpacity: 0.85, stroke: 4, radius: 24,
     faces: ["caveat-400", "caveat-700", "jetbrains-mono-400"],
   }),
@@ -141,14 +144,14 @@ export const THEMES: Record<string, Theme> = {
     ink: "#d4af37", onInk: "#0b1430",
     headingFont: `"DM Serif Display", Georgia, serif`, headingWeight: 400, headingTracking: 0.01,
     stroke: 1.5, radius: 4, shadow: "soft", shadowColor: "rgba(0,0,0,0.45)",
-    numbers: `"DM Serif Display", Georgia, serif`, toneBase: "fg",
+    numbers: `"DM Serif Display", Georgia, serif`, toneBase: "fg", background: "gradient+grain",
     faces: ["inter-400", "inter-700", "dm-serif-display-400", "jetbrains-mono-400"],
   }),
   blueprint: look({
     name: "blueprint", bg: "#123a73", fg: "#eaf2ff", muted: "#9fb8dd", accent: "#ffffff", warn: "#ffb4a2", good: "#b8f2e6", cool: "#a0c4ff", surface: "rgba(255,255,255,0.06)",
     ink: "#eaf2ff", onInk: "#123a73",
     font: `"Space Mono", ${MONO}`, headingFont: `"Space Mono", ${MONO}`, mono: `"Space Mono", ${MONO}`, headingCase: "upper", headingTracking: 0.04, charW: 0.62,
-    stroke: 2, radius: 0, faces: ["space-mono-400", "space-mono-700"],
+    stroke: 2, radius: 0, faces: ["space-mono-400", "space-mono-700"], background: "grid",
   }),
 };
 

@@ -33,7 +33,7 @@ The first token decides the statement type.
 | Statement | Syntax | Where |
 |---|---|---|
 | Header | `video <version> ["title"]` | First line, required, once |
-| Setting | `theme <look>` · `motion <personality>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
+| Setting | `theme <look>` · `motion <personality>` · `bg <kind>[+<kind>] [seed=<n>]` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
 | Scene | `scene <id> ["title"] [template=<t>] [in=<transition>] [out=<transition>] [keep=<id,id>]` | Top level |
 | Step | `step [<id>] ["title"]` | Inside a scene |
 | Layout | `layout <name>` | Inside a scene/step (when no template does the layout) |
@@ -145,6 +145,10 @@ A script's visual style comes from two video-wide settings. Neither changes the 
 | `dramatic` | weighty (×1.25) | zooming in from depth | 1.6 → 1 with blur |
 
 Narration timing never changes: only default durations scale, and explicit durations, `fit` and `until=` are kept. Unknown names are fixed to the closest one (NAR214).
+
+**Backgrounds.** `bg <kind>[+<kind>…] [seed=<n>]` draws procedural layers behind every scene, outside the camera: `solid` `gradient` `mesh` `aurora` `grain` `grid` `dots` `notebook` `waves` `shapes` (`mesh`, `aurora`, `waves` and `shapes` drift slowly). Colors come from the look. The default, `auto`, is the look's own background (`neo-brutal` dots, `soft-pastel` mesh, `tech-neon` aurora+grid, `crayon` notebook, …; the original looks stay solid). The seed defaults to a hash of the video title, so different videos get different arrangements and the same video always renders identically.
+
+**Transitions.** `in=` accepts `auto` (default) `cut` `fade` `slide` `wipe` `iris` `zoom` `blur` `rise`. A scene starts empty (its elements appear on their cues), so with any personality other than `standard`, a scene's transition is played as the *previous* scene's exit (unless that scene sets `out=`). `auto` takes the next transition from the personality's set (playful: zoom, iris, rise; corporate: rise, wipe, fade; cinematic: blur, fade, zoom; energetic: wipe, slide, zoom; dramatic: zoom, iris, blur), and the video ends with a fade. Under `standard`, `auto` means fade, as before.
 
 ## 7. Diagnostics (parser, L1)
 

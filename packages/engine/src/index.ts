@@ -4,3 +4,4 @@ export { build, fitText, type Instance } from "./components.js";
 export { THEMES, getTheme, color, shadowFilter, type Theme } from "./theme.js";
 export { FONT_PACKAGES, fontFace, fontFaceCss, type FontFace } from "./fonts.js";
 export { ICONS, ILLUSTRATIONS } from "./art.js";
+export { buildBackground, BACKGROUND_KINDS, type Background } from "./background.js";

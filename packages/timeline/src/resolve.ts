@@ -39,7 +39,7 @@ export interface ResolveOptions {
   transitions?: Record<string, number>;
 }
 
-const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, fade: 0.5, slide: 0.6 };
+const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, fade: 0.5, slide: 0.6, wipe: 0.6, iris: 0.7, zoom: 0.6, blur: 0.7, rise: 0.6 };
 const ENTER = new Set(["fade", "pop", "draw", "write"]);
 
 /**
@@ -146,8 +146,9 @@ class Resolver {
   // ------------------------------------------------------------ schedule ---
 
   private scene(scene: SceneIR, sp: SceneSpeech, start: number, prev: SceneIR | undefined): number {
-    const trIn = { type: scene.transitionIn, duration: this.transitions[scene.transitionIn] ?? 0 };
-    const trOut = { type: scene.transitionOut, duration: this.transitions[scene.transitionOut] ?? 0 };
+    // Transitions take the personality's tempo (cinematic ones are slower).
+    const trIn = { type: scene.transitionIn, duration: this.q((this.transitions[scene.transitionIn] ?? 0) * this.motion.durScale) };
+    const trOut = { type: scene.transitionOut, duration: this.q((this.transitions[scene.transitionOut] ?? 0) * this.motion.durScale) };
     const t0 = this.q(start);
     this.initScene(scene, prev);
 

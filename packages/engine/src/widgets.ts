@@ -32,11 +32,13 @@ interface Ctx {
   /** Left and top edges in local coordinates. */
   L: number;
   T: number;
+  /** Prefix for SVG ids (unique per stage and element). */
+  ids: string;
 }
 
-export function buildWidget(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {
+export function buildWidget(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme, ids: string): void {
   const { w, h } = el.box;
-  const c: Ctx = { doc, inst, theme, el, g, w, h, L: -w / 2, T: -h / 2 };
+  const c: Ctx = { doc, inst, theme, el, g, w, h, L: -w / 2, T: -h / 2, ids };
   // Builds are synchronous, so text() and textHeight() measure alike.
   charW = theme.charW;
   fontScale = theme.fontScale;
@@ -146,13 +148,29 @@ function setVis(n: Element, opacity: number, dx = 0, dy = 0, scale = 1, cx = 0, 
   else n.removeAttribute("transform");
 }
 
-/** A background-colored cover that slides off to the right: a left-to-right wipe without clip ids. */
+/**
+ * Left-to-right wipe of the band [y, y+h]: the element is clipped to
+ * everything above and below the band plus the revealed part of it, so
+ * whatever is behind (gradients, patterns) stays visible.
+ */
 function wipe(c: Ctx, x: number, y: number, w: number, h: number): (k: number) => void {
-  const cover = node(c, "rect", { x: round(x), y: round(y), width: round(w), height: round(h), fill: c.theme.bg, stroke: "none" });
+  const id = `${c.ids}-wipe`;
+  const clip = svg(c.doc, "clipPath", { id });
+  const far = 4000; // content may overflow the box a little; keep it outside the band visible
+  clip.append(
+    svg(c.doc, "rect", { x: -far, y: -far, width: far * 2, height: round(y + far) }),
+    svg(c.doc, "rect", { x: -far, y: round(y + h), width: far * 2, height: far }),
+  );
+  const shown = svg(c.doc, "rect", { x: round(x), y: round(y), width: 0, height: round(h) });
+  clip.append(shown);
+  c.g.prepend(clip);
+  c.g.setAttribute("clip-path", `url(#${id})`);
   return (k) => {
     const p = out(k);
-    cover.setAttribute("x", String(round(x + w * p)));
-    cover.setAttribute("width", String(round(Math.max(0, w * (1 - p)))));
+    shown.setAttribute("width", String(round(w * p)));
+    // Fully revealed: drop the clip so nothing (shadows, overflow) is cut.
+    if (p >= 1) c.g.removeAttribute("clip-path");
+    else c.g.setAttribute("clip-path", `url(#${id})`);
   };
 }
 
@@ -313,12 +331,13 @@ const BUILDERS: Record<string, Builder> = {
 
   body(c) {
     const size = Math.max(24, Math.min(30, c.h * 0.12));
-    const fitted = fitText(c.el.texts[0] ?? "", size, c.w - 16, c.h - 16);
+    // Fit at the look's real size; text() scales again, so it gets the unscaled size back.
+    const fitted = fitText(c.el.texts[0] ?? "", size * fontScale, c.w - 16, c.h - 16, charW);
     const lh = fitted.font * 1.4;
     const top = -(fitted.lines.length * lh) / 2;
     const lines = fitted.lines.map((line, i) => {
       const it = item(c);
-      text(c, line, c.L + 8, top + i * lh, { size: fitted.font }, it.inner);
+      text(c, line, c.L + 8, top + i * lh, { size: fitted.font / fontScale }, it.inner);
       return it.inner;
     });
     return (k) => lines.forEach((ln, i) => {

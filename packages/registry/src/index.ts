@@ -70,17 +70,19 @@ export interface MotionProfile {
   distance: number;
   /** Peak scale of `pulse`. */
   pulse: number;
+  /** Scene transitions `in=auto` rotates through, scene by scene. */
+  transitions: string[];
 }
 
 export const MOTIONS: readonly MotionProfile[] = [
   // The original behavior: older scripts render exactly as before.
-  { name: "standard", summary: "balanced fades and springy pops", durScale: 1, staggerScale: 1, ease: {}, fade: "plain", pop: { from: 0.6, ease: "spring" }, distance: 0, pulse: 1.15 },
-  { name: "playful", summary: "bouncy and overshooting; things hop in", durScale: 0.9, staggerScale: 1, ease: { out: "back", spring: "elastic" }, fade: "rise", pop: { from: 0.3, ease: "elastic" }, distance: 48, pulse: 1.25 },
-  { name: "corporate", summary: "quick, clean, subtle rise-ins", durScale: 0.8, staggerScale: 0.8, ease: { out: "quart", spring: "quart" }, fade: "rise", pop: { from: 0.94, ease: "quart" }, distance: 18, pulse: 1.06 },
-  { name: "cinematic", summary: "slow and smooth; blur-to-focus reveals", durScale: 1.5, staggerScale: 1.6, ease: { out: "expo", spring: "expo", inout: "sine" }, fade: "blur", pop: { from: 1.08, ease: "expo", blur: 14 }, distance: 0, pulse: 1.08 },
-  { name: "energetic", summary: "fast, punchy slides that snap into place", durScale: 0.65, staggerScale: 0.7, ease: { out: "back", spring: "back", inout: "quart" }, fade: "slide", pop: { from: 0.2, ease: "back" }, distance: 90, pulse: 1.3 },
-  { name: "minimal", summary: "calm, quiet fades only", durScale: 1.1, staggerScale: 1.2, ease: { out: "sine", spring: "sine", inout: "sine" }, fade: "plain", pop: { from: 1, ease: "sine" }, distance: 0, pulse: 1.04 },
-  { name: "dramatic", summary: "weighty zoom-ins from depth", durScale: 1.25, staggerScale: 1.3, ease: { out: "expo", spring: "back" }, fade: "zoom", pop: { from: 1.6, ease: "expo", blur: 8 }, distance: 0, pulse: 1.2 },
+  { name: "standard", summary: "balanced fades and springy pops", durScale: 1, staggerScale: 1, ease: {}, fade: "plain", pop: { from: 0.6, ease: "spring" }, distance: 0, pulse: 1.15, transitions: ["fade"] },
+  { name: "playful", summary: "bouncy and overshooting; things hop in", durScale: 0.9, staggerScale: 1, ease: { out: "back", spring: "elastic" }, fade: "rise", pop: { from: 0.3, ease: "elastic" }, distance: 48, pulse: 1.25, transitions: ["zoom", "iris", "rise"] },
+  { name: "corporate", summary: "quick, clean, subtle rise-ins", durScale: 0.8, staggerScale: 0.8, ease: { out: "quart", spring: "quart" }, fade: "rise", pop: { from: 0.94, ease: "quart" }, distance: 18, pulse: 1.06, transitions: ["rise", "wipe", "fade"] },
+  { name: "cinematic", summary: "slow and smooth; blur-to-focus reveals", durScale: 1.5, staggerScale: 1.6, ease: { out: "expo", spring: "expo", inout: "sine" }, fade: "blur", pop: { from: 1.08, ease: "expo", blur: 14 }, distance: 0, pulse: 1.08, transitions: ["blur", "fade", "zoom"] },
+  { name: "energetic", summary: "fast, punchy slides that snap into place", durScale: 0.65, staggerScale: 0.7, ease: { out: "back", spring: "back", inout: "quart" }, fade: "slide", pop: { from: 0.2, ease: "back" }, distance: 90, pulse: 1.3, transitions: ["wipe", "slide", "zoom"] },
+  { name: "minimal", summary: "calm, quiet fades only", durScale: 1.1, staggerScale: 1.2, ease: { out: "sine", spring: "sine", inout: "sine" }, fade: "plain", pop: { from: 1, ease: "sine" }, distance: 0, pulse: 1.04, transitions: ["fade"] },
+  { name: "dramatic", summary: "weighty zoom-ins from depth", durScale: 1.25, staggerScale: 1.3, ease: { out: "expo", spring: "back" }, fade: "zoom", pop: { from: 1.6, ease: "expo", blur: 8 }, distance: 0, pulse: 1.2, transitions: ["zoom", "iris", "blur"] },
 ];
 
 export function findMotion(name: string | undefined): MotionProfile {
@@ -90,7 +92,26 @@ export function findMotion(name: string | undefined): MotionProfile {
 export const SLOTS = ["TL", "T", "TR", "L", "C", "R", "BL", "B", "BR"] as const;
 export const RELATIONS = ["right-of", "left-of", "above", "below", "inside"] as const;
 export const LAYOUTS = ["center", "row", "col", "grid", "split", "stack", "cycle"] as const;
-export const TRANSITIONS = ["cut", "fade", "slide"] as const;
+/** Scene transitions; `auto` (the default) takes the next one from the motion personality's set. */
+export const TRANSITIONS = ["auto", "cut", "fade", "slide", "wipe", "iris", "zoom", "blur", "rise"] as const;
+
+/**
+ * Procedural, seeded backgrounds drawn behind every scene. Combine with
+ * "+" (`bg gradient+grain`); `auto` uses the look's own background.
+ */
+export const BACKGROUNDS = [
+  { name: "auto", summary: "the look's own background" },
+  { name: "solid", summary: "flat background color" },
+  { name: "gradient", summary: "soft two-tone linear gradient" },
+  { name: "mesh", summary: "drifting soft color blobs" },
+  { name: "aurora", summary: "slow flowing light bands" },
+  { name: "grain", summary: "fine film/paper grain" },
+  { name: "grid", summary: "engineering grid lines" },
+  { name: "dots", summary: "dot grid" },
+  { name: "notebook", summary: "ruled notebook paper with a margin" },
+  { name: "waves", summary: "layered waves along the bottom" },
+  { name: "shapes", summary: "scattered outline shapes, slowly turning" },
+] as const;
 /** Looks: token sets the engine defines (fonts, palette, shapes, emphasis). Picked per video with `theme`. */
 export const THEMES = ["chalk", "paper", "dark", "light", "editorial", "neo-brutal", "soft-pastel", "tech-neon", "magazine", "bold-pop", "crayon", "midnight-luxe", "blueprint"] as const;
 /** One line per look, for the LLM and the style director. */

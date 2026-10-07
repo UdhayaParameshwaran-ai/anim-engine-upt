@@ -91,10 +91,11 @@ Every script can be restyled without touching its content:
 
 ```
 theme magazine        # 13 looks: palette, bundled fonts, shapes, shadows, emphasis
-motion cinematic      # 7 personalities: how the same verbs move
+motion cinematic      # 7 personalities: how the same verbs move, and which scene transitions
+bg aurora+grain       # optional: procedural, seeded backgrounds (default: the look's own)
 ```
 
-The Studio's Script tab has **Look** and **Motion** menus that override the script, so you can flip one script through every combination. The LLM picks a look and a motion to suit each topic. See `docs/dsl-spec.md` §6b.
+The Studio's Script tab has **Look**, **Motion** and **Background** menus that override the script, so you can flip one script through every combination. The LLM picks a look and a motion to suit each topic. See `docs/dsl-spec.md` §6b.
 
 ## Voice (local TTS)
 

@@ -58,7 +58,7 @@ function defaultTts(): Tts["name"] {
 function ttsOf(url: URL): Tts {
   const name = url.searchParams.get("tts");
   const style: Record<string, string> = {};
-  for (const key of ["theme", "motion"]) {
+  for (const key of ["theme", "motion", "bg"]) {
     const v = url.searchParams.get(key);
     if (v) style[key] = v;
   }
@@ -98,10 +98,11 @@ async function build(server: ViteDevServer, source: string, tts: Tts) {
 }
 
 async function providers(server: ViteDevServer) {
-  const { THEMES, THEME_SUMMARIES, MOTIONS } = await server.ssrLoadModule("@anim/registry");
+  const { THEMES, THEME_SUMMARIES, MOTIONS, BACKGROUNDS } = await server.ssrLoadModule("@anim/registry");
   return {
     themes: THEMES.map((name: keyof typeof THEME_SUMMARIES) => ({ name, summary: THEME_SUMMARIES[name] })),
     motions: MOTIONS.map((m: { name: string; summary: string }) => ({ name: m.name, summary: m.summary })),
+    backgrounds: BACKGROUNDS.filter((b: { name: string }) => b.name !== "auto"),
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
     tts: defaultTts(),

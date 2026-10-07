@@ -9,6 +9,7 @@ import {
   slotRects,
   SLOTS,
   TEMPLATES,
+  BACKGROUNDS,
   MOTIONS,
   THEME_SUMMARIES,
   THEMES,
@@ -233,7 +234,9 @@ function styleSection(): string {
 theme <look>:
 ${looks}
 motion <personality>:
-${motions}`;
+${motions}
+bg <kind>[+<kind>] (optional; default is the look's own): ${BACKGROUNDS.filter((b) => b.name !== "auto").map((b) => b.name).join(" ")}
+Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS.filter((t) => t !== "auto").join("|")}`;
 }
 
 /** First pass: plan the scenes without writing narration. */
