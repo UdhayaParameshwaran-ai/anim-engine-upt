@@ -1,0 +1,47 @@
+video 1 "Composition"
+theme magazine
+motion cinematic
+
+scene a "Auto" compose=auto
+title = title "What a leaf needs"
+leaf = asset:leaf "Leaf"
+sun = icon:sun "Sunlight"
+water = icon:droplet "Water"
+air = icon:wind "Air"
+> A {1}leaf needs {2}light, {3}water and {4}air.
+start write title
+1 draw leaf
+2 pop sun
+3 pop water
+4 pop air
+
+scene b "Hero right" compose=hero-right emphasis=chart
+chart = chart:bar data=3,5,8,13 labels=A,B,C,D
+note = text "Growth compounds"
+icon = icon:sun "Energy"
+> Growth {1}compounds over time, fueled by {2}energy.
+1 draw chart
+1 write note
+2 pop icon
+
+scene c "Pyramid" compose=pyramid
+cell = asset:cell.plant "Plant cell"
+a = label "Wall"
+b = label "Chloroplast"
+c = label "Vacuole"
+> A {1}plant cell has a {2}wall, {3}chloroplasts and a {4}vacuole.
+1 draw cell
+2 write a
+3 write b
+4 write c
+
+scene d "Z pattern" compose=z
+s1 = icon:sun "Light in"
+s2 = icon:cube "Sugar made"
+s3 = icon:wind "Oxygen out"
+s4 = icon:leaf "Plant grows"
+> Light {1}goes in, {2}sugar is made, {3}oxygen goes out, and the {4}plant grows.
+1 pop s1
+2 pop s2
+3 pop s3
+4 pop s4

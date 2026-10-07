@@ -4,6 +4,7 @@ import {
   BACKGROUNDS,
   CHART_TYPES,
   COMPONENTS,
+  COMPOSE_PATTERNS,
   findComponent,
   findTemplate,
   findVerb,
@@ -346,6 +347,10 @@ class Validator {
       knob("density", `density= takes ${LAYOUT_KNOBS.density.join(", ")}`, closest(a.density, LAYOUT_KNOBS.density));
     }
     if (a.mirror !== undefined && !["true", "false"].includes(a.mirror)) knob("mirror", "mirror= takes true or false");
+    if (a.compose !== undefined) {
+      if (tpl || a.grid !== undefined) knob("compose", `compose= replaces a template or grid; remove one (keeping \`${tpl ? "template" : "grid"}\`)`);
+      else if (!(COMPOSE_PATTERNS as readonly string[]).includes(a.compose)) knob("compose", `compose= takes ${COMPOSE_PATTERNS.join(", ")}`, closest(a.compose, COMPOSE_PATTERNS) ?? "auto");
+    }
   }
 
   // -------------------------------------------------------------- element ---

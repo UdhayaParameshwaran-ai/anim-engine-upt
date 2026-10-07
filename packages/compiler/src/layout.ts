@@ -2,6 +2,7 @@ import type { Diagnostic, ElementDecl, Place, Scene } from "@anim/dsl";
 import type { Box } from "@anim/ir";
 import { findGridLayout, findTemplate, frameRects, GRID, slotRects, SLOTS, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
 import { gridMode, gridParts } from "@anim/validate";
+import { compose, COMPOSE_PATTERNS, type ComposePattern } from "./compose.js";
 import { fit, measure, type Size } from "./measure.js";
 
 /**
@@ -114,6 +115,7 @@ class SceneLayouter {
     const sceneLayout = this.scene.steps[0]?.implicit ? this.scene.steps[0].layout?.name : undefined;
     const area = this.freeArea(occupied, sceneLayout === "col" || sceneLayout === "stack" ? "tall" : "wide");
     if (tpl) this.template(tpl, scenePool, area);
+    else if (this.scene.attrs.compose) this.composeScene(scenePool, area);
     else this.layout(sceneLayout ?? (scenePool.length === 1 ? "center" : "row"), scenePool, area);
 
     // 3. Relative placements (may chain). Connectors are routed in result(), after any mirroring.
@@ -375,6 +377,37 @@ class SceneLayouter {
         return this.flow(pool, content, variant);
       default:
         return this.layout("row", items, content);
+    }
+  }
+
+/**
+   * `compose=<pattern>`: boxes from the constraint solver (compose.ts). A
+   * `title` element keeps the top band; the hero is the emphasized element,
+   * else the first picture-like one. Falls back to a row if nothing solves.
+   */
+  private composeScene(pool: ElementDecl[], area: Box): void {
+    let content = area;
+    const title = pool.find((e) => e.id === "title" && ["title", "text"].includes(e.kind));
+    if (title) {
+      const band = { ...area, h: Math.round(area.h * 0.18) };
+      this.put(title, band, 0.95);
+      content = { x: area.x, y: band.y + band.h, w: area.w, h: area.h - band.h };
+    }
+    const els = pool.filter((e) => e !== title);
+    const e = this.scene.attrs.emphasis;
+    const heroId = (e === "first" ? els[0] : e === "last" ? els.at(-1) : els.find((x) => x.id === e))?.id ?? els.find((x) => ["asset", "icon", "chart", "card", "formula", "circle"].includes(x.kind))?.id ?? els[0]?.id;
+    const pattern = (COMPOSE_PATTERNS as readonly string[]).includes(this.scene.attrs.compose!) ? (this.scene.attrs.compose as ComposePattern) : "auto";
+    const result = compose(
+      els.map((x) => ({ id: x.id, w: this.sizes.get(x.id)!.w, h: this.sizes.get(x.id)!.h, hero: x.id === heroId, text: ["title", "text", "label", "list"].includes(x.kind) })),
+      content,
+      { pattern, gap: this.gap, seed: hash(this.scene.id) },
+    );
+    if (!result) return this.layout("row", els, content);
+    for (const x of els) {
+      const box = result.boxes.get(x.id)!;
+      // Pictures take the solved box as is (it keeps their aspect and may enlarge them); text is fitted.
+      if (["title", "text", "label", "list"].includes(x.kind)) this.put(x, box, 1);
+      else this.boxes.set(x.id, box);
     }
   }
 

@@ -10,6 +10,7 @@ import {
   SLOTS,
   TEMPLATES,
   BACKGROUNDS,
+  COMPOSE_PATTERNS,
   MOTIONS,
   THEME_SUMMARIES,
   THEMES,
@@ -115,7 +116,7 @@ STATEMENTS (one per line; the first word decides the type)
 video 1 "Title"                      first line of a full script
 theme <look>                         see STYLE
 motion <personality>                 see STYLE
-scene <id> "Title" [template=<t> [variant=<v>|auto]] [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]
+scene <id> "Title" [template=<t> [variant=<v>|auto] | compose=<pattern>] [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]
 step <id> "Title"                    optional sub-scene on the same stage
 <id> = <kind>[:<name>] ["text"] [key=value] [@slot]   declares an element (hidden until an action shows it)
 <id> = <a> -> <b> ["label"]          graph edge (template=flow)
@@ -135,6 +136,7 @@ RULES
 - Show an element before emphasizing or moving it. Draw connectors after (or together with) their endpoints.
 - Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.
 - Prefer a template. Element ids that equal slot names fill those slots; other elements fill items in order.
+- No template fits? compose=<pattern> arranges 2–6 elements by intent (${COMPOSE_PATTERNS.join("|")}); emphasis=<id> names the hero. An element called title keeps the top band.
 - Use only the assets listed below, exactly as written. For anything else use box "Label" or text.
 - Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …
 - Connectors join two declared ids with "->" and no spaces: a1 = arrow sun->leaf (never "arrow sun to leaf").

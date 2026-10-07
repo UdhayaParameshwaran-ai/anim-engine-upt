@@ -173,6 +173,22 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 
 Bad values are fixed to the closest one or dropped (NAR218).
 
+## 6d. Composition by intent
+
+When no template fits, `compose=<pattern>` arranges a scene's elements from a description of how they relate:
+
+| Pattern | Arrangement |
+|---|---|
+| `hero-left` / `hero-right` | the hero on one side, the others stacked beside it |
+| `hero-top` | the hero above, the others in a row below |
+| `hero-center` | the hero in the middle, the others in columns on both sides |
+| `pyramid` | the first element on top, the rest in a row below |
+| `columns` / `rows` | side by side / stacked, evenly spaced |
+| `z` | a Z reading path: alternating columns, each a step lower |
+| `auto` | try every pattern and keep the best |
+
+The hero is the element named by `emphasis=`, else the first picture-like one (asset, icon, chart, card, formula). An element with id `title` keeps the top band. Each pattern becomes linear constraints (inside the safe area, gaps, fixed aspect ratios, alignment, hero/support width ratio, even spacing, a pull to grow pictures while text keeps its natural size), solved with the Cassowary algorithm. Candidates (pattern × hero ratio 1.4/1.8/2.3) are scored for coverage, balance, hierarchy, text readability and even margins; near-ties are broken by the scene id, so a scene always lays out the same way. `compose` can't be combined with `template=` or `grid=` (NAR218).
+
 ## 7. Diagnostics (parser, L1)
 
 | Code | Meaning |

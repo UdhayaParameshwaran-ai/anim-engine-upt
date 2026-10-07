@@ -1,3 +1,4 @@
+import type { Box } from "@anim/ir";
 import { describe, expect, it } from "vitest";
 import { findGridLayout, frameMode, GRID_ELEMENTS, GRID_LAYOUTS, slotRects } from "@anim/registry";
 import { compile, report } from "../src/index.js";
@@ -148,5 +149,55 @@ describe("layout variants and knobs", () => {
     const r = compile(steps("variant=zigzg density=airyy emphasis=nobody mirror=yes"));
     const fixes = r.diagnostics.filter((d) => d.code === "NAR218").map((d) => d.fixed);
     expect(fixes).toEqual(["used `zigzag`", "ignored", "used `airy`", "ignored"]);
+  });
+});
+
+describe("composition by intent (compose=)", () => {
+  const scene = (attrs: string) => `video 1 "C"\nscene c "C" ${attrs}\nhero = asset:leaf "Leaf"\na = icon:sun "Sun"\nb = icon:droplet "Water"\nc = icon:wind "Air"\n> The {1}leaf, {2}sun, {3}water and {4}air.\n1 draw hero\n2 pop a\n3 pop b\n4 pop c\n`;
+  const solved = (attrs: string) => {
+    const r = compile(scene(attrs));
+    expect(r.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    return Object.fromEntries(r.ir!.scenes[0]!.elements.map((e) => [e.id, e.box]));
+  };
+  const overlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  for (const pattern of ["auto", "hero-left", "hero-right", "hero-top", "hero-center", "columns", "rows", "pyramid", "z"]) {
+    it(`${pattern}: everything inside the page, nothing overlapping`, () => {
+      const boxes = Object.values(solved(`compose=${pattern}`));
+      for (const b of boxes) {
+        expect(b.x).toBeGreaterThanOrEqual(90);
+        expect(b.y).toBeGreaterThanOrEqual(70);
+        expect(b.x + b.w).toBeLessThanOrEqual(1920 - 90);
+        expect(b.y + b.h).toBeLessThanOrEqual(1080 - 70);
+      }
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) expect(overlap(boxes[i]!, boxes[j]!)).toBe(false);
+    });
+  }
+
+  it("makes the hero the biggest and puts it where the pattern says", () => {
+    const left = solved("compose=hero-left");
+    const area = (b: Box) => b.w * b.h;
+    for (const id of ["a", "b", "c"]) expect(area(left.hero!)).toBeGreaterThan(area(left[id]!));
+    for (const id of ["a", "b", "c"]) expect(left.hero!.x).toBeLessThan(left[id]!.x);
+    const right = solved("compose=hero-right");
+    for (const id of ["a", "b", "c"]) expect(right.hero!.x).toBeGreaterThan(right[id]!.x);
+    const top = solved("compose=hero-top");
+    for (const id of ["a", "b", "c"]) expect(top.hero!.y).toBeLessThan(top[id]!.y);
+    // emphasis picks a different hero
+    const sun = solved("compose=hero-left emphasis=a");
+    expect(area(sun.a!)).toBeGreaterThan(area(sun.b!));
+  });
+
+  it("spaces supporting items evenly", () => {
+    const top = solved("compose=hero-top");
+    const gaps = [top.b!.x - (top.a!.x + top.a!.w), top.c!.x - (top.b!.x + top.b!.w)];
+    expect(Math.abs(gaps[0]! - gaps[1]!)).toBeLessThanOrEqual(2);
+  });
+
+  it("is deterministic and rejects compose next to a template", () => {
+    expect(solved("compose=auto")).toEqual(solved("compose=auto"));
+    const r = compile(scene("template=steps compose=hero-left"));
+    expect(r.diagnostics.find((d) => d.code === "NAR218")?.message).toMatch(/compose= replaces a template/);
+    expect(compile(scene("compose=hero-lft")).diagnostics.find((d) => d.code === "NAR218")?.fixed).toBe("used `hero-left`");
   });
 });

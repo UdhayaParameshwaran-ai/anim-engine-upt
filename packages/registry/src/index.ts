@@ -132,7 +132,10 @@ export const THEME_SUMMARIES: Record<(typeof THEMES)[number], string> = {
 };
 export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
-export const SCENE_ATTRS = ["template", "grid", "in", "out", "keep", "variant", "emphasis", "density", "mirror"] as const;
+export const SCENE_ATTRS = ["template", "grid", "compose", "in", "out", "keep", "variant", "emphasis", "density", "mirror"] as const;
+
+/** `compose=`: arrangements the constraint solver understands (`auto` tries them all). */
+export const COMPOSE_PATTERNS = ["auto", "hero-left", "hero-right", "hero-top", "hero-center", "columns", "rows", "pyramid", "z"] as const;
 
 /** Layout knobs (scene attributes) every template and grid scene understands. */
 export const LAYOUT_KNOBS = {

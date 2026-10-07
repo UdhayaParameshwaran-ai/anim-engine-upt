@@ -15,8 +15,9 @@
     "@anim/dsl": "workspace:*",
     "@anim/ir": "workspace:*",
     "@anim/registry": "workspace:*",
-    "@anim/validate": "workspace:*",
     "@anim/timeline": "workspace:*",
-    "@anim/tts": "workspace:*"
+    "@anim/tts": "workspace:*",
+    "@anim/validate": "workspace:*",
+    "@lume/kiwi": "^0.4.4"
   }
 }

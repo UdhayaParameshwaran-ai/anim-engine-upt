@@ -98,6 +98,10 @@ bg aurora+grain       # optional: procedural, seeded backgrounds (default: the l
 
 The Studio's Script tab has **Look**, **Motion** and **Background** menus that override the script, so you can flip one script through every combination. The LLM picks a look and a motion to suit each topic. See `docs/dsl-spec.md` §6b.
 
+## Composition by intent
+
+Scenes that no template fits can say how their elements relate instead: `compose=hero-left` (or `hero-top`, `hero-center`, `pyramid`, `columns`, `rows`, `z`, `auto`) with `emphasis=<id>` for the hero. A Cassowary constraint solver turns that into boxes and the best-scoring candidate wins. Still no coordinates in the script. See `docs/dsl-spec.md` §6d.
+
 ## Style director
 
 Someone generating many videos should keep getting new-looking ones. The style director (`packages/director`) styles every generated video without touching its content:
