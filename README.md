@@ -102,6 +102,19 @@ The Studio's Script tab has **Look**, **Motion** and **Background** menus that o
 
 Scenes that no template fits can say how their elements relate instead: `compose=hero-left` (or `hero-top`, `hero-center`, `pyramid`, `columns`, `rows`, `z`, `auto`) with `emphasis=<id>` for the hero. A Cassowary constraint solver turns that into boxes and the best-scoring candidate wins. Still no coordinates in the script. See `docs/dsl-spec.md` §6d.
 
+## Adding layout variants
+
+New arrangements are added offline, never improvised at generation time:
+
+```sh
+pnpm variant new steps arch "steps rising along an arch"   # scaffold a draft plugin
+pnpm variant check steps:arch                              # stress-test + contact sheet + report
+pnpm variant approve steps:arch                            # after reviewing the report
+pnpm variant list
+```
+
+A variant is a small plugin (`packages/compiler/src/variants/`) that picks a cell per item with the same helpers the built-in variants use; `put()` fits each element and the usual overlap/overflow checks apply. `check` compiles generated stress scripts (fewest/middle/most items, short and long labels, pictures and boxes, with and without a title) and flags overlap, overflow, tiny elements and anything leaving the safe area. Problems the template's default arrangement also has are reported as shared, not blamed on the variant. It renders every case in three looks into `out/variants/<template>-<name>/` (`report.html`, `sheet.png`). Drafts are refused everywhere except the checker. Once approved, the template offers the variant like a built-in one, so the LLM prompt and the style director use it.
+
 ## Style director
 
 Someone generating many videos should keep getting new-looking ones. The style director (`packages/director`) styles every generated video without touching its content:

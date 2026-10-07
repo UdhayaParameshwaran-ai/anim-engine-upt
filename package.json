@@ -13,7 +13,8 @@
     "studio": "vite --config apps/studio/vite.config.ts",
     "preview": "vite --config apps/studio/vite.config.ts",
     "render": "tsc -b && node apps/render/dist/cli.js",
-    "generate": "tsc -b && node packages/llm/dist/cli.js"
+    "generate": "tsc -b && node packages/llm/dist/cli.js",
+    "variant": "tsc -b && node apps/render/dist/variant-cli.js"
   },
   "devDependencies": {
     "@fontsource/archivo-black": "^5.3.0",

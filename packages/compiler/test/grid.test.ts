@@ -1,7 +1,7 @@
 import type { Box } from "@anim/ir";
 import { describe, expect, it } from "vitest";
-import { findGridLayout, frameMode, GRID_ELEMENTS, GRID_LAYOUTS, slotRects } from "@anim/registry";
-import { compile, report } from "../src/index.js";
+import { EXTRA_VARIANTS, findGridLayout, findTemplate, frameMode, GRID_ELEMENTS, GRID_LAYOUTS, slotRects } from "@anim/registry";
+import { compile, report, VARIANT_PLUGINS } from "../src/index.js";
 
 const grid = (layout: string, body: string, narration = "> Look {1}here.\n1 draw s1") => `video 1 "Grid"\nscene a "A" grid=${layout}\n${body}\n${narration}\n`;
 const codes = (src: string, autofix = false) => compile(src, { autofix }).diagnostics.map((d) => d.code);
@@ -199,5 +199,34 @@ describe("composition by intent (compose=)", () => {
     const r = compile(scene("template=steps compose=hero-left"));
     expect(r.diagnostics.find((d) => d.code === "NAR218")?.message).toMatch(/compose= replaces a template/);
     expect(compile(scene("compose=hero-lft")).diagnostics.find((d) => d.code === "NAR218")?.fixed).toBe("used `hero-left`");
+  });
+});
+
+describe("authored variants (pnpm variant)", () => {
+  const src = (variant: string) => `video 1 "A"\nscene s "S" template=steps variant=${variant}\na = box "A"\nb = box "B"\nc = box "C"\n> {1}One, {2}two, {3}three.\n1 fade a\n2 fade b\n3 fade c\n`;
+
+  it("offers approved variants like built-in ones (steps:arch arches up in the middle)", () => {
+    expect(findTemplate("steps")!.variants).toContain("arch");
+    const r = compile(src("arch"));
+    expect(r.diagnostics).toEqual([]);
+    const [a, b, c] = ["a", "b", "c"].map((id) => r.ir!.scenes[0]!.elements.find((e) => e.id === id)!.box);
+    expect(b!.y).toBeLessThan(a!.y);
+    expect(b!.y).toBeLessThan(c!.y);
+  });
+
+  it("keeps drafts out unless drafts are allowed", () => {
+    EXTRA_VARIANTS.push({ template: "steps", name: "test-draft", summary: "test", status: "draft" });
+    VARIANT_PLUGINS["steps:test-draft"] = (c) => c.items.forEach((e, i) => c.put(e, c.colCells(c.area, c.items.length)[i]!));
+    try {
+      const blocked = compile(src("test-draft"));
+      expect(blocked.diagnostics.find((d) => d.code === "NAR218")?.message).toMatch(/draft that hasn't been approved/);
+      const allowed = compile(src("test-draft"), { drafts: true });
+      expect(allowed.diagnostics).toEqual([]);
+      const boxes = allowed.ir!.scenes[0]!.elements.map((e) => e.box);
+      expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y); // the plugin's column layout ran
+    } finally {
+      EXTRA_VARIANTS.pop();
+      delete VARIANT_PLUGINS["steps:test-draft"];
+    }
   });
 });

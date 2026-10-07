@@ -5,6 +5,7 @@ import {
   CHART_TYPES,
   COMPONENTS,
   COMPOSE_PATTERNS,
+  draftVariants,
   findComponent,
   findTemplate,
   findVerb,
@@ -34,6 +35,8 @@ export interface ValidateOptions {
   maxBeatWords?: number;
   /** More elements than this in one scene gets a warning. */
   maxSceneElements?: number;
+  /** Accept draft layout variants (authoring pipeline). Default false. */
+  drafts?: boolean;
 }
 
 export interface ValidateResult {
@@ -105,12 +108,14 @@ interface Fix {
 class Validator {
   private readonly diags: Diagnostic[] = [];
   private readonly autofix: boolean;
+  private readonly drafts: boolean;
   private readonly assets: AssetLibrary;
   private readonly maxBeatWords: number;
   private readonly maxSceneElements: number;
 
   constructor(opts: ValidateOptions) {
     this.autofix = opts.autofix ?? true;
+    this.drafts = opts.drafts ?? false;
     this.assets = opts.assets ?? new AssetLibrary();
     this.maxBeatWords = opts.maxBeatWords ?? 40;
     this.maxSceneElements = opts.maxSceneElements ?? 10;
@@ -336,8 +341,9 @@ class Validator {
     const tpl = a.template ? findTemplate(a.template) : undefined;
     if (a.variant !== undefined && a.variant !== "auto") {
       if (!tpl) knob("variant", a.grid !== undefined ? "grid scenes have no variants (pick another grid= code, or mirror=true)" : "variant= needs a template");
-      else if (!tpl.variants.includes(a.variant)) {
-        knob("variant", `template \`${tpl.name}\` has no variant \`${a.variant}\` (variants: ${tpl.variants.join(", ")}, auto)`, closest(a.variant, tpl.variants));
+      else if (!tpl.variants.includes(a.variant) && !(this.drafts && draftVariants(tpl.name).includes(a.variant))) {
+        if (draftVariants(tpl.name).includes(a.variant)) knob("variant", `variant \`${a.variant}\` is a draft that hasn't been approved yet (pnpm variant check, then approve)`);
+        else knob("variant", `template \`${tpl.name}\` has no variant \`${a.variant}\` (variants: ${tpl.variants.join(", ")}, auto)`, closest(a.variant, tpl.variants));
       }
     }
     if (a.emphasis !== undefined && !["first", "last"].includes(a.emphasis) && !scene.steps.some((s) => s.elements.some((e) => e.id === a.emphasis))) {

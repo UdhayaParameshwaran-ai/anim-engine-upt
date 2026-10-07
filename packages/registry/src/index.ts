@@ -1,3 +1,5 @@
+import { EXTRA_VARIANTS } from "./variants.js";
+
 /**
  * The registry is the single source of truth for everything the DSL may
  * name: verbs, templates, layouts, slots, components and assets. The
@@ -174,7 +176,7 @@ export interface TemplateManifest {
 const VISUAL = ["icon", "asset", "shape", "box", "circle", "card", "chart", "formula"] as const;
 const TEXTUAL = ["title", "text", "label", "list"] as const;
 
-export const TEMPLATES: readonly TemplateManifest[] = [
+const BASE_TEMPLATES: readonly TemplateManifest[] = [
   { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
   { name: "compare", version: 1, summary: "two things side by side", slots: [{ name: "left", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "right", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], variants: ["side", "stacked", "diagonal", "asymmetric"] },
   { name: "steps", version: 1, summary: "ordered sequence left to right", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 }, variants: ["row", "zigzag", "column", "staircase", "grid"] },
@@ -294,6 +296,17 @@ export function findVerb(name: string): VerbManifest | undefined {
   return VERBS.find((v) => v.name === name);
 }
 
+/** Templates, with approved variants from the authoring pipeline appended. */
+export const TEMPLATES: readonly TemplateManifest[] = BASE_TEMPLATES.map((t) => ({
+  ...t,
+  variants: [...t.variants, ...EXTRA_VARIANTS.filter((v) => v.template === t.name && v.status === "approved").map((v) => v.name)],
+}));
+
+/** Draft variants of a template (usable only when drafts are allowed). */
+export function draftVariants(template: string): string[] {
+  return EXTRA_VARIANTS.filter((v) => v.template === template && v.status === "draft").map((v) => v.name);
+}
+
 export function findTemplate(name: string): TemplateManifest | undefined {
   return TEMPLATES.find((t) => t.name === name);
 }
@@ -303,5 +316,6 @@ export function findComponent(kind: string): ComponentManifest | undefined {
 }
 
 export * from "./grid.js";
+export { EXTRA_VARIANTS, type ExtraVariant } from "./variants.js";
 export { findPlace, PLACES } from "./places.js";
 export { AssetLibrary, flowNodes, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";

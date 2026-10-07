@@ -15,6 +15,7 @@
     "@anim/compiler": "workspace:*",
     "@anim/engine": "workspace:*",
     "@anim/ir": "workspace:*",
+    "@anim/registry": "workspace:*",
     "@anim/timeline": "workspace:*",
     "@anim/tts": "workspace:*",
     "@anim/tts-kokoro": "workspace:*",

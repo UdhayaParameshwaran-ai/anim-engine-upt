@@ -171,7 +171,7 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 - `density=airy|normal|tight` changes spacing and how much of its cell each element fills.
 - `mirror=true` flips the scene left↔right; it works on grid pages too, so the 27 rule-book layouts have 54 arrangements.
 
-Bad values are fixed to the closest one or dropped (NAR218).
+Bad values are fixed to the closest one or dropped (NAR218). Variants added through the authoring pipeline (`pnpm variant`, see the README) appear in this list once approved (`steps` also has `arch`); a draft variant is refused with NAR218.
 
 ## 6d. Composition by intent
 

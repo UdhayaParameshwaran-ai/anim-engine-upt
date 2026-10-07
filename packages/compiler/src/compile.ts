@@ -13,6 +13,8 @@ export interface CompileOptions {
    * restyle a script without editing it. Validated like settings written in the script.
    */
   settings?: Record<string, string>;
+  /** Accept draft layout variants (the authoring pipeline's checker does). */
+  drafts?: boolean;
 }
 
 export interface CompileResult {
@@ -37,7 +39,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     if (at >= 0) parsed.script.settings[at] = setting;
     else parsed.script.settings.push(setting);
   }
-  const validated = validate(parsed.script, { assets, autofix: options.autofix ?? true });
+  const validated = validate(parsed.script, { assets, autofix: options.autofix ?? true, drafts: options.drafts ?? false });
   const diagnostics = [...parsed.diagnostics, ...validated.diagnostics];
   const ok = !diagnostics.some((d) => d.severity === "error" && !d.fixed);
   if (!ok) return { script: validated.script, diagnostics: sortDiagnostics(diagnostics), ok };

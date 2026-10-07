@@ -4,6 +4,7 @@ import { findGridLayout, findTemplate, frameRects, GRID, slotRects, SLOTS, type 
 import { gridMode, gridParts } from "@anim/validate";
 import { compose, COMPOSE_PATTERNS, type ComposePattern } from "./compose.js";
 import { fit, measure, type Size } from "./measure.js";
+import { VARIANT_PLUGINS } from "./variants/index.js";
 
 /**
  * The layout engine: the only place coordinates are decided. The DSL names
@@ -77,7 +78,8 @@ class SceneLayouter {
     const v = this.scene.attrs.variant;
     if (!v) return tpl.variants[0]!;
     if (v === "auto") return tpl.variants[hash(this.scene.id + (this.scene.title ?? "")) % tpl.variants.length]!;
-    return tpl.variants.includes(v) ? v : tpl.variants[0]!;
+    // Plugins (approved, or drafts the validator let through) count as variants.
+    return tpl.variants.includes(v) || VARIANT_PLUGINS[`${tpl.name}:${v}`] ? v : tpl.variants[0]!;
   }
 
   /** Space weights for items: the emphasized one gets more room. */
@@ -263,6 +265,21 @@ class SceneLayouter {
     }
 
     const variant = this.variant(tpl);
+    const plugin = VARIANT_PLUGINS[`${tpl.name}:${variant}`];
+    if (plugin) {
+      const e = this.scene.attrs.emphasis;
+      return plugin({
+        area: content,
+        gap: this.gap,
+        items,
+        slot,
+        put: (el, cell, fill) => this.put(el, cell, fill),
+        rowCells: (a, n, w) => rowCells(a, n, this.gap, w),
+        colCells: (a, n, w) => colCells(a, n, this.gap, w),
+        gridCells: (a, n) => gridCells(a, n, this.ctx.width / this.ctx.height, this.gap),
+        emphasis: e === "first" ? 0 : e === "last" ? items.length - 1 : items.findIndex((x) => x.id === e),
+      });
+    }
     switch (tpl.name) {
       case "title": {
         const sub = slot("subtitle");
