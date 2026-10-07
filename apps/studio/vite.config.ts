@@ -142,15 +142,27 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     if (!topic && provider !== "replay") throw new Error("enter a topic");
     send("log", `generating with ${client.name} (${mode})`);
 
+    // The style director gives each video a fresh look, remembering what this Studio user already saw.
+    // Look/Motion/Background picks in the Script tab act as locks.
+    const { Director, StyleHistory } = await server.ssrLoadModule("@anim/director");
+    const store = new StyleHistory(join(repo, ".cache", "style-history.json"));
+    const director = url.searchParams.get("style") === "llm" ? undefined : new Director({ topic: topic || "replay", history: await store.get("studio"), lock: tts.style });
+    const styleLine = () => {
+      const c = director!.choice;
+      return `style: ${c.theme} · ${c.motion} · bg ${c.bg} (mood: ${c.mood})`;
+    };
+
     const scenes: string[] = [];
     let chain = Promise.resolve();
     const started = performance.now();
     const result = await llm.generate(topic || "replay", {
       client,
       mode,
+      ...(director && { director }),
       onLog: (m: string) => send("log", m),
       onScene: (text: string, index: number, header: string) => {
         scenes[index] = text;
+        if (index === 0 && director) send("log", styleLine());
         const script = `${header}\n\n${scenes.slice(0, index + 1).join("\n\n")}\n`;
         // Builds run one at a time, in scene order.
         chain = chain.then(async () => {
@@ -161,6 +173,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
       },
     });
     await chain;
+    if (director && result.ok) await store.add("studio", director.entry());
     const built = await build(server, result.script, tts);
     send("done", {
       ...built,

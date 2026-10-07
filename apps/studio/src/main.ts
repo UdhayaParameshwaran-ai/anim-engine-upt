@@ -238,6 +238,7 @@ function startGeneration(): void {
     topic: $<HTMLTextAreaElement>("topic").value,
     provider: provider.value,
     mode: $<HTMLSelectElement>("mode").value,
+    style: $<HTMLSelectElement>("style").value,
     example: replayExample.value,
     ...Object.fromEntries(style()),
   });

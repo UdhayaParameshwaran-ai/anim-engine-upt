@@ -1,4 +1,5 @@
 import { compile } from "@anim/compiler";
+import { Director, type HistoryEntry } from "@anim/director";
 import { AssetLibrary } from "@anim/registry";
 import { describe, expect, it } from "vitest";
 import {
@@ -353,5 +354,26 @@ describe("generation fixes from the traced run", () => {
     const off = new ScriptedLlm(answer(NEED_OK));
     await generate("plants", { client: off, qualityRepairs: false });
     expect(off.requests).toHaveLength(3);
+  });
+});
+
+describe("style director in generation", () => {
+  const plain = (last: string) => (last.startsWith("Plan") ? OUTLINE : last.includes('"need"') ? NEED_OK : LEAF_OK);
+
+  it("styles the header before the first scene streams and varies looks across a user's videos", async () => {
+    const history: HistoryEntry[] = [];
+    const looks: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const director = new Director({ topic: "how plants make food", history });
+      const headers: string[] = [];
+      const r = await generate("how plants make food", { client: new ScriptedLlm(plain), director, onScene: (_, __, header) => headers.push(header) });
+      expect(r.ok).toBe(true);
+      // Every scene was handed over under the directed header.
+      for (const h of headers) expect(h).toContain(`theme ${director.choice.theme}`);
+      expect(r.script).toContain(`motion ${director.choice.motion}`);
+      looks.push(director.choice.theme);
+      history.push(director.entry());
+    }
+    expect(new Set(looks).size).toBe(3);
   });
 });

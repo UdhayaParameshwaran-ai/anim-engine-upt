@@ -89,6 +89,9 @@ importers:
       '@anim/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
+      '@anim/director':
+        specifier: workspace:*
+        version: link:../../packages/director
       '@anim/engine':
         specifier: workspace:*
         version: link:../../packages/engine
@@ -132,6 +135,15 @@ importers:
         specifier: workspace:*
         version: link:../validate
 
+  packages/director:
+    dependencies:
+      '@anim/dsl':
+        specifier: workspace:*
+        version: link:../dsl
+      '@anim/registry':
+        specifier: workspace:*
+        version: link:../registry
+
   packages/dsl:
     dependencies:
       '@anim/registry':
@@ -157,6 +169,9 @@ importers:
       '@anim/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@anim/director':
+        specifier: workspace:*
+        version: link:../director
       '@anim/dsl':
         specifier: workspace:*
         version: link:../dsl

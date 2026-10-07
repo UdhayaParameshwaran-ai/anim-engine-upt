@@ -8,7 +8,7 @@ import { generate } from "./generate.js";
 
 /**
  *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|groq[,..]] [--model=<id>]
- *            [--single] [--scenes=2-4] [--render [--voice=kokoro|beeps]] [--verbose]
+ *            [--single] [--scenes=2-4] [--style=director|llm] [--render [--voice=kokoro|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -35,10 +35,16 @@ try {
 }
 const verbose = args.includes("--verbose");
 
+// A fresh look per video, remembering past ones (`--style=llm` keeps the LLM's own style lines).
+const { Director, StyleHistory } = await import("@anim/director");
+const store = new StyleHistory(".cache/style-history.json");
+const director = value("style") === "llm" ? undefined : new Director({ topic, history: await store.get("cli") });
+
 console.error(`generating with ${client.name}…`);
 const started = performance.now();
 const result = await generate(topic, {
   client,
+  ...(director && { director }),
   mode: args.includes("--single") ? "single" : "outline",
   scenes: { min: min ?? 2, max: max ?? min ?? 4 },
   onScene: (_, i) => console.error(`  scene ${i + 1} ready`),
@@ -47,6 +53,11 @@ const result = await generate(topic, {
 
 await mkdir(dirname(out), { recursive: true });
 await writeFile(out, result.script);
+if (director && result.ok) {
+  await store.add("cli", director.entry());
+  const c = director.choice;
+  console.error(`style: ${c.theme} · ${c.motion} · bg ${c.bg} (mood: ${c.mood})`);
+}
 if (result.diagnostics.length) console.error(report(result.diagnostics));
 console.error(
   `wrote ${out}: ${result.ok ? "ok" : "has errors"} · ${result.calls} LLM call(s), ${result.repairs} repair(s), ` +

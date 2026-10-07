@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@anim/compiler": "workspace:*",
+    "@anim/director": "workspace:*",
     "@anim/engine": "workspace:*",
     "@anim/ir": "workspace:*",
     "@anim/llm": "workspace:*",

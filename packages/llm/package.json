@@ -5,9 +5,15 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "dependencies": {
     "@anim/compiler": "workspace:*",
+    "@anim/director": "workspace:*",
     "@anim/dsl": "workspace:*",
     "@anim/registry": "workspace:*",
     "@anim/render": "workspace:*"

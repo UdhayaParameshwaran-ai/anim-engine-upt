@@ -1,5 +1,6 @@
 import { compile, report } from "@anim/compiler";
 import { print, type Diagnostic } from "@anim/dsl";
+import type { Director } from "@anim/director";
 import { AssetLibrary } from "@anim/registry";
 import type { ChatMessage, LlmClient, Usage } from "./client.js";
 import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
@@ -17,6 +18,11 @@ export interface GenerateOptions {
   concurrency?: number;
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
   qualityRepairs?: boolean;
+  /**
+   * Styles the video (look, motion, background, scene arrangements) as it streams,
+   * remembering what this user saw before. Without one, the LLM's own style lines stay.
+   */
+  director?: Director;
   temperature?: number;
   /**
    * Each finished (validated) scene, in order, as soon as it and all earlier
@@ -61,6 +67,9 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
   const ctx: Ctx = { opts, system: systemPrompt(relevant), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0 };
   const range = opts.scenes ?? { min: 2, max: 4 };
   let header = "";
+  // The look is set on the header, before the first scene plays; scenes are arranged as they arrive.
+  const direct = (h: string) => (opts.director ? opts.director.header(h).trim() : h);
+  const arrange = (scene: string) => (opts.director ? opts.director.scene(scene) : scene);
   const emit = orderedEmitter((text, i) => opts.onScene?.(text, i, header));
 
   let scenes: string[];
@@ -72,7 +81,7 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
       opts.onLog?.("outline had no scenes; falling back to a single pass");
       return generate(topic, { ...opts, mode: "single" });
     }
-    header = ensureHeader(plan.header, topic);
+    header = direct(ensureHeader(plan.header, topic));
     opts.onLog?.(`outline: ${plan.scenes.map((s) => s.id).join(", ")}`);
     const written: string[] = [];
     scenes = await pool(plan.scenes, opts.concurrency ?? opts.client.concurrency ?? 3, async (s, i) => {
@@ -80,7 +89,7 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
       const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
       const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier) };
       const text = sceneOnly(clean(await chat(ctx, [first])), s.id);
-      const fixed = await repairLoop(ctx, header, text, [first]);
+      const fixed = arrange(await repairLoop(ctx, header, text, [first]));
       written[i] = fixed;
       emit(fixed, i);
       return fixed;
@@ -93,16 +102,16 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
     const onSceneText = (text: string) => {
       const i = pending.length;
       pending.push(
-        repairLoop(ctx, headerText!, text, [request]).then((fixed) => {
+        repairLoop(ctx, headerText!, text, [request]).then(arrange).then((fixed) => {
           emit(fixed, i);
           return fixed;
         }),
       );
     };
-    const splitter = streamSplitter((h) => (header = headerText = ensureHeader(h, topic)), onSceneText);
+    const splitter = streamSplitter((h) => (header = headerText = direct(ensureHeader(h, topic))), onSceneText);
     const full = await chat(ctx, [request], (delta) => splitter.push(delta));
     splitter.end();
-    headerText ??= ensureHeader(split(clean(full)).header, topic);
+    headerText ??= direct(ensureHeader(split(clean(full)).header, topic));
     header = headerText;
     scenes = await Promise.all(pending);
     if (!scenes.length) throw new Error(`LLM reply contained no scenes:\n${full.slice(0, 500)}`);

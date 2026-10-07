@@ -17,6 +17,9 @@
       "path": "packages/compiler"
     },
     {
+      "path": "packages/director"
+    },
+    {
       "path": "packages/tts"
     },
     {
