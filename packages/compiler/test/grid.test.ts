@@ -95,3 +95,58 @@ describe("grid scenes", () => {
     expect(compile(src).script.scenes[0]!.steps[0]!.elements[0]!.kind).toBe("body"); // text → body
   });
 });
+
+describe("layout variants and knobs", () => {
+  const steps = (attrs: string) => `video 1 "V"\nscene s "S" template=steps ${attrs}\na = box "A"\nb = box "B"\nc = box "C"\n> {1}One, {2}two, {3}three.\n1 fade a\n2 fade b\n3 fade c\n`;
+  const boxes = (src: string) => {
+    const r = compile(src);
+    expect(report(r.diagnostics.filter((d) => d.severity === "error"))).toBe("");
+    return Object.fromEntries(r.ir!.scenes[0]!.elements.map((e) => [e.id, e.box]));
+  };
+
+  it("arrange the same template differently", () => {
+    const row = boxes(steps(""));
+    const zig = boxes(steps("variant=zigzag"));
+    const col = boxes(steps("variant=column"));
+    const stairs = boxes(steps("variant=staircase"));
+    expect(new Set([row.a!.y, row.b!.y, row.c!.y]).size).toBe(1);
+    expect(zig.b!.y).toBeGreaterThan(zig.a!.y);
+    expect(zig.c!.y).toBe(zig.a!.y);
+    expect(col.b!.y).toBeGreaterThan(col.a!.y);
+    expect(col.a!.x).toBe(col.b!.x);
+    expect(stairs.a!.y).toBeGreaterThan(stairs.b!.y);
+    expect(stairs.b!.y).toBeGreaterThan(stairs.c!.y);
+  });
+
+  it("give the emphasized element more room and space things by density", () => {
+    const even = boxes(steps("variant=zigzag"));
+    const big = boxes(steps("variant=zigzag emphasis=b"));
+    expect(big.b!.x - big.a!.x).toBeGreaterThan(even.b!.x - even.a!.x);
+    const airy = boxes(steps("density=airy"));
+    const tight = boxes(steps("density=tight"));
+    expect(tight.a!.w).toBeGreaterThanOrEqual(airy.a!.w);
+  });
+
+  it("mirror any layout, grid pages included", () => {
+    const plain = boxes(steps(""));
+    const flipped = boxes(steps("mirror=true"));
+    expect(flipped.a!.x).toBe(1920 - plain.a!.x - plain.a!.w);
+    const page = (m: string) => boxes(`video 1 "G"\nscene a "A" grid=L2-01 ${m}\ns1 = body "Left"\ns2 = stat "9" "right"\n> {1}Go {2}now.\n1 draw s1\n2 draw s2\n`);
+    expect(page("mirror=true").s1!.x).toBeGreaterThan(page("").s1!.x);
+  });
+
+  it("pick a stable variant for variant=auto", () => {
+    expect(boxes(steps("variant=auto"))).toEqual(boxes(steps("variant=auto")));
+  });
+
+  it("left-align headlines in the left title variant", () => {
+    const r = compile(`video 1 "T"\nscene t "T" template=title variant=left\ntitle = title "Hello"\n> {1}Hello.\n1 write title\n`);
+    expect(r.ir!.scenes[0]!.elements[0]!.params.align).toBe("left");
+  });
+
+  it("fix bad knobs (NAR218)", () => {
+    const r = compile(steps("variant=zigzg density=airyy emphasis=nobody mirror=yes"));
+    const fixes = r.diagnostics.filter((d) => d.code === "NAR218").map((d) => d.fixed);
+    expect(fixes).toEqual(["used `zigzag`", "ignored", "used `airy`", "ignored"]);
+  });
+});

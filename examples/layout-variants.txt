@@ -1,0 +1,71 @@
+video 1 "Layout Variants"
+theme soft-pastel
+motion corporate
+
+scene open "Opening" template=title variant=left
+title = title "How plants make food"
+subtitle = text "Sunlight, water and air become sugar"
+leaf = asset:leaf "Leaf"
+> Plants {1}make their own food from {2 sunlight, water and air}.
+1 write title
+1 fade subtitle
+2 draw leaf
+
+scene zig "Steps, zigzag" template=steps variant=zigzag
+a = icon:sun "Light"
+b = icon:droplet "Water"
+c = icon:wind "Air"
+d = icon:cube "Sugar"
+> First {1}light, then {2}water, then {3}air, and finally {4}sugar.
+1 pop a
+2 pop b
+3 pop c
+4 pop d
+
+scene stairs "Steps, staircase" template=steps variant=staircase emphasis=last
+a = box "Seed"
+b = box "Sprout"
+c = box "Plant"
+d = box "Tree"
+> A {1}seed becomes a {2}sprout, a {3}plant, then a {4}tree.
+1 fade a
+2 fade b
+3 fade c
+4 fade d
+
+scene diag "Compare, diagonal" template=compare variant=diagonal
+left = asset:cell.plant "Plant cell"
+right = asset:cell.animal "Animal cell"
+> A {1}plant cell and an {2}animal cell.
+1 draw left
+2 draw right
+
+scene asym "Compare, asymmetric" template=compare variant=asymmetric emphasis=right
+left = icon:sun "Day"
+right = icon:cloud "Night"
+> By {1}day leaves make sugar; at {2}night they rest.
+1 pop left
+2 pop right
+
+scene feature "Grid, feature" template=grid variant=feature
+a = asset:leaf "Leaf"
+b = icon:sun "Sun"
+c = icon:droplet "Water"
+d = icon:wind "Air"
+> The {1}leaf is the hero, helped by {2}sun, {3}water and {4}air.
+1 draw a
+2 pop b
+3 pop c
+4 pop d
+
+scene mirrored "Grid page, mirrored" grid=L3-02 mirror=true
+title = title "Mirrored rule-book page"
+chart = chart:bar data=12,48,72,85 labels=1980,1995,2010,2020
+stat = stat "94M" "deaths prevented"
+note = callout "Mirror flips any layout."
+> The {1}chart now sits on the right.
+start write title
+1 draw chart
+> The {1}number and the {2}note move left.
+1 draw stat
+2 draw note

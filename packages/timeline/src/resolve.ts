@@ -40,6 +40,8 @@ export interface ResolveOptions {
 }
 
 const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, fade: 0.5, slide: 0.6, wipe: 0.6, iris: 0.7, zoom: 0.6, blur: 0.7, rise: 0.6 };
+/** Exit length (s) under any personality but standard, whatever the transition. */
+const EXIT = 0.6;
 const ENTER = new Set(["fade", "pop", "draw", "write"]);
 
 /**
@@ -148,7 +150,10 @@ class Resolver {
   private scene(scene: SceneIR, sp: SceneSpeech, start: number, prev: SceneIR | undefined): number {
     // Transitions take the personality's tempo (cinematic ones are slower).
     const trIn = { type: scene.transitionIn, duration: this.q((this.transitions[scene.transitionIn] ?? 0) * this.motion.durScale) };
-    const trOut = { type: scene.transitionOut, duration: this.q((this.transitions[scene.transitionOut] ?? 0) * this.motion.durScale) };
+    // Exits all last the same under a personality: appending a scene turns the last scene's
+    // closing fade into a boundary transition, and its end time must not move.
+    const outBase = this.motion.name !== "standard" && scene.transitionOut !== "cut" ? EXIT : (this.transitions[scene.transitionOut] ?? 0);
+    const trOut = { type: scene.transitionOut, duration: this.q(outBase * this.motion.durScale) };
     const t0 = this.q(start);
     this.initScene(scene, prev);
 

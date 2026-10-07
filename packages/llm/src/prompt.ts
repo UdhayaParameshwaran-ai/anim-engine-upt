@@ -99,7 +99,7 @@ export function systemPrompt(assets: AssetManifest[]): string {
   const templates = TEMPLATES.map((t) => {
     const slots = t.slots.map((s) => `${s.name}${s.required ? "" : "?"}`).join(",");
     const items = t.items ? ` items ${t.items.min}-${t.items.max}` : t.graph ? ` nodes ≤${t.graph.maxNodes} + edges` : "";
-    return `  ${t.name.padEnd(10)} ${t.summary}${slots ? ` [slots: ${slots}]` : ""}${items}`;
+    return `  ${t.name.padEnd(10)} ${t.summary}${slots ? ` [slots: ${slots}]` : ""}${items} · variants: ${t.variants.join("|")}`;
   }).join("\n");
   // Grid-only elements are listed in the grid section instead.
   const gridOnly = new Set(GRID_ELEMENTS.map((e) => e.kind).filter((k) => !["icon", "asset", "chart", "formula"].includes(k)));
@@ -115,7 +115,7 @@ STATEMENTS (one per line; the first word decides the type)
 video 1 "Title"                      first line of a full script
 theme <look>                         see STYLE
 motion <personality>                 see STYLE
-scene <id> "Title" [template=<t>] [in=${TRANSITIONS.join("|")}]
+scene <id> "Title" [template=<t> [variant=<v>|auto]] [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]
 step <id> "Title"                    optional sub-scene on the same stage
 <id> = <kind>[:<name>] ["text"] [key=value] [@slot]   declares an element (hidden until an action shows it)
 <id> = <a> -> <b> ["label"]          graph edge (template=flow)
@@ -196,7 +196,7 @@ ${elements}`;
  * types, themes, the asset names), about a fifth of the full prompt.
  */
 export function outlineSystemPrompt(assets: AssetManifest[]): string {
-  const templates = TEMPLATES.map((t) => `  ${t.name.padEnd(10)} ${t.summary}`).join("\n");
+  const templates = TEMPLATES.map((t) => `  ${t.name.padEnd(10)} ${t.summary} (variants: ${t.variants.join("|")})`).join("\n");
   const layouts = GRID_LAYOUTS.map((l) => `${l.code} ${l.name} (${l.slots.length})`).join(" · ");
   const elements = [...new Set(GRID_ELEMENTS.map((e) => e.kind))].join(" ");
   return `You plan narrated 2D explainer videos written in Narrascript, a line-based script language.
@@ -206,7 +206,7 @@ LINES
 video 1 "Title"
 theme <look>
 motion <personality>
-scene <id> "Title" template=<t> | grid=<layout code>  [in=${TRANSITIONS.join("|")}]
+scene <id> "Title" template=<t> [variant=<v>] | grid=<layout code> [mirror=true]
 # goal: <one line>
 
 ${styleSection()}
@@ -222,7 +222,7 @@ ASSETS AVAILABLE: ${assets.map((a) => `${a.kind}:${a.name}`).join(" ")}
 PLANNING RULES
 - Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
 - Pick the template or grid that fits the content: processes → steps/flow, comparisons → compare, loops → cycle, numbers/quotes/lists → grid.
-- Vary scene types; plan visuals from the assets above.
+- Vary scene types and arrangements (variant=, mirror=true on some grid pages); plan visuals from the assets above.
 - Plan only facts you are sure of.`;
 }
 

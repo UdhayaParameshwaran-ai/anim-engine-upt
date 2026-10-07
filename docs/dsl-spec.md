@@ -150,6 +150,29 @@ Narration timing never changes: only default durations scale, and explicit durat
 
 **Transitions.** `in=` accepts `auto` (default) `cut` `fade` `slide` `wipe` `iris` `zoom` `blur` `rise`. A scene starts empty (its elements appear on their cues), so with any personality other than `standard`, a scene's transition is played as the *previous* scene's exit (unless that scene sets `out=`). `auto` takes the next transition from the personality's set (playful: zoom, iris, rise; corporate: rise, wipe, fade; cinematic: blur, fade, zoom; energetic: wipe, slide, zoom; dramatic: zoom, iris, blur), and the video ends with a fade. Under `standard`, `auto` means fade, as before.
 
+## 6c. Layout variants and knobs
+
+Scene attributes that rearrange a template (or a grid page) without coordinates. The layout engine still computes every box, with the same fitting and overlap checks.
+
+| Template | `variant=` (first is the default) |
+|---|---|
+| `title` | `center` `left` (left-aligned headline, items beside it) `split` |
+| `compare` | `side` `stacked` `diagonal` `asymmetric` (golden ratio) |
+| `steps` | `row` `zigzag` `column` `staircase` `grid` |
+| `cycle` | `ring` `arc` |
+| `hub` | `ring` `sides` |
+| `timeline` | `alternate` `line` `vertical` |
+| `grid` | `auto` `feature` (one large item, the rest beside it) `strip` |
+| `spotlight` | `center` `left` `right` |
+| `flow` | `auto` `down` `across` |
+
+- `variant=auto` picks one from the scene id, so it is stable for that scene.
+- `emphasis=first|last|<id>` gives that element more room (the larger side of `compare`, the hero of `grid variant=feature`).
+- `density=airy|normal|tight` changes spacing and how much of its cell each element fills.
+- `mirror=true` flips the scene left↔right; it works on grid pages too, so the 27 rule-book layouts have 54 arrangements.
+
+Bad values are fixed to the closest one or dropped (NAR218).
+
 ## 7. Diagnostics (parser, L1)
 
 | Code | Meaning |
@@ -193,6 +216,7 @@ Run `pnpm check <file>` to see them. Most come with a deterministic auto-fix. A 
 | NAR215 | schema | Unknown scene attribute (warning) | Ignore |
 | NAR216 | schema | `move` without a destination | Drop the call |
 | NAR217 | schema | `fit` anchored on a point cue | Remove `fit` |
+| NAR218 | schema | Bad layout knob (`variant`, `emphasis`, `density`, `mirror`) (warning) | Closest value, else ignore |
 | NAR301 | reference | Undeclared element (or one declared in a later step) | Closest id, else drop the target |
 | NAR302 | reference | Duplicate element id in a scene | Drop the duplicate |
 | NAR303 | reference | Anchor is not a cue of this beat | Re-anchor onto the beat's unused cues in order (for cues numbered across the scene), else drop the action |

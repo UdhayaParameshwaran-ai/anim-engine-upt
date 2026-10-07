@@ -7,6 +7,7 @@ import {
   findComponent,
   findTemplate,
   findVerb,
+  LAYOUT_KNOBS,
   LAYOUTS,
   MOTIONS,
   partsOf,
@@ -61,6 +62,7 @@ export const ValidateCodes = {
   UnknownSceneAttr: "NAR215",
   MissingDestination: "NAR216",
   FitNeedsSpan: "NAR217",
+  BadLayoutKnob: "NAR218",
   // L3 reference
   UndeclaredElement: "NAR301",
   DuplicateElement: "NAR302",
@@ -319,6 +321,31 @@ class Validator {
         }
       }
     }
+    this.layoutKnobs(scene);
+  }
+
+  /** `variant=`, `emphasis=`, `density=`, `mirror=`: checked after the template is settled. */
+  private layoutKnobs(scene: Scene): void {
+    const a = scene.attrs;
+    const knob = (key: string, message: string, fix?: string) =>
+      this.warn(C.BadLayoutKnob, message, scene.span, {
+        desc: fix ? `used \`${fix}\`` : "ignored",
+        apply: () => (fix ? (a[key] = fix) : delete a[key]),
+      });
+    const tpl = a.template ? findTemplate(a.template) : undefined;
+    if (a.variant !== undefined && a.variant !== "auto") {
+      if (!tpl) knob("variant", a.grid !== undefined ? "grid scenes have no variants (pick another grid= code, or mirror=true)" : "variant= needs a template");
+      else if (!tpl.variants.includes(a.variant)) {
+        knob("variant", `template \`${tpl.name}\` has no variant \`${a.variant}\` (variants: ${tpl.variants.join(", ")}, auto)`, closest(a.variant, tpl.variants));
+      }
+    }
+    if (a.emphasis !== undefined && !["first", "last"].includes(a.emphasis) && !scene.steps.some((s) => s.elements.some((e) => e.id === a.emphasis))) {
+      knob("emphasis", `emphasis= takes first, last or an element id of this scene, not \`${a.emphasis}\``);
+    }
+    if (a.density !== undefined && !(LAYOUT_KNOBS.density as readonly string[]).includes(a.density)) {
+      knob("density", `density= takes ${LAYOUT_KNOBS.density.join(", ")}`, closest(a.density, LAYOUT_KNOBS.density));
+    }
+    if (a.mirror !== undefined && !["true", "false"].includes(a.mirror)) knob("mirror", "mirror= takes true or false");
   }
 
   // -------------------------------------------------------------- element ---

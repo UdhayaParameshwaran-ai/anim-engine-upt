@@ -169,7 +169,8 @@ describe("scenes", () => {
       const [prefix, full] = [await build(src.slice(0, cut + 1)), await build(src)];
       const first = prefix.tl.scenes.map((s) => s.id);
       const mine = (tl: ResolvedTimeline) => ({
-        scenes: tl.scenes.filter((s) => first.includes(s.id)),
+        // The last scene's closing fade may become a boundary transition; its timing must not change.
+        scenes: tl.scenes.filter((s) => first.includes(s.id)).map((s) => ({ ...s, transitionOut: { ...s.transitionOut, type: "" } })),
         tracks: tl.tracks.filter((t) => first.includes(t.target.split("/")[0]!)),
         cues: tl.cues.filter((c) => first.includes(c.scene)),
         audio: tl.audio.slice(0, prefix.tl.audio.length),

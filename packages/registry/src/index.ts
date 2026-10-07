@@ -132,7 +132,16 @@ export const THEME_SUMMARIES: Record<(typeof THEMES)[number], string> = {
 };
 export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
-export const SCENE_ATTRS = ["template", "grid", "in", "out", "keep"] as const;
+export const SCENE_ATTRS = ["template", "grid", "in", "out", "keep", "variant", "emphasis", "density", "mirror"] as const;
+
+/** Layout knobs (scene attributes) every template and grid scene understands. */
+export const LAYOUT_KNOBS = {
+  /** `emphasis=first|last|<id>`: that element gets more room. */
+  emphasis: "first|last|<id>",
+  density: ["airy", "normal", "tight"],
+  /** Flip the layout left↔right. */
+  mirror: ["true", "false"],
+} as const;
 
 /** A template slot: where content goes. The template decides geometry. */
 export interface SlotSpec {
@@ -155,21 +164,23 @@ export interface TemplateManifest {
   items?: { accepts: readonly string[]; min: number; max: number };
   /** Graph templates take nodes and edges. */
   graph?: { maxNodes: number };
+  /** Arrangements of the same slots (`variant=`); the first is the default. */
+  variants: readonly string[];
 }
 
 const VISUAL = ["icon", "asset", "shape", "box", "circle", "card", "chart", "formula"] as const;
 const TEXTUAL = ["title", "text", "label", "list"] as const;
 
 export const TEMPLATES: readonly TemplateManifest[] = [
-  { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }] },
-  { name: "compare", version: 1, summary: "two things side by side", slots: [{ name: "left", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "right", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }] },
-  { name: "steps", version: 1, summary: "ordered sequence left to right", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 } },
-  { name: "cycle", version: 1, summary: "items on a loop with arrows", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 3, max: 6 } },
-  { name: "flow", version: 1, summary: "flowchart / graph of nodes and edges", slots: [], graph: { maxNodes: 12 } },
-  { name: "timeline", version: 1, summary: "events along a horizontal line", slots: [], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 7 } },
-  { name: "hub", version: 1, summary: "central idea with spokes", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: true }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 8 } },
-  { name: "grid", version: 1, summary: "cards in a grid", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 9 } },
-  { name: "spotlight", version: 1, summary: "one large visual with labels around it", slots: [{ name: "main", accepts: [...VISUAL], required: true }], items: { accepts: ["label", "text"], min: 0, max: 6 } },
+  { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
+  { name: "compare", version: 1, summary: "two things side by side", slots: [{ name: "left", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "right", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], variants: ["side", "stacked", "diagonal", "asymmetric"] },
+  { name: "steps", version: 1, summary: "ordered sequence left to right", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 }, variants: ["row", "zigzag", "column", "staircase", "grid"] },
+  { name: "cycle", version: 1, summary: "items on a loop with arrows", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 3, max: 6 }, variants: ["ring", "arc"] },
+  { name: "flow", version: 1, summary: "flowchart / graph of nodes and edges", slots: [], graph: { maxNodes: 12 }, variants: ["auto", "down", "across"] },
+  { name: "timeline", version: 1, summary: "events along a horizontal line", slots: [], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 7 }, variants: ["alternate", "line", "vertical"] },
+  { name: "hub", version: 1, summary: "central idea with spokes", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: true }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 8 }, variants: ["ring", "sides"] },
+  { name: "grid", version: 1, summary: "cards in a grid", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 9 }, variants: ["auto", "feature", "strip"] },
+  { name: "spotlight", version: 1, summary: "one large visual with labels around it", slots: [{ name: "main", accepts: [...VISUAL], required: true }], items: { accepts: ["label", "text"], min: 0, max: 6 }, variants: ["center", "left", "right"] },
 ];
 
 /** Component (element kind) manifest: `icon`, `text`, `arrow`, `chart`, ... */

@@ -47,6 +47,11 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
     scene.steps.forEach((step, si) => {
       for (const el of step.elements) elements.push(lowerElement(el, si, layout, assets, lock));
     });
+    // Parameters a layout variant implies (left-aligned headlines, ...).
+    for (const el of elements) {
+      const extra = layout.params.get(el.id);
+      if (extra) el.params = { ...el.params, ...extra };
+    }
     if (scene.attrs.grid !== undefined) {
       // Editorial frame: left-aligned header, footer with brand and page number.
       for (const el of elements) {
