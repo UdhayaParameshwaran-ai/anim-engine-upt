@@ -33,6 +33,7 @@ water = icon:droplet
 | `packages/validate` | ✅ L2–L4 checks + auto-fix | Schema, reference, template and visibility checks |
 | `packages/compiler` | ✅ layout + lowering + CLI | DSL → VideoIR; the layout engine decides every coordinate |
 | `packages/tts` | ✅ interface, mock, aligner, cache | Provider-neutral TTS; any timing granularity → word timings |
+| `packages/tts-kokoro` | ✅ local neural voice | Kokoro-82M (q4f16 ONNX) on the CPU with exact word timings from the model's durations |
 | `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
 | `packages/llm` | ✅ OpenRouter + Groq, generation pipeline | Prompt → outline → scenes → validate → LLM repair → auto-fix |
 | `packages/engine` | ✅ stage, components, player | Browser SVG/HTML engine; stateless `render(t)`, audio-clocked player |
@@ -67,7 +68,7 @@ pnpm check examples/photosynthesis.txt          # diagnostics
 pnpm check my-script.txt --fixed --ir           # auto-fixed script + IR
 pnpm check my-script.txt --timeline=tl.json     # mock TTS + resolved timeline
 pnpm studio                                     # http://localhost:5199
-pnpm render examples/cells.txt -o out/cells.mp4 # export MP4 (--workers=N --from=s --to=s --jpeg)
+pnpm render examples/cells.txt -o out/cells.mp4 # export MP4 (--voice=kokoro|beeps --speed=1 --workers=N --from=s --to=s --jpeg)
 ```
 
 Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmpeg from `$FFMPEG_PATH`, the system `PATH`, or the bundled `ffmpeg-static` build.
@@ -82,7 +83,17 @@ Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmp
 - **Inspector:** shows the current scene, step, beat and word, each element's values, and the tween driving it. Click to jump to the source.
 - **Bounds overlay** (O): shows each element's current box and id, following the camera.
 
-The Studio uses the mock voice, which plays a soft tick at the start of every word. Each visual should land on its tick.
+The Studio and the renderer narrate with the local Kokoro voice by default. **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
+
+## Voice (local TTS)
+
+Narration is synthesized on your machine with [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped) (Apache-2.0) through ONNX Runtime. There is no Python, GPU or API key involved.
+
+- **Model:** the *timestamped* export, `q4f16` weights (155 MB), downloaded on first use to `.cache/models`. On a laptop CPU (i5-12500H) it runs at about 2.8× realtime after a ~1.5 s load. The 8-bit build is slower than full precision on CPUs, so it isn't the default.
+- **Word timings:** besides the audio, the model returns how long it spends on every input token. Tokens are built word by word, so those durations give exact word starts and ends (`word` precision) for cue sync.
+- **Pronunciation:** phrases between punctuation are phonemized whole (espeak-ng), so words keep their natural reduced and linked forms (*of the* → ʌvðə). The phrase's phonemes are then split back into words by aligning them with each word's own phonemes.
+- **Voices:** a script's `voice` line can name any Kokoro English voice (`af_heart`, `am_michael`, `bf_emma`, …). Any other name uses `af_heart`.
+- **Caching:** audio is cached per scene by text, voice and speed in `.cache/tts`, so a rebuild only synthesizes scenes that changed.
 
 ## Git account for this repo
 

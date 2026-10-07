@@ -5,3 +5,6 @@ packages:
 allowBuilds:
   esbuild: true
   ffmpeg-static: true
+  onnxruntime-node: true
+  protobufjs: false
+  sharp: false

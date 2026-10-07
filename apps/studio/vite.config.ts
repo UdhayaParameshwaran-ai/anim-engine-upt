@@ -14,7 +14,7 @@ if (existsSync(join(repo, ".env"))) process.loadEnvFile(join(repo, ".env"));
 const alias = Object.fromEntries(readdirSync(packages).map((name) => [`@anim/${name}`, join(packages, name, "src", "index.ts")]));
 
 /**
- * Dev API: compiles DSL in Node (parse → validate → layout → mock TTS →
+ * Dev API: compiles DSL in Node (parse → validate → layout → TTS →
  * resolve), serves the synthesized narration, and streams LLM generation
  * scene by scene for progressive playback.
  */
@@ -22,12 +22,14 @@ function api(): Plugin {
   return {
     name: "anim-studio-api",
     configureServer(server) {
+      // Load the voice model in the background so the first build doesn't wait for it.
+      if (defaultTts() === "kokoro") void voice(server, "kokoro").catch(() => undefined);
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://localhost");
         try {
           if (url.pathname === "/api/examples") return json(res, readdirSync(examples).filter((f) => f.endsWith(".txt")));
           if (url.pathname === "/api/source") return send(res, "text/plain; charset=utf-8", readFileSync(join(examples, basename(url.searchParams.get("file") ?? "")), "utf8"));
-          if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), Number(url.searchParams.get("speed") ?? 1)));
+          if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), ttsOf(url)));
           if (url.pathname === "/api/providers") return json(res, providers());
           if (url.pathname === "/api/generate") return await generateStream(server, url, req, res);
           if (url.pathname.startsWith("/audio/")) return send(res, "audio/wav", readFileSync(join(ttsDir, basename(url.pathname))));
@@ -41,14 +43,45 @@ function api(): Plugin {
   };
 }
 
-async function build(server: ViteDevServer, source: string, speed: number) {
+type Tts = { name: "kokoro" | "beeps"; speed: number };
+
+/** Narration voice: "kokoro" (local neural TTS) or "beeps" (instant mock that ticks on every word). */
+function defaultTts(): Tts["name"] {
+  return process.env.ANIM_TTS === "beeps" ? "beeps" : "kokoro";
+}
+
+function ttsOf(url: URL): Tts {
+  const name = url.searchParams.get("tts");
+  return { name: name === "beeps" || name === "kokoro" ? name : defaultTts(), speed: Number(url.searchParams.get("speed") ?? 1) || 1 };
+}
+
+// One Kokoro instance for the server's lifetime: the model stays loaded.
+let kokoro: Promise<unknown> | undefined;
+async function voice(server: ViteDevServer, name: Tts["name"], speed = 1) {
+  if (name === "beeps") {
+    const { MockTtsProvider } = await server.ssrLoadModule("@anim/tts");
+    return new MockTtsProvider({ audio: "beeps", speed });
+  }
+  kokoro ??= server.ssrLoadModule("@anim/tts-kokoro").then(async ({ KokoroTtsProvider }) => {
+    const p = new KokoroTtsProvider({ cacheDir: join(repo, ".cache", "models") });
+    await p.warmup();
+    return p;
+  });
+  kokoro.catch(() => (kokoro = undefined));
+  return kokoro;
+}
+
+async function build(server: ViteDevServer, source: string, tts: Tts) {
   const { compile, report } = await server.ssrLoadModule("@anim/compiler");
-  const { FileCache, MockTtsProvider, speakVideo } = await server.ssrLoadModule("@anim/tts");
+  const { FileCache, speakVideo } = await server.ssrLoadModule("@anim/tts");
   const { resolve } = await server.ssrLoadModule("@anim/timeline");
   const compiled = compile(source);
   const diagnostics: string[] = compiled.diagnostics.length ? report(compiled.diagnostics).split("\n") : [];
   if (!compiled.ir) return { ok: false, diagnostics };
-  const speech = await speakVideo(compiled.ir, { provider: new MockTtsProvider({ audio: "beeps", speed }), cache: new FileCache(ttsDir) });
+  const provider = await voice(server, tts.name, tts.speed);
+  // Kokoro's rate is a request setting (part of the cache key); the mock bakes it into its id.
+  const settings = tts.name === "kokoro" && tts.speed !== 1 ? { speed: tts.speed } : undefined;
+  const speech = await speakVideo(compiled.ir, { provider, cache: new FileCache(ttsDir), ...(settings && { settings }) });
   const timeline = resolve(compiled.ir, speech);
   timeline.audio = timeline.audio.map((a: { src: string }) => ({ ...a, src: `/audio/${basename(a.src)}` }));
   return { ok: true, diagnostics, ir: compiled.ir, timeline };
@@ -58,6 +91,7 @@ function providers() {
   return {
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
+    tts: defaultTts(),
     examples: readdirSync(examples).filter((f) => f.endsWith(".txt")),
   };
 }
@@ -72,7 +106,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
   const llm = await server.ssrLoadModule("@anim/llm");
   const topic = url.searchParams.get("topic")?.trim() ?? "";
   const provider = url.searchParams.get("provider") ?? "auto";
-  const speed = Number(url.searchParams.get("speed") ?? 1);
+  const tts = ttsOf(url);
   let mode = url.searchParams.get("mode") === "single" ? "single" : "outline";
 
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
@@ -107,13 +141,13 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
         // Builds run one at a time, in scene order.
         chain = chain.then(async () => {
           if (closed) return;
-          const built = await build(server, script, speed);
+          const built = await build(server, script, tts);
           send("scene", { index, script, ...built });
         });
       },
     });
     await chain;
-    const built = await build(server, result.script, speed);
+    const built = await build(server, result.script, tts);
     send("done", {
       ...built,
       script: result.script,

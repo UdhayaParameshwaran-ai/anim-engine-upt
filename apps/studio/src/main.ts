@@ -29,6 +29,7 @@ const renderMode = params.has("render");
 
 const examples = $<HTMLSelectElement>("examples");
 const speed = $<HTMLInputElement>("speed");
+const tts = $<HTMLSelectElement>("tts");
 const diagnostics = $<HTMLUListElement>("diagnostics");
 const stageBox = $<HTMLDivElement>("stage");
 const waiting = $<HTMLDivElement>("waiting");
@@ -181,7 +182,7 @@ function selectLine(line: number): void {
 
 async function build(): Promise<void> {
   stopGeneration();
-  const res = await fetch(`/api/build?speed=${speed.value}`, { method: "POST", body: editor.value });
+  const res = await fetch(`/api/build?speed=${speed.value}&tts=${tts.value}`, { method: "POST", body: editor.value });
   const result: BuildResult = await res.json();
   showDiagnostics(result.error ? [result.error] : result.diagnostics);
   if (!result.ok || !result.ir || !result.timeline) return;
@@ -234,6 +235,7 @@ function startGeneration(): void {
     mode: $<HTMLSelectElement>("mode").value,
     example: replayExample.value,
     speed: speed.value,
+    tts: tts.value,
   });
   const started = performance.now();
   let firstFrame = 0;
@@ -301,7 +303,8 @@ function stopGeneration(): void {
 }
 
 async function loadProviders(): Promise<void> {
-  const p: { openrouter: boolean; groq: boolean; examples: string[] } = await (await fetch("/api/providers")).json();
+  const p: { openrouter: boolean; groq: boolean; tts: string; examples: string[] } = await (await fetch("/api/providers")).json();
+  tts.value = p.tts;
   replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
   $<HTMLParagraphElement>("keys").innerHTML =
     `OpenRouter ${p.openrouter ? "connected" : "not set"} · Groq ${p.groq ? "connected" : "not set"}` +

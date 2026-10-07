@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "dist", "types": ["node"], "lib": ["ES2022", "DOM", "DOM.Iterable"] },
   "include": ["src"],
-  "references": [{ "path": "../../packages/compiler" }, { "path": "../../packages/engine" }, { "path": "../../packages/ir" }, { "path": "../../packages/timeline" }, { "path": "../../packages/tts" }]
+  "references": [{ "path": "../../packages/compiler" }, { "path": "../../packages/engine" }, { "path": "../../packages/ir" }, { "path": "../../packages/timeline" }, { "path": "../../packages/tts" }, { "path": "../../packages/tts-kokoro" }]
 }

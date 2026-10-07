@@ -1,0 +1,20 @@
+{
+  "name": "@anim/tts-kokoro",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@anim/tts": "workspace:*",
+    "@huggingface/transformers": "^4.3.0",
+    "kokoro-js": "^1.2.1",
+    "phonemizer": "^1.2.1"
+  }
+}

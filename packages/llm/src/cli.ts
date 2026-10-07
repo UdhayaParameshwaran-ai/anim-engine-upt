@@ -8,7 +8,7 @@ import { generate } from "./generate.js";
 
 /**
  *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|groq[,..]] [--model=<id>]
- *            [--single] [--scenes=2-4] [--render] [--verbose]
+ *            [--single] [--scenes=2-4] [--render [--voice=kokoro|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -55,9 +55,9 @@ console.error(
 if (!result.ok) process.exit(1);
 
 if (args.includes("--render")) {
-  const { prepare, renderVideo } = await import("@anim/render");
+  const { prepare, renderVideo, voiceProvider } = await import("@anim/render");
   const mp4 = out.replace(/\.[^.]+$/, "") + ".mp4";
-  const data = await prepare(result.script);
+  const data = await prepare(result.script, { provider: voiceProvider(value("voice")) });
   const r = await renderVideo(data, { out: mp4 });
   console.error(`rendered ${mp4}: ${r.duration.toFixed(1)}s in ${r.seconds.toFixed(1)}s`);
 }

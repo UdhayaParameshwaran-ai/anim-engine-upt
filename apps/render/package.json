@@ -5,13 +5,19 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "dependencies": {
     "@anim/compiler": "workspace:*",
     "@anim/engine": "workspace:*",
     "@anim/ir": "workspace:*",
     "@anim/timeline": "workspace:*",
     "@anim/tts": "workspace:*",
+    "@anim/tts-kokoro": "workspace:*",
     "ffmpeg-static": "^5.2.0",
     "playwright-core": "^1.50.0"
   }

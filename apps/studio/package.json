@@ -13,6 +13,7 @@
     "@anim/llm": "workspace:*",
     "@anim/registry": "workspace:*",
     "@anim/timeline": "workspace:*",
-    "@anim/tts": "workspace:*"
+    "@anim/tts": "workspace:*",
+    "@anim/tts-kokoro": "workspace:*"
   }
 }
