@@ -15,12 +15,15 @@ describe("gallery", () => {
     expect(all(groups[5]!).length).toBe(COMPOSE_PATTERNS.length);
   });
 
-  it("only shows examples that compile without errors or fixes", () => {
+  it("only shows examples that compile without any diagnostics", () => {
     const problems: string[] = [];
+    // Not even warnings: a tile shows the layout at its best (no shrinking, no overflow).
+    // "Most allowed" items is the stress setting: errors still fail, crowding warnings are expected.
+    const max = new Set(all(groups[2]!));
     for (const g of groups)
       for (const c of all(g)) {
         const r = compile(c.script);
-        const bad = r.diagnostics.filter((d) => d.severity === "error" || d.fixed);
+        const bad = max.has(c) ? r.diagnostics.filter((d) => d.severity === "error" || d.fixed) : r.diagnostics;
         if (!r.ok || bad.length) problems.push(`${g.id}/${c.id}: ${bad.map((d) => `${d.code} ${d.message}`).join("; ") || "failed"}`);
       }
     expect(problems).toEqual([]);

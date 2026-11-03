@@ -466,6 +466,14 @@ class Validator {
       }
       if (free.length > items.max) this.error(C.TemplateSlot, `template \`${tpl.name}\` holds at most ${items.max} items (got ${free.length}); split the scene`, scene.span);
       else if (free.length < items.min) this.warn(C.TemplateSlot, `template \`${tpl.name}\` expects at least ${items.min} items (got ${free.length})`, scene.span);
+      if (tpl.name === "process") {
+        // Declaration order says which side an item is on: inputs before `process`, outputs after.
+        const at = own.findIndex((e) => e.id === "process");
+        const before = free.filter((e) => own.indexOf(e) < at).length;
+        if (at >= 0 && free.length >= 2 && (before === 0 || before === free.length)) {
+          this.warn(C.TemplateSlot, "declare inputs before `process` and outputs after it; the items were split in half", scene.span);
+        }
+      }
     } else {
       for (const e of free) this.warn(C.OutsideTemplate, `\`${e.id}\` doesn't fill a slot of \`${tpl.name}\` (slots: ${[...slotNames].join(", ")}); give it a placement`, e.span);
     }

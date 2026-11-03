@@ -165,7 +165,11 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 | `grid` | `auto` `feature` (one large item, the rest beside it) `strip` |
 | `spotlight` | `center` `left` `right` |
 | `flow` | `auto` `down` `across` |
+| `converge` | `left` (inputs stacked left, result right) `top` `around` |
+| `diverge` | `right` (source left, outputs stacked right) `bottom` `around` |
+| `process` | `across` (inputs → process → outputs) `down` `equation` (one line: `A + B → [process] → C + D`) |
 
+- **Flow shapes.** `converge` fills its `result` slot and places the inputs; `diverge` fills `source` and places the outputs; in `process`, items declared before the `process` element are inputs and items after it are outputs (if one side is empty they are split in half, with a warning). The template only places the parts: declare the arrows yourself (`a1 = arrow sun->result`) and draw them on cues.
 - `variant=auto` picks one from the scene id, so it is stable for that scene.
 - `emphasis=first|last|<id>` gives that element more room (the larger side of `compare`, the hero of `grid variant=feature`).
 - `density=airy|normal|tight` changes spacing and how much of its cell each element fills.

@@ -170,6 +170,10 @@ const BASE_TEMPLATES: readonly TemplateManifest[] = [
   { name: "hub", version: 1, summary: "central idea with spokes", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: true }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 8 }, variants: ["ring", "sides"] },
   { name: "grid", version: 1, summary: "cards in a grid", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 9 }, variants: ["auto", "feature", "strip"] },
   { name: "spotlight", version: 1, summary: "one large visual with labels around it", slots: [{ name: "main", accepts: [...VISUAL], required: true }], items: { accepts: ["label", "text"], min: 0, max: 6 }, variants: ["center", "left", "right"] },
+  // Flow shapes: the template places the parts; declared arrows (a1 = arrow sun->leaf) connect them.
+  { name: "converge", version: 1, summary: "several inputs flow into one result (declare arrows input->result)", slots: [{ name: "result", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 5 }, variants: ["left", "top", "around"] },
+  { name: "diverge", version: 1, summary: "one source produces several outputs (declare arrows source->output)", slots: [{ name: "source", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 5 }, variants: ["right", "bottom", "around"] },
+  { name: "process", version: 1, summary: "inputs go through a process and come out as outputs: declare inputs, then process, then outputs (arrows in->process->out)", slots: [{ name: "process", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 8 }, variants: ["across", "down", "equation"] },
 ];
 
 /** Component (element kind) manifest: `icon`, `text`, `arrow`, `chart`, ... */

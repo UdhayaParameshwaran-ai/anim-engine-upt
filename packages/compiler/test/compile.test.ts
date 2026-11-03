@@ -87,6 +87,65 @@ describe("layout", () => {
   });
 });
 
+describe("flow templates", () => {
+  const right = (b: Box) => b.x + b.w;
+  const bottom = (b: Box) => b.y + b.h;
+  const scene = (attrs: string, body: string) => {
+    const ids = body.split("\n").map((l) => l.split(" = ")[0]!.trim());
+    return `video 1 "x"\nscene s "S" ${attrs}\n${body}\n> Go {1}now.\n1 fade ${ids.join(",")}\n`;
+  };
+  const flow = (attrs: string, decl: string[]) => {
+    const v = ir(scene(attrs, decl.join("\n")));
+    return (id: string) => el(v, "s", id).box;
+  };
+  const three = ['a = icon:sun "A"', 'b = icon:droplet "B"', 'c = icon:wind "C"'];
+
+  it("converge: inputs on one side or around, the result opposite", () => {
+    let box = flow("template=converge variant=left", [...three, 'result = asset:leaf "Leaf"', "x = arrow a->result"]);
+    for (const id of ["a", "b", "c"]) expect(right(box(id))).toBeLessThan(box("result").x);
+    expect(cy(box("a"))).toBeLessThan(cy(box("b")));
+    box = flow("template=converge variant=top", [...three, 'result = asset:leaf "Leaf"']);
+    for (const id of ["a", "b", "c"]) expect(bottom(box(id))).toBeLessThan(box("result").y);
+    box = flow("template=converge variant=around", [...three, 'result = asset:leaf "Leaf"']);
+    const r = box("result");
+    for (const id of ["a", "b", "c"]) expect(Math.hypot(cx(box(id)) - cx(r), cy(box(id)) - cy(r))).toBeGreaterThan(r.w / 2);
+  });
+
+  it("diverge: the source first, outputs after it", () => {
+    let box = flow("template=diverge variant=right", ['source = icon:bolt "Power"', ...three]);
+    for (const id of ["a", "b", "c"]) expect(box(id).x).toBeGreaterThan(right(box("source")));
+    box = flow("template=diverge variant=bottom", ['source = icon:bolt "Power"', ...three]);
+    for (const id of ["a", "b", "c"]) expect(box(id).y).toBeGreaterThan(bottom(box("source")));
+  });
+
+  it("process: items declared before it are inputs, after it outputs", () => {
+    const decl = ['a = icon:sun "A"', 'b = icon:droplet "B"', 'process = asset:leaf "P"', 'c = icon:cube "C"', "x = arrow a->process", "y = arrow process->c"];
+    let box = flow("template=process variant=across", decl);
+    for (const id of ["a", "b"]) expect(right(box(id))).toBeLessThan(box("process").x);
+    expect(box("c").x).toBeGreaterThan(right(box("process")));
+    box = flow("template=process variant=down", decl);
+    for (const id of ["a", "b"]) expect(bottom(box(id))).toBeLessThan(box("process").y);
+    expect(box("c").y).toBeGreaterThan(bottom(box("process")));
+    box = flow("template=process variant=equation", decl);
+    expect(right(box("b"))).toBeLessThan(box("process").x);
+    expect(box("c").x).toBeGreaterThan(right(box("process")));
+    expect(Math.abs(cy(box("a")) - cy(box("c")))).toBeLessThan(2); // one line
+  });
+
+  it("process: warns when every item is on one side, and splits them in half", () => {
+    const r = compile(scene("template=process variant=across", ['process = asset:leaf "P"', ...three].join("\n")));
+    expect(r.diagnostics.map((d) => d.message)).toContain("declare inputs before `process` and outputs after it; the items were split in half");
+    const box = (id: string) => el(r.ir!, "s", id).box;
+    expect(right(box("a"))).toBeLessThan(box("process").x);
+    expect(box("c").x).toBeGreaterThan(right(box("process")));
+  });
+
+  it("the photosynthesis example uses them without diagnostics", () => {
+    const v = ir(example("photosynthesis-templates.txt"));
+    expect(v.scenes.map((sc) => sc.id)).toEqual(["need", "make", "uses"]);
+  });
+});
+
 describe("lowering", () => {
   it("fills defaults and resolves components with a lockfile", () => {
     const v = ir(example("photosynthesis.txt"));

@@ -1,0 +1,66 @@
+video 1 "How Photosynthesis Works"
+theme chalk
+
+scene need "What a plant needs" template=converge variant=left in=fade
+title  = title "What a plant needs"
+sun    = icon:sun "Sunlight"
+water  = icon:droplet "Water"
+co2    = text "CO₂"
+result = asset:leaf "Leaf"
+a1     = arrow sun->result
+a2     = arrow water->result
+a3     = arrow co2->result
+
+> Every plant needs three ingredients: {1}sunlight, {2}water, and {3}carbon dioxide.
+start write title
+1 pop sun
+2 pop water
+3 write co2
+> All three flow into the {1 leaf}.
+1 draw result
+1 draw a1,a2,a3 /0.15
+end pulse result
+
+scene make "Inside the leaf" template=process variant=across
+title   = title "Inside the leaf"
+light   = icon:sun "Light"
+h2o     = icon:droplet "Water"
+air     = icon:wind "CO₂"
+process = asset:leaf "Chloroplast"
+sugar   = icon:cube "Glucose"
+oxygen  = icon:wind "Oxygen"
+i1 = arrow light->process
+i2 = arrow h2o->process
+i3 = arrow air->process
+o1 = arrow process->sugar
+o2 = arrow process->oxygen
+
+> Inside each leaf, tiny {1 chloroplasts} do the work.
+start write title
+1 draw process
+> They take in {1}light, {2}water and {3}carbon dioxide,
+1 pop light then draw i1
+2 pop h2o then draw i2
+3 pop air then draw i3
+> and turn them into {1}sugar and {2}oxygen.
+1 draw o1 then pop sugar
+2 draw o2 then pop oxygen
+end highlight sugar
+
+scene uses "What the sugar becomes" template=diverge variant=right
+title  = title "One sugar, many uses"
+source = icon:cube "Glucose"
+energy = icon:bolt "Energy"
+growth = asset:tree "Growth"
+store  = icon:database "Storage"
+b1 = arrow source->energy
+b2 = arrow source->growth
+b3 = arrow source->store
+
+> That {1 sugar} is the plant's food.
+start write title
+1 pop source
+> It powers the plant with {1}energy, builds new {2}growth, and is {3}stored for later.
+1 draw b1 then pop energy
+2 draw b2 then pop growth
+3 draw b3 then pop store

@@ -392,6 +392,54 @@ class SceneLayouter {
       }
       case "flow":
         return this.flow(pool, content, variant);
+      case "converge":
+      case "diverge": {
+        // The narrow middle cell stays empty: it is where the arrows run.
+        const hub = slot(tpl.name === "converge" ? "result" : "source");
+        const into = tpl.name === "converge";
+        if (variant === "around") return this.orbit(items, content, hub);
+        if (variant === "top" || variant === "bottom") {
+          const [a, , b] = colCells(content, 3, this.gap, into ? [1, 0.35, 1.4] : [1.4, 0.35, 1]);
+          const [many, one] = into ? [a!, b!] : [b!, a!];
+          if (hub) this.put(hub, one, 0.85);
+          return items.forEach((e, i) => this.put(e, rowCells(many, items.length, this.gap)[i]!));
+        }
+        const [a, , b] = rowCells(content, 3, this.gap, into ? [1, 0.45, 1.3] : [1.3, 0.45, 1]);
+        const [many, one] = into ? [a!, b!] : [b!, a!];
+        if (hub) this.put(hub, one, 0.85);
+        return items.forEach((e, i) => this.put(e, colCells(many, items.length, this.gap)[i]!));
+      }
+      case "process": {
+        // Inputs are the items declared before `process`, outputs the ones after (half and half if one side is empty).
+        const proc = slot("process");
+        const at = proc ? this.els.indexOf(proc) : -1;
+        let inputs = items.filter((e) => this.els.indexOf(e) < at);
+        let outputs = items.filter((e) => this.els.indexOf(e) > at);
+        if (!inputs.length || !outputs.length) {
+          const half = Math.ceil(items.length / 2);
+          inputs = items.slice(0, half);
+          outputs = items.slice(half);
+        }
+        if (variant === "equation") {
+          // One line: in + in → [process] → out + out, on a middle band.
+          const band = { x: content.x, y: content.y + content.h * 0.22, w: content.w, h: content.h * 0.56 };
+          const weights = [...inputs.map(() => 1), 0.4, 1.5, 0.4, ...outputs.map(() => 1)];
+          const cells = rowCells(band, weights.length, this.gap * 0.6, weights);
+          inputs.forEach((e, i) => this.put(e, cells[i]!));
+          if (proc) this.put(proc, cells[inputs.length + 1]!, 0.9);
+          outputs.forEach((e, i) => this.put(e, cells[inputs.length + 3 + i]!));
+          return;
+        }
+        // Three bands with wide gaps between them for the arrows (a 16:9 frame has little height to spare going down).
+        const down = variant === "down";
+        const parts = down ? colCells(content, 3, this.gap * 2.4, [1, 1.5, 1]) : rowCells(content, 5, this.gap, [1, 0.35, 1.25, 0.35, 1]);
+        const [first, mid, last] = down ? [parts[0]!, parts[1]!, parts[2]!] : [parts[0]!, parts[2]!, parts[4]!];
+        const side = (list: ElementDecl[], cell: Box) => list.forEach((e, i) => this.put(e, (down ? rowCells : colCells)(cell, list.length, this.gap)[i]!));
+        side(inputs, first);
+        if (proc) this.put(proc, mid, 0.9);
+        side(outputs, last);
+        return;
+      }
       default:
         return this.layout("row", items, content);
     }
@@ -457,6 +505,27 @@ class SceneLayouter {
   }
 
   /** Items evenly on a circle (clockwise from the top), optional center element. */
+  /**
+   * Items on an ellipse that uses the frame's full width, around a central
+   * element sized to leave room for the arrows between them.
+   */
+  private orbit(items: ElementDecl[], area: Box, mid?: ElementDecl): void {
+    const cx = area.x + area.w / 2;
+    const cy = area.y + area.h / 2;
+    const n = Math.max(1, items.length);
+    const cell = Math.min(220, area.h * 0.28);
+    const rx = Math.min(area.w * 0.36, area.w / 2 - cell / 2);
+    const ry = area.h / 2 - cell / 2;
+    items.forEach((e, i) => {
+      const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      this.put(e, { x: cx + rx * Math.cos(a) - cell / 2, y: cy + ry * Math.sin(a) - cell / 2, w: cell, h: cell }, 1);
+    });
+    if (mid) {
+      const m = Math.min(area.h * 0.3, rx * 0.5);
+      this.put(mid, { x: cx - m / 2, y: cy - m / 2, w: m, h: m }, 0.9);
+    }
+  }
+
   private ring(items: ElementDecl[], area: Box, mid?: ElementDecl): void {
     const cx = area.x + area.w / 2;
     const cy = area.y + area.h / 2;

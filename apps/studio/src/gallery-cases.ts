@@ -28,6 +28,10 @@ const ITEMS: Record<string, [string, string][]> = {
   timeline: [["box", "1796 · First vaccine"], ["box", "1885 · Rabies"], ["box", "1955 · Polio"], ["box", "1980 · Smallpox gone"], ["box", "2020 · mRNA"], ["box", "2030 · Next"], ["box", "2040 · Future"]],
   hub: [["icon:server", "Servers"], ["icon:database", "Data"], ["icon:user", "Users"], ["icon:gear", "Settings"], ["icon:clock", "Uptime"], ["icon:check", "Checks"], ["icon:bolt", "Speed"], ["icon:heart", "Health"]],
   grid: [["icon:sun", "Solar"], ["icon:wind", "Wind"], ["icon:droplet", "Hydro"], ["icon:flame", "Gas"], ["icon:bolt", "Grid"], ["icon:cube", "Storage"], ["asset:tree", "Biomass"], ["asset:earth", "Global"], ["icon:lightbulb", "Ideas"]],
+  converge: [["icon:sun", "Sunlight"], ["icon:droplet", "Water"], ["icon:wind", "CO₂"], ["icon:bolt", "Minerals"], ["icon:clock", "Time"]],
+  diverge: [["icon:lightbulb", "Light"], ["icon:flame", "Heat"], ["icon:gear", "Motion"], ["icon:server", "Computing"], ["icon:wind", "Cooling"]],
+  // process: the first half are inputs (declared before the process), the rest outputs.
+  process: [["icon:sun", "Light"], ["icon:droplet", "Water"], ["icon:wind", "CO₂"], ["icon:bolt", "Minerals"], ["icon:cube", "Glucose"], ["icon:wind", "Oxygen"], ["icon:droplet", "Vapour"], ["icon:flame", "Heat"]],
   spotlight: [["label", "Left atrium"], ["label", "Right atrium"], ["label", "Left ventricle"], ["label", "Right ventricle"], ["label", "Valve"], ["label", "Aorta"]],
 };
 
@@ -53,7 +57,7 @@ function slotsNote(t: TemplateManifest): string {
 
 function itemCount(t: TemplateManifest, density: Density): number {
   if (!t.items) return 0;
-  const typical = { title: 2, steps: 4, cycle: 4, timeline: 4, hub: 5, grid: 6, spotlight: 4 }[t.name] ?? Math.round((t.items.min + t.items.max) / 2);
+  const typical = { title: 2, steps: 4, cycle: 4, timeline: 4, hub: 5, grid: 6, spotlight: 4, converge: 3, diverge: 4, process: 5 }[t.name] ?? Math.round((t.items.min + t.items.max) / 2);
   const n = density === "min" ? t.items.min : density === "max" ? t.items.max : typical;
   return Math.max(t.items.min, Math.min(t.items.max, n));
 }
@@ -73,15 +77,39 @@ function templateScript(t: TemplateManifest, variant: string, density: Density):
   if (t.name === "hub") (decl.push(`center = icon:cloud "Cloud app"`), show.push("center"));
   if (t.name === "spotlight") (decl.push(`main = asset:heart.anatomy "Heart"`), show.push("main"));
   const pool = ITEMS[t.name] ?? [];
-  for (let i = 0; i < itemCount(t, density); i++) {
+  const n = itemCount(t, density);
+  const ids = Array.from({ length: n }, (_, i) => `i${i + 1}`);
+  // process: inputs, then the process, then outputs, joined by arrows through the process.
+  if (t.name === "process") {
+    const ins = Math.ceil(n / 2);
+    const inputs = ids.slice(0, ins);
+    const outputs = ids.slice(ins);
+    inputs.forEach((id, i) => decl.push(`${id} = ${pool[i]![0]} "${pool[i]![1]}"`));
+    decl.push(`process = asset:leaf "Photosynthesis"`);
+    outputs.forEach((id, i) => decl.push(`${id} = ${pool[4 + i]![0]} "${pool[4 + i]![1]}"`));
+    const arrows = [...inputs.map((id, i) => `p${i + 1} = arrow ${id}->process`), ...outputs.map((id, i) => `q${i + 1} = arrow process->${id}`)];
+    decl.push(...arrows);
+    show.push(...inputs, "process", ...outputs, ...arrows.map((a) => a.split(" ")[0]!));
+    return scene(`template=process variant=${variant}`, decl, show);
+  }
+  ids.forEach((id, i) => {
     const [kind, label] = pool[i % pool.length]!;
-    decl.push(`i${i + 1} = ${kind} "${label}"`);
-    show.push(`i${i + 1}`);
+    decl.push(`${id} = ${kind} "${label}"`);
+    show.push(id);
+  });
+  // converge / diverge: one arrow per item, into or out of the hub.
+  if (t.name === "converge" || t.name === "diverge") {
+    const hub = t.name === "converge" ? "result" : "source";
+    decl.push(t.name === "converge" ? `result = asset:leaf "Leaf"` : `source = icon:bolt "Electricity"`);
+    show.splice(1, 0, hub);
+    const arrows = ids.map((id, i) => (t.name === "converge" ? `a${i + 1} = arrow ${id}->result` : `a${i + 1} = arrow source->${id}`));
+    decl.push(...arrows);
+    show.push(...arrows.map((a) => a.split(" ")[0]!));
   }
   return scene(`template=${t.name} variant=${variant}`, decl, show);
 }
 
-const TITLES: Record<string, string> = { compare: "Plant vs Animal Cells", steps: "The Water Cycle", timeline: "A Short History of Vaccines", grid: "Energy Sources", hub: "What Runs a Cloud App" };
+const TITLES: Record<string, string> = { converge: "What a Plant Needs", diverge: "What Electricity Does", process: "Inside the Leaf", compare: "Plant vs Animal Cells", steps: "The Water Cycle", timeline: "A Short History of Vaccines", grid: "Energy Sources", hub: "What Runs a Cloud App" };
 
 function flowScript(variant: string, density: Density): string {
   const nodes = density === "min" ? 3 : density === "max" ? 8 : 5;
