@@ -1,7 +1,6 @@
 import type { Box, Prop, ResolvedScene, ResolvedTimeline, SceneIR, Tween, VideoIR } from "@anim/ir";
 import { createEvaluator, EASES, type FrameState, type Value } from "@anim/timeline";
 import { build, paintFills, round, svg, SVG_NS, type Instance } from "./components.js";
-import { buildBackground, type Background } from "./background.js";
 import { fontFace, fontFaceCss } from "./fonts.js";
 import { color, getTheme, type Theme } from "./theme.js";
 
@@ -72,7 +71,6 @@ export class Stage {
   private readonly height: number;
   private time = 0;
   private resizer: ResizeObserver | undefined;
-  private readonly background: Background;
   /** Unique per stage, so two stages on one page don't share filter ids. */
   private readonly markId = `anim-mark-${++stageCount}`;
 
@@ -100,11 +98,6 @@ export class Stage {
     const fonts = doc.createElement("style");
     fonts.textContent = fontFaceCss(this.theme.faces, opts.fontBase ?? "/fonts/");
     this.root.append(fonts);
-
-    // Behind every scene and outside the camera: backgrounds don't zoom with focus.
-    const bg = ir.background ?? { kinds: ["auto"], seed: 0 };
-    this.background = buildBackground(doc, bg.kinds, bg.seed, this.theme, this.width, this.height, `${this.markId}-bg`);
-    this.root.append(this.background.node);
 
     this.svgRoot = svg(doc, "svg", { viewBox: `0 0 ${this.width} ${this.height}`, width: this.width, height: this.height }) as SVGSVGElement;
     this.svgRoot.style.cssText = SVG_ROOT_BASE;
@@ -186,8 +179,7 @@ export class Stage {
   render(t: number): void {
     this.time = Math.min(Math.max(t, 0), this.duration);
     const state = this.evaluator.at(this.time);
-    this.background.update(this.time);
-    // Clip transitions (wipe, iris) act on the active scene's layers, never the background.
+    // Clip transitions (wipe, iris) act on the active scene's layers, never the stage color behind them.
     let clip = "";
     const last = this.scenes[this.scenes.length - 1];
     for (const view of this.scenes) {

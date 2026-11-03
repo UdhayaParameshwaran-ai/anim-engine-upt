@@ -61,7 +61,7 @@ console.error(`trace: ${traceFile}`);
 if (director && result.ok) {
   await store.add("cli", director.entry());
   const c = director.choice;
-  console.error(`style: ${c.theme} · ${c.motion} · bg ${c.bg} (mood: ${c.mood})`);
+  console.error(`style: ${c.theme} · ${c.motion} (mood: ${c.mood})`);
 }
 if (result.diagnostics.length) console.error(report(result.diagnostics));
 console.error(

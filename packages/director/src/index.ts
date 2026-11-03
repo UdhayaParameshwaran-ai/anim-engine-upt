@@ -1,12 +1,12 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse, print, printScene, type Script } from "@anim/dsl";
-import { BACKGROUNDS, findTemplate, MOTIONS, THEMES } from "@anim/registry";
+import { findTemplate, MOTIONS, THEMES } from "@anim/registry";
 
 /**
  * The style director: gives every video its own look without touching its
- * content. From the topic's mood it picks a look, a motion personality and
- * a background that suit each other, then varies scene arrangements
+ * content. From the topic's mood it picks a look and a motion personality
+ * that suit each other, then varies scene arrangements
  * (template variants, mirrored grid pages). A per-user history makes recent
  * choices less likely, so someone generating many videos keeps getting new
  * ones. Everything is seeded: the same topic and history give the same
@@ -16,7 +16,6 @@ import { BACKGROUNDS, findTemplate, MOTIONS, THEMES } from "@anim/registry";
 export interface StyleChoice {
   theme: string;
   motion: string;
-  bg: string;
   /** Scene id → layout attributes the director set. */
   scenes: Record<string, Record<string, string>>;
   mood: string;
@@ -34,7 +33,7 @@ export interface DirectOptions {
   /** Past videos of this user, newest last. */
   history?: HistoryEntry[];
   /** Choices the user fixed (brand kit, "make it playful"); never changed. */
-  lock?: Partial<Pick<StyleChoice, "theme" | "motion" | "bg">>;
+  lock?: Partial<Pick<StyleChoice, "theme" | "motion">>;
   /** Keep a look/motion the script already names unless it was used recently. Default true. */
   respectScript?: boolean;
 }
@@ -75,23 +74,6 @@ const PAIRS: Record<string, Weights> = {
   editorial: { minimal: 1.6, corporate: 1.5, playful: 0.4 },
   light: { corporate: 1.7, minimal: 1.4, dramatic: 0.6 },
   blueprint: { corporate: 1.4, energetic: 1.3, playful: 0.6 },
-};
-
-/** Backgrounds that suit a look besides its own ("auto"). */
-const LOOK_BGS: Record<string, string[]> = {
-  dark: ["aurora", "mesh", "gradient+grain", "grid"],
-  "tech-neon": ["grid", "aurora", "dots", "waves"],
-  "midnight-luxe": ["aurora", "grain", "mesh"],
-  blueprint: ["dots"],
-  chalk: ["grain", "grid"],
-  paper: ["grain", "dots", "notebook", "waves"],
-  light: ["mesh", "dots", "waves", "gradient"],
-  "soft-pastel": ["waves", "dots", "gradient"],
-  magazine: ["gradient+grain", "dots"],
-  "bold-pop": ["dots", "waves", "mesh"],
-  crayon: ["dots", "grain"],
-  "neo-brutal": ["grid", "shapes", "solid"],
-  editorial: ["solid"],
 };
 
 /** Mulberry32. */
@@ -160,7 +142,7 @@ export class Director {
   private readonly mood: Mood;
   private readonly recentLayouts: string[];
   private last = "";
-  private style?: Pick<StyleChoice, "theme" | "motion" | "bg">;
+  private style?: Pick<StyleChoice, "theme" | "motion">;
   private readonly scenes: StyleChoice["scenes"] = {};
   private readonly layouts: string[] = [];
 
@@ -171,7 +153,7 @@ export class Director {
     this.recentLayouts = this.history.slice(-3).flatMap((h) => h.layouts);
   }
 
-  /** Picks look, motion and background and writes them into the header (any scenes in `source` are kept). */
+  /** Picks look and motion and writes them into the header (any scenes in `source` are kept). */
   header(source: string): string {
     const { script } = parse(source);
     const setting = (key: string) => script.settings.find((x) => x.key === key)?.args[0];
@@ -198,20 +180,11 @@ export class Director {
       motion = pick(w, rand);
     }
 
-    // Background: mostly the look's own; sometimes a fitting alternative, avoiding recent ones.
-    let bg = opts.lock?.bg ?? setting("bg");
-    if (!bg) {
-      const w: Weights = { auto: 2.5 };
-      for (const k of LOOK_BGS[theme] ?? []) w[k] = 1;
-      for (const k of Object.keys(w)) w[k]! *= novelty((h) => h.theme === theme && h.bg === k, history);
-      bg = pick(w, rand);
-    }
-    if (!bg.split("+").every((k) => BACKGROUNDS.some((x) => x.name === k))) bg = "auto";
-
-    this.style = { theme, motion, bg };
+    this.style = { theme, motion };
     setSetting(script, "theme", theme);
     setSetting(script, "motion", motion);
-    if (bg !== "auto") setSetting(script, "bg", bg);
+    // Backgrounds aren't a feature; a stray `bg` line from the LLM is dropped here rather than warned about.
+    script.settings = script.settings.filter((x) => x.key !== "bg");
     for (const scene of script.scenes) this.arrange(scene);
     return print(script);
   }
@@ -264,7 +237,7 @@ export class Director {
   }
 }
 
-/** Chooses look, motion, background and scene arrangements for a whole script. */
+/** Chooses look, motion and scene arrangements for a whole script. */
 export function direct(source: string, opts: DirectOptions): { script: string; choice: StyleChoice; entry: HistoryEntry } {
   const d = new Director(opts);
   const script = d.header(source);
@@ -286,7 +259,7 @@ export function historyEntry(choice: StyleChoice, source: string): HistoryEntry 
     if (s.attrs.grid) return [`${s.attrs.grid}${s.attrs.mirror === "true" ? ":mirror" : ""}`];
     return [];
   });
-  return { theme: choice.theme, motion: choice.motion, bg: choice.bg, layouts, at: Date.now() };
+  return { theme: choice.theme, motion: choice.motion, layouts, at: Date.now() };
 }
 
 /** Per-user style history in a JSON file (`{ user: HistoryEntry[] }`), capped at the last 30 videos. */

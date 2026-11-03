@@ -9,7 +9,6 @@ import {
   slotRects,
   SLOTS,
   TEMPLATES,
-  BACKGROUNDS,
   COMPOSE_PATTERNS,
   MOTIONS,
   THEME_SUMMARIES,
@@ -237,7 +236,6 @@ theme <look>:
 ${looks}
 motion <personality>:
 ${motions}
-bg <kind>[+<kind>] (optional; default is the look's own): ${BACKGROUNDS.filter((b) => b.name !== "auto").map((b) => b.name).join(" ")}
 Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS.filter((t) => t !== "auto").join("|")}`;
 }
 

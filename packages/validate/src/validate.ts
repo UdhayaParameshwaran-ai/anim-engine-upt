@@ -1,7 +1,6 @@
 import type { Action, Beat, Diagnostic, ElementDecl, Place, Scene, Script, Setting, Span, SpeechBeat, Step, VerbCall } from "@anim/dsl";
 import {
   AssetLibrary,
-  BACKGROUNDS,
   CHART_TYPES,
   COMPONENTS,
   COMPOSE_PATTERNS,
@@ -184,23 +183,10 @@ class Validator {
           });
           break;
         }
-        case "bg": {
-          // `bg <kind>[+<kind>…] [seed=<n>]`: unknown kinds go to the closest one, or are dropped.
-          const names: readonly string[] = BACKGROUNDS.map((b) => b.name);
-          const kindArg = s.args.find((a) => !a.includes("="));
-          const kinds = (kindArg ?? "").split("+").filter(Boolean);
-          const fixed = kinds.map((k) => (names.includes(k) ? k : closest(k, names))).filter((k): k is string => !!k);
-          if (!kinds.length || fixed.length !== kinds.length || fixed.some((k, i) => k !== kinds[i])) {
-            this.warn(C.BadSetting, `unknown background \`${kindArg ?? ""}\` (backgrounds: ${names.join(", ")})`, s.span, {
-              desc: fixed.length ? `used \`${fixed.join("+")}\`` : "removed; the look's background applies",
-              apply: () => (fixed.length ? (s.args = [fixed.join("+"), ...s.args.filter((a) => a.includes("="))]) : remove(settings, s)),
-            });
-          }
-          for (const a of s.args.filter((x) => x.includes("="))) {
-            if (!/^seed=\d+$/.test(a)) this.warn(C.BadSetting, `bg takes only \`seed=<whole number>\`, not \`${a}\``, s.span, { desc: "ignored", apply: () => (s.args = s.args.filter((x) => x !== a)) });
-          }
+        case "bg":
+          // Backgrounds were removed (every video is on a white board); older scripts still compile.
+          this.warn(C.BadSetting, "backgrounds are not supported; videos draw on a white board", s.span, drop(settings, s, "removed the bg setting"));
           break;
-        }
         case "lang":
           if (!arg || !/^[a-z]{2}(-[A-Z]{2})?$/.test(arg)) {
             this.warn(C.BadSetting, "lang must look like `en` or `en-US`", s.span, drop(settings, s, "removed the lang setting"));

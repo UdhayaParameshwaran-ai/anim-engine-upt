@@ -19,7 +19,7 @@ export interface GenerateOptions {
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
   qualityRepairs?: boolean;
   /**
-   * Styles the video (look, motion, background, scene arrangements) as it streams,
+   * Styles the video (look, motion, scene arrangements) as it streams,
    * remembering what this user saw before. Without one, the LLM's own style lines stay.
    */
   director?: Director;

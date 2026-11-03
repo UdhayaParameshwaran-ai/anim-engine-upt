@@ -58,7 +58,7 @@ function defaultTts(): Tts["name"] {
 function ttsOf(url: URL): Tts {
   const name = url.searchParams.get("tts");
   const style: Record<string, string> = {};
-  for (const key of ["theme", "motion", "bg"]) {
+  for (const key of ["theme", "motion"]) {
     const v = url.searchParams.get(key);
     if (v) style[key] = v;
   }
@@ -98,12 +98,11 @@ async function build(server: ViteDevServer, source: string, tts: Tts) {
 }
 
 async function providers(server: ViteDevServer) {
-  const { THEMES, THEME_SUMMARIES, MOTIONS, BACKGROUNDS } = await server.ssrLoadModule("@anim/registry");
+  const { THEMES, THEME_SUMMARIES, MOTIONS } = await server.ssrLoadModule("@anim/registry");
   const { configuredProviders } = await server.ssrLoadModule("@anim/llm");
   return {
     themes: THEMES.map((name: keyof typeof THEME_SUMMARIES) => ({ name, summary: THEME_SUMMARIES[name] })),
     motions: MOTIONS.map((m: { name: string; summary: string }) => ({ name: m.name, summary: m.summary })),
-    backgrounds: BACKGROUNDS.filter((b: { name: string }) => b.name !== "auto"),
     llm: configuredProviders(process.env),
     tts: defaultTts(),
     examples: readdirSync(examples).filter((f) => f.endsWith(".txt")),
@@ -143,13 +142,13 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     send("log", `generating with ${client.name} (${mode})`);
 
     // The style director gives each video a fresh look, remembering what this Studio user already saw.
-    // Look/Motion/Background picks in the Script tab act as locks.
+    // Look/Motion picks in the Script tab act as locks.
     const { Director, StyleHistory } = await server.ssrLoadModule("@anim/director");
     const store = new StyleHistory(join(repo, ".cache", "style-history.json"));
     const director = url.searchParams.get("style") === "llm" ? undefined : new Director({ topic: topic || "replay", history: await store.get("studio"), lock: tts.style });
     const styleLine = () => {
       const c = director!.choice;
-      return `style: ${c.theme} · ${c.motion} · bg ${c.bg} (mood: ${c.mood})`;
+      return `style: ${c.theme} · ${c.motion} (mood: ${c.mood})`;
     };
 
     const scenes: string[] = [];

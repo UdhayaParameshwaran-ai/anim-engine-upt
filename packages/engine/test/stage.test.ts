@@ -6,7 +6,7 @@ import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { resolve } from "@anim/timeline";
 import { MockTtsProvider, speakVideo } from "@anim/tts";
 import { beforeEach, describe, expect, it } from "vitest";
-import { BACKGROUND_KINDS, exposeForRender, fontFace, Player, Stage, THEMES } from "../src/index.js";
+import { exposeForRender, fontFace, Player, Stage, THEMES } from "../src/index.js";
 import { countUp } from "../src/widgets.js";
 
 const EXAMPLES = join(import.meta.dirname, "../../../examples");
@@ -260,23 +260,7 @@ describe("looks", () => {
   });
 });
 
-describe("backgrounds", () => {
-  it("draw every generator deterministically, outside the camera", async () => {
-    const { ir, tl } = await load("vaccines-grid.txt");
-    for (const kind of BACKGROUND_KINDS) {
-      const video = { ...ir, background: { kinds: [kind], seed: 7 } };
-      const html = (t: number) => {
-        const s = new Stage(document.createElement("div"), video, tl, { autoFit: false, theme: "soft-pastel" });
-        s.render(t);
-        return s.root.innerHTML.replace(/anim-mark-\d+/g, "anim-mark");
-      };
-      expect(html(3.3), kind).toBe(html(3.3));
-      const stage = new Stage(container, video, tl, { autoFit: false });
-      expect(stage.root.querySelector("[data-camera]")!.closest("svg")!.previousElementSibling?.tagName.toLowerCase(), kind).toBe("svg");
-      stage.destroy();
-    }
-  });
-
+describe("wipe", () => {
   it("wipe text in with a clip path, never a cover painted in the background color", async () => {
     const { ir, tl } = await load("rulebook-gallery.txt");
     const stage = new Stage(container, ir, tl, { autoFit: false, theme: "soft-pastel" });

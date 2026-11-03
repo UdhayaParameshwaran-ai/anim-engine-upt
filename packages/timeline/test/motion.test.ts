@@ -73,7 +73,7 @@ describe("motion personalities", () => {
   });
 });
 
-describe("scene transitions and backgrounds", () => {
+describe("scene transitions", () => {
   const two = (head: string, attrs = ["", ""]) => `video 1 "Two"\n${head}scene a "A"${attrs[0]}\nlayout row\ns = icon:sun "Sun"\n> The {1}sun.\n1 pop s\nscene b "B"${attrs[1]}\nlayout row\nt = icon:sun "Sun"\n> Again the {1}sun.\n1 pop t\n`;
   const ir = (src: string) => compile(src).ir!;
 
@@ -89,17 +89,11 @@ describe("scene transitions and backgrounds", () => {
     expect(ir(two("motion playful\n", [" out=slide", " in=wipe"])).scenes[0]!.transitionOut).toBe("slide");
   });
 
-  it("seed backgrounds from the title unless a seed is given", () => {
-    const a = ir(two("bg mesh+grain\n"));
-    expect(a.background.kinds).toEqual(["mesh", "grain"]);
-    expect(ir(two("bg mesh+grain\n").replace('"Two"', '"Other"')).background.seed).not.toBe(a.background.seed);
-    expect(ir(two("bg dots seed=42\n")).background).toEqual({ kinds: ["dots"], seed: 42 });
-    expect(ir(two("")).background.kinds).toEqual(["auto"]);
-  });
-
-  it("fix unknown backgrounds", () => {
-    const r = compile(two("bg meshh+grainn seed=3\n"));
-    expect(r.diagnostics.find((d) => d.code === "NAR214")?.fixed).toBe("used `mesh+grain`");
-    expect(r.ir!.background).toEqual({ kinds: ["mesh", "grain"], seed: 3 });
+  it("drop the removed bg setting from older scripts, with a warning", () => {
+    const r = compile(two("bg mesh+grain seed=3\n"));
+    expect(r.ok).toBe(true);
+    expect(r.diagnostics.find((d) => d.code === "NAR214")).toMatchObject({ severity: "warning", fixed: "removed the bg setting" });
+    expect(r.ir).not.toHaveProperty("background");
+    expect(r.script.settings.some((x) => x.key === "bg")).toBe(false);
   });
 });

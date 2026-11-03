@@ -99,7 +99,6 @@ export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diag
       // Grid scenes are designed for the monochrome editorial theme.
       theme: setting(script.settings, "theme")?.[0] ?? (script.scenes.some((s) => s.attrs.grid !== undefined) ? "editorial" : DEFAULTS.theme),
       motion: motion.name,
-      background: background(setting(script.settings, "bg"), script.title),
       voice: setting(script.settings, "voice")?.[0] ?? DEFAULTS.voice,
       lang: setting(script.settings, "lang")?.[0] ?? DEFAULTS.lang,
       scenes,
@@ -209,19 +208,6 @@ function boundaries(scenes: SceneIR[], script: Script, motion: MotionProfile): v
   });
   const last = scenes.at(-1);
   if (last && script.scenes.at(-1)!.attrs.out === undefined) last.transitionOut = "fade";
-}
-
-/** `bg mesh+grain seed=7` → generators and seed; the default seed comes from the title, so videos differ. */
-function background(args: string[] | undefined, title: string | undefined): VideoIR["background"] {
-  const kinds = (args?.find((a) => !a.includes("=")) ?? "auto").split("+").filter(Boolean);
-  const seed = Number(args?.find((a) => a.startsWith("seed="))?.slice(5));
-  return { kinds: kinds.length ? kinds : ["auto"], seed: Number.isInteger(seed) ? seed : hash(title ?? "") };
-}
-
-function hash(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return (h >>> 0) % 100000;
 }
 
 function round2(n: number): number {

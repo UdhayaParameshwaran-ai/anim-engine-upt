@@ -35,7 +35,7 @@ water = icon:droplet
 | `packages/tts` | ✅ interface, mock, aligner, cache | Provider-neutral TTS; any timing granularity → word timings |
 | `packages/tts-kokoro` | ✅ local neural voice | Kokoro-82M (q4f16 ONNX) on the CPU with exact word timings from the model's durations |
 | `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
-| `packages/director` | ✅ style director | Mood → look/motion/background, novelty memory per user, scene arrangements |
+| `packages/director` | ✅ style director | Mood → look/motion, novelty memory per user, scene arrangements |
 | `packages/llm` | ✅ OpenRouter + Groq, generation pipeline | Prompt → outline → scenes → validate → LLM repair → auto-fix |
 | `packages/engine` | ✅ stage, components, player | Browser SVG/HTML engine; stateless `render(t)`, audio-clocked player |
 | `apps/render` | ✅ MP4 exporter | Same engine stepped frame by frame in headless Chrome, parallel H.264 segments + mixed narration |
@@ -93,10 +93,9 @@ Every script can be restyled without touching its content:
 ```
 theme magazine        # 13 looks: palette, bundled fonts, shapes, shadows, emphasis
 motion cinematic      # 7 personalities: how the same verbs move, and which scene transitions
-bg aurora+grain       # optional: procedural, seeded backgrounds (default: the look's own)
 ```
 
-The Studio's Script tab has **Look**, **Motion** and **Background** menus that override the script, so you can flip one script through every combination. The LLM picks a look and a motion to suit each topic. See `docs/dsl-spec.md` §6b.
+The Studio's Script tab has **Look** and **Motion** menus that override the script, so you can flip one script through every combination. The LLM picks a look and a motion to suit each topic. See `docs/dsl-spec.md` §6b.
 
 ## Composition by intent
 
@@ -120,10 +119,10 @@ A variant is a small plugin (`packages/compiler/src/variants/`) that picks a cel
 Someone generating many videos should keep getting new-looking ones. The style director (`packages/director`) styles every generated video without touching its content:
 
 1. **Mood:** keywords in the topic pick a mood (kids, tech, finance, business, science, health, history, nature, culture or general), and each mood weights the looks and motions that suit it. A pairing table keeps combinations sensible (crayon goes with playful, midnight-luxe with cinematic).
-2. **Novelty memory:** a per-user history (`.cache/style-history.json`, last 30 videos) rules out the previous video's look and motion and makes older choices less likely, fading with age. Backgrounds and layouts are remembered too.
+2. **Novelty memory:** a per-user history (`.cache/style-history.json`, last 30 videos) rules out the previous video's look and motion and makes older choices less likely, fading with age. Layouts are remembered too.
 3. **Arrangements:** template scenes get a variant (never the same template+variant twice in a row), and some grid pages are mirrored.
 
-It runs while the video streams: the look is decided on the script header before scene 1 plays, and each scene is arranged as it arrives. Choices the user makes (the Script tab's Look/Motion/Background, or a brand kit) are locks the director never changes. The LLM's own `theme`/`motion` lines are kept unless they were used recently. Everything is seeded, so the same topic and history give the same result.
+It runs while the video streams: the look is decided on the script header before scene 1 plays, and each scene is arranged as it arrives. Choices the user makes (the Script tab's Look/Motion, or a brand kit) are locks the director never changes. The LLM's own `theme`/`motion` lines are kept unless they were used recently. Everything is seeded, so the same topic and history give the same result.
 
 The Studio's Generate tab and `pnpm generate` use it by default ("LLM's own style" / `--style=llm` turns it off).
 

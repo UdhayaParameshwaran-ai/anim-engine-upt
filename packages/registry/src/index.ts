@@ -97,40 +97,24 @@ export const LAYOUTS = ["center", "row", "col", "grid", "split", "stack", "cycle
 /** Scene transitions; `auto` (the default) takes the next one from the motion personality's set. */
 export const TRANSITIONS = ["auto", "cut", "fade", "slide", "wipe", "iris", "zoom", "blur", "rise"] as const;
 
-/**
- * Procedural, seeded backgrounds drawn behind every scene. Combine with
- * "+" (`bg gradient+grain`); `auto` uses the look's own background.
- */
-export const BACKGROUNDS = [
-  { name: "auto", summary: "the look's own background" },
-  { name: "solid", summary: "flat background color" },
-  { name: "gradient", summary: "soft two-tone linear gradient" },
-  { name: "mesh", summary: "drifting soft color blobs" },
-  { name: "aurora", summary: "slow flowing light bands" },
-  { name: "grain", summary: "fine film/paper grain" },
-  { name: "grid", summary: "engineering grid lines" },
-  { name: "dots", summary: "dot grid" },
-  { name: "notebook", summary: "ruled notebook paper with a margin" },
-  { name: "waves", summary: "layered waves along the bottom" },
-  { name: "shapes", summary: "scattered outline shapes, slowly turning" },
-] as const;
 /** Looks: token sets the engine defines (fonts, palette, shapes, emphasis). Picked per video with `theme`. */
 export const THEMES = ["chalk", "paper", "dark", "light", "editorial", "neo-brutal", "soft-pastel", "tech-neon", "magazine", "bold-pop", "crayon", "midnight-luxe", "blueprint"] as const;
 /** One line per look, for the LLM and the style director. */
 export const THEME_SUMMARIES: Record<(typeof THEMES)[number], string> = {
-  chalk: "hand-drawn chalkboard, friendly classroom",
-  paper: "warm off-white, clean and neutral",
-  dark: "dark slate, calm and modern",
-  light: "bright white, crisp product style",
+  // Every look draws on a white board for now; they differ in ink, type and shapes.
+  chalk: "handwritten marker on a whiteboard, friendly classroom",
+  paper: "warm ink, clean and neutral",
+  dark: "near-black ink, blue accent, calm and modern",
+  light: "crisp product style, Apple-like",
   editorial: "monochrome print layout, black on white",
-  "neo-brutal": "cream, thick black outlines, hard shadows, loud orange",
+  "neo-brutal": "thick black outlines, hard shadows, loud orange",
   "soft-pastel": "lavender pastels, rounded and gentle",
-  "tech-neon": "near-black with neon cyan glow, mono labels",
-  magazine: "serif headlines, cream paper, burgundy accent",
-  "bold-pop": "saturated blue, heavy rounded type, yellow pop",
+  "tech-neon": "techy cyan accents, uppercase grotesk, mono labels",
+  magazine: "serif headlines, burgundy accent",
+  "bold-pop": "electric blue, heavy rounded type, punchy",
   crayon: "kids' notebook, crayon colors, handwriting",
-  "midnight-luxe": "deep navy, gold accents, elegant serif",
-  blueprint: "engineering blueprint, white lines on blue grid",
+  "midnight-luxe": "navy ink, gold accents, elegant serif",
+  blueprint: "engineering drawing, navy mono lines, square corners",
 };
 export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
