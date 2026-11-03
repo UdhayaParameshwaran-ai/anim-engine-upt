@@ -9,6 +9,9 @@ import {
   slotRects,
   SLOTS,
   TEMPLATES,
+  SHAPES,
+  findTemplate,
+  templatesFor,
   COMPOSE_PATTERNS,
   MOTIONS,
   THEME_SUMMARIES,
@@ -16,6 +19,8 @@ import {
   TRANSITIONS,
   VERBS,
   type AssetManifest,
+  type Shape,
+  type TemplateManifest,
 } from "@anim/registry";
 
 /**
@@ -98,8 +103,7 @@ export function systemPrompt(assets: AssetManifest[]): string {
   const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const templates = TEMPLATES.map((t) => {
     const slots = t.slots.map((s) => `${s.name}${s.required ? "" : "?"}`).join(",");
-    const items = t.items ? ` items ${t.items.min}-${t.items.max}` : t.graph ? ` nodes ≤${t.graph.maxNodes} + edges` : "";
-    return `  ${t.name.padEnd(10)} ${t.summary}${slots ? ` [slots: ${slots}]` : ""}${items} · variants: ${t.variants.join("|")}`;
+    return `  ${t.name.padEnd(10)} ${t.guide.useWhen}${slots ? ` [slots: ${slots}]` : ""}${itemsOf(t)} · variants: ${t.variants.join("|")}`;
   }).join("\n");
   // Grid-only elements are listed in the grid section instead.
   const gridOnly = new Set(GRID_ELEMENTS.map((e) => e.kind).filter((k) => !["icon", "asset", "chart", "formula"].includes(k)));
@@ -155,7 +159,7 @@ ARGS: 0.8 duration · fit (= length of the span cue) · +0.2 delay · /0.15 stag
 
 ${styleSection()}
 
-TEMPLATES
+TEMPLATES (variant=: usually leave it out; the engine picks the arrangement that fits the content)
 ${templates}
 LAYOUTS (only when no template): ${LAYOUTS.join(" ")}
 SLOT HINTS: @${SLOTS.join(" @")} · relative: ${RELATIONS.map((r) => `@${r}:<id>`).join(" ")}
@@ -197,7 +201,6 @@ ${elements}`;
  * types, themes, the asset names), about a fifth of the full prompt.
  */
 export function outlineSystemPrompt(assets: AssetManifest[]): string {
-  const templates = TEMPLATES.map((t) => `  ${t.name.padEnd(10)} ${t.summary} (variants: ${t.variants.join("|")})`).join("\n");
   const layouts = GRID_LAYOUTS.map((l) => `${l.code} ${l.name} (${l.slots.length})`).join(" · ");
   const elements = [...new Set(GRID_ELEMENTS.map((e) => e.kind))].join(" ");
   return `You plan narrated 2D explainer videos written in Narrascript, a line-based script language.
@@ -207,13 +210,15 @@ LINES
 video 1 "Title"
 theme <look>
 motion <personality>
-scene <id> "Title" template=<t> [variant=<v>] | grid=<layout code> [mirror=true]     <id> is one short lowercase word (intro, stages, recap), never a number
-# goal: <one line>
+scene <id> "Title" template=<template>      a diagram
+scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true to some)
+# shape: <shape> · goal: <one line>          one comment line under each scene line; grid pages use shape: page
+<id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
 
 ${styleSection()}
 
-TEMPLATES (diagrams)
-${templates}
+SCENE SHAPES → TEMPLATES (diagrams). First decide the shape of what the scene explains, then take a template of that shape.
+${shapeTable()}
 
 GRID LAYOUTS (editorial pages; number of content slots in brackets; elements: ${elements})
 ${layouts}
@@ -222,8 +227,9 @@ ASSETS AVAILABLE: ${assets.map((a) => `${a.kind}:${a.name}`).join(" ")}
 
 PLANNING RULES
 - Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
-- Pick the template or grid that fits the content: processes → steps/flow, comparisons → compare, loops → cycle, numbers/quotes/lists → grid.
-- Vary scene types and arrangements (variant=, mirror=true on some grid pages); plan visuals from the assets above.
+- Diagrams: label the scene's shape, then use a template of that shape (check its "not if"). Numbers, quotes, lists and charts: a grid page (shape: page).
+- Vary scene types across the video; mirror=true on some grid pages. Leave variant= out: the engine picks the arrangement that fits.
+- Plan visuals from the assets above.
 - Plan only facts you are sure of.`;
 }
 
@@ -246,7 +252,7 @@ ${topic}
 
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
-- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# goal: <what this scene explains and which visuals it uses>"
+- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and which visuals it uses>"
 No elements, narration or actions yet.`;
 }
 
@@ -256,8 +262,11 @@ No elements, narration or actions yet.`;
  */
 export function scenePrompt(outline: string, sceneId: string, earlier = ""): string {
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
+  const line = outline.split("\n").find((l) => sceneLineId(l) === sceneId);
+  const tpl = line ? findTemplate(/\btemplate=(\S+)/.exec(line)?.[1] ?? "") : undefined;
+  const card = tpl ? `\n\n${templateCard(tpl)}` : "";
   return `Video outline:
-${outline}${said}
+${outline}${said}${card}
 
 Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
 Cover only this scene's goal; other scenes cover the rest.
@@ -302,4 +311,47 @@ ${numbered}
 
 ${kind === "errors" ? "Errors" : "Problems"}:
 ${diagnostics}`;
+}
+
+function sceneLineId(line: string): string | undefined {
+  return /^\s*scene\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line)?.[1];
+}
+
+function itemsOf(t: TemplateManifest): string {
+  return t.items ? ` items ${t.items.min}-${t.items.max}` : t.graph ? ` nodes ≤${t.graph.maxNodes} + edges` : "";
+}
+
+/**
+ * Shape → templates: what the outline pass chooses from. A shape with one
+ * template is one line (the shape says when); with several, each template
+ * says when it is the one. "not if" points to the neighbouring shape.
+ */
+export function shapeTable(): string {
+  return (Object.keys(SHAPES) as Shape[])
+    .map((shape) => {
+      const tpls = templatesFor(shape);
+      if (!tpls.length) return "";
+      if (tpls.length === 1) return `  ${shape.padEnd(12)} ${SHAPES[shape]} → ${tpls[0]!.name} (not if ${tpls[0]!.guide.avoidWhen})`;
+      return [`  ${shape.padEnd(12)} ${SHAPES[shape]}:`, ...tpls.map((t) => `    → ${t.name}: ${t.guide.useWhen} (not if ${t.guide.avoidWhen})`)].join("\n");
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Everything about one template that writing a scene needs: when to use it,
+ * its slots and items, what each variant is for, and a worked example. Sent
+ * with the scene request, not in the shared system prompt (which stays cached).
+ */
+export function templateCard(t: TemplateManifest): string {
+  const slots = t.slots.map((s) => `${s.name}${s.required ? "" : " (optional)"}`).join(", ");
+  const items = t.items ? ` Every other element is an item (${t.items.min}–${t.items.max}), in declaration order.` : "";
+  const variants = t.variants.map((v) => `  ${v.padEnd(11)} ${t.guide.variants[v]?.when ?? t.summary}`);
+  return `TEMPLATE ${t.name} (shape: ${t.guide.shape})
+Use when: ${t.guide.useWhen}. Not when: ${t.guide.avoidWhen}.
+${t.summary}.${slots ? ` Slots: ${slots}; an element whose id is the slot name fills it.` : ""}${items}
+Variants (leave variant= out unless one clearly suits the content; the engine replaces one that does not fit):
+${variants.join("\n")}
+Example:
+${t.guide.example}`;
 }

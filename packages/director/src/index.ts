@@ -1,7 +1,9 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse, print, printScene, type Script } from "@anim/dsl";
-import { findTemplate, MOTIONS, THEMES } from "@anim/registry";
+import { findTemplate, MOTIONS, THEMES, variantGuide } from "@anim/registry";
+
+const LINKS = new Set(["arrow", "line", "edge"]);
 
 /**
  * The style director: gives every video its own look without touching its
@@ -220,7 +222,16 @@ export class Director {
     const tpl = a.template ? findTemplate(a.template) : undefined;
     if (tpl && a.variant === undefined && tpl.variants.length > 1) {
       const w: Weights = {};
+      // Only arrangements whose card covers this many items (the layout engine still checks the real fit).
+      const named = new Set(tpl.slots.map((x) => x.name));
+      const items = scene.steps.flatMap((st) => st.elements).filter((e) => !named.has(e.id) && !LINKS.has(e.kind)).length;
+      const fits = (v: string) => {
+        const r = variantGuide(tpl, v).items;
+        return !r || (items >= r[0] && items <= r[1]);
+      };
+      const candidates = tpl.variants.filter(fits);
       tpl.variants.forEach((v, i) => {
+        if (candidates.length && !candidates.includes(v)) return;
         const key = `${tpl.name}:${v}`;
         // The default arrangement stays the most likely; repeats are rare.
         w[v] = (i === 0 ? 2 : 1) * (key === this.last ? 0.05 : 1) * (this.recentLayouts.includes(key) ? 0.5 : 1);

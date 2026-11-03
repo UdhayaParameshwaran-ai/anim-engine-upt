@@ -22,7 +22,7 @@ describe("gallery", () => {
     const max = new Set(all(groups[2]!));
     for (const g of groups)
       for (const c of all(g)) {
-        const r = compile(c.script);
+        const r = compile(c.script, { variants: "exact" });
         const bad = max.has(c) ? r.diagnostics.filter((d) => d.severity === "error" || d.fixed) : r.diagnostics;
         if (!r.ok || bad.length) problems.push(`${g.id}/${c.id}: ${bad.map((d) => `${d.code} ${d.message}`).join("; ") || "failed"}`);
       }

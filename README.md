@@ -45,7 +45,7 @@ water = icon:droplet
 
 A scene picks one of two layout systems. The LLM never writes coordinates in either:
 
-- `template=`: 12 diagram templates (`title`, `compare`, `steps`, `cycle`, `flow`, `timeline`, `hub`, `grid`, `spotlight`, and the flow shapes `converge`, `diverge`, `process`). Every template, variant and grid layout is rendered at `/gallery` in the Studio.
+- `template=`: 12 diagram templates (`title`, `compare`, `steps`, `cycle`, `flow`, `timeline`, `hub`, `grid`, `spotlight`, and the flow shapes `converge`, `diverge`, `process`). Every template, variant and grid layout is rendered at `/gallery` in the Studio. Each template has a card (shape, when to use it, what each variant is for); the LLM picks the template by shape and the layout engine picks the variant that fits the content (§6c of `docs/dsl-spec.md`).
 - `grid=`: editorial pages from the [Template Rule Book v2](docs/rulebook-v2.html). It has 27 slot layouts on a 12-column grid, 6 frame modes (header and footer on or off), and 32 elements (stats, charts, tables, lists, quotes, steppers, flowcharts, maps…), each with its own motion. Rules R1–R11 are checked and auto-fixed where possible. See `examples/rulebook-gallery.txt` for every element.
 
 ## Generate from a prompt

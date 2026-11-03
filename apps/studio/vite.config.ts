@@ -31,7 +31,7 @@ function api(): Plugin {
         try {
           if (url.pathname === "/api/examples") return json(res, readdirSync(examples).filter((f) => f.endsWith(".txt")));
           if (url.pathname === "/api/source") return send(res, "text/plain; charset=utf-8", readFileSync(join(examples, basename(url.searchParams.get("file") ?? "")), "utf8"));
-          if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), ttsOf(url)));
+          if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), ttsOf(url), url.searchParams.get("variants") === "exact" ? "exact" : "fit"));
           if (url.pathname === "/api/providers") return json(res, await providers(server));
           if (url.pathname === "/api/generate") return await generateStream(server, url, req, res);
           if (url.pathname.startsWith("/audio/")) return send(res, "audio/wav", readFileSync(join(ttsDir, basename(url.pathname))));
@@ -83,11 +83,11 @@ async function voice(server: ViteDevServer, name: Tts["name"], speed = 1) {
   return kokoro;
 }
 
-async function build(server: ViteDevServer, source: string, tts: Tts) {
+async function build(server: ViteDevServer, source: string, tts: Tts, variants: "fit" | "exact" = "fit") {
   const { compile, report } = await server.ssrLoadModule("@anim/compiler");
   const { FileCache, speakVideo } = await server.ssrLoadModule("@anim/tts");
   const { resolve } = await server.ssrLoadModule("@anim/timeline");
-  const compiled = compile(source, { settings: tts.style });
+  const compiled = compile(source, { settings: tts.style, variants });
   const diagnostics: string[] = compiled.diagnostics.length ? report(compiled.diagnostics).split("\n") : [];
   if (!compiled.ir) return { ok: false, diagnostics };
   const provider = await voice(server, tts.name, tts.speed);

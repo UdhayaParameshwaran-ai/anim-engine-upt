@@ -170,7 +170,16 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 | `process` | `across` (inputs → process → outputs) `down` `equation` (one line: `A + B → [process] → C + D`) |
 
 - **Flow shapes.** `converge` fills its `result` slot and places the inputs; `diverge` fills `source` and places the outputs; in `process`, items declared before the `process` element are inputs and items after it are outputs (if one side is empty they are split in half, with a warning). The template only places the parts: declare the arrows yourself (`a1 = arrow sun->result`) and draw them on cues.
-- `variant=auto` picks one from the scene id, so it is stable for that scene.
+- **Variants are chosen by fit.** The layout engine checks the variant on the scene's real content.
+  - **A named variant**, or none (the template's first variant), is kept when it lays out cleanly: no overflow, tiny text or overlap.
+  - **When it doesn't**, the engine lays out every variant on trial and uses the best clean one. A variant the script named is reported as NAR416 (warning, fixed).
+  - **`variant=auto`** scores every variant on trial: content size, use of the frame, balance, and arrows that don't cut through other elements. Among the clean variants within 10% of the best, the scene id picks one, so the choice is stable for the scene and varied across scenes.
+  - **The gallery** compiles with `variants: "exact"`, so each tile shows its variant as is.
+- **Template cards** (`packages/registry/src/guide.ts`) describe each template: its *shape* (sequence, loop, many-to-one, …), when to use it and when not, and per variant what it is for plus the item counts it lays out cleanly.
+  - **The outline prompt** lists shapes → templates. Each planned scene carries `# shape: <shape> · goal: …`, and a template of another shape is routed to the shape's template.
+  - **Each scene request** carries only its template's card and example.
+  - **The style director** rotates only among variants whose card covers the scene's item count.
+  - **The quality test** (`apps/studio/test/quality.test.ts`) holds every variant to its card's item range.
 - `emphasis=first|last|<id>` gives that element more room (the larger side of `compare`, the hero of `grid variant=feature`).
 - `density=airy|normal|tight` changes spacing and how much of its cell each element fills.
 - `mirror=true` flips the scene left↔right; it works on grid pages too, so the 27 rule-book layouts have 54 arrangements.
@@ -260,6 +269,7 @@ Run `pnpm check <file>` to see them. Most come with a deterministic auto-fix. A 
 | NAR413 | layout | Element had to shrink below 35% to fit (warning) | — |
 | NAR414 | layout | Text had to shrink below 50% (warning) | — |
 | NAR415 | layout | Elements overlap (warning) | — |
+| NAR416 | layout | The named variant does not fit the content; another variant was used (warning) | best clean variant |
 
 Visibility checks follow narration order (where each cue falls in the sentence), not line order. Endpoints revealed later in the same `then` chain count as present for connectors, so `draw e1 then pop n2` is fine.
 

@@ -1,6 +1,6 @@
 import type { Diagnostic, ElementDecl, Place, Scene } from "@anim/dsl";
 import type { Box } from "@anim/ir";
-import { findGridLayout, findTemplate, frameRects, GRID, slotRects, SLOTS, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
+import { findGridLayout, findTemplate, frameRects, GRID, slotRects, SLOTS, variantGuide, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
 import { gridMode, gridParts } from "@anim/validate";
 import { compose, COMPOSE_PATTERNS, type ComposePattern } from "./compose.js";
 import { fit, measure, type Size } from "./measure.js";
@@ -16,12 +16,18 @@ export const LayoutCodes = {
   Overflow: "NAR413",
   TextTooSmall: "NAR414",
   Overlap: "NAR415",
+  VariantSwitched: "NAR416",
 } as const;
+
+/** Layout warnings that make a variant unfit for its content. */
+const UNFIT = new Set<string>([LayoutCodes.Overflow, LayoutCodes.TextTooSmall, LayoutCodes.Overlap]);
 
 export interface LayoutContext {
   width: number;
   height: number;
   assets: AssetLibrary;
+  /** "exact" lays out the named variant even when it fits badly (the gallery shows each as is). Default "fit". */
+  variants?: "fit" | "exact";
 }
 
 export interface SceneLayout {
@@ -29,6 +35,8 @@ export interface SceneLayout {
   /** Parameters a layout variant implies for an element (e.g. left-aligned text). */
   params: Map<string, Record<string, string>>;
   diagnostics: Diagnostic[];
+  /** The template variant used, when the scene has a template. */
+  variant?: string;
   /** Destination box for `move <id> @place`. */
   destination(id: string, place: Place): Box | undefined;
 }
@@ -37,7 +45,75 @@ const LINK_KINDS = new Set(["arrow", "line", "edge"]);
 const GAP = 48;
 
 export function layoutScene(scene: Scene, ctx: LayoutContext, kept: Map<string, Box> = new Map()): SceneLayout {
-  return new SceneLayouter(scene, ctx, kept).run();
+  const isGrid = scene.attrs.grid !== undefined && findGridLayout(scene.attrs.grid);
+  const tpl = !isGrid && scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
+  if (!tpl || tpl.variants.length < 2 || ctx.variants === "exact") return new SceneLayouter(scene, ctx, kept).run();
+  return chooseVariant(scene, ctx, kept, tpl);
+}
+
+/** How well one variant laid out this scene's content. */
+export interface VariantScore {
+  variant: string;
+  /** No overflow, tiny text or overlap. */
+  clean: boolean;
+  /** Higher is better: content size, use of space, balance, arrows that run clear. */
+  value: number;
+  issues: number;
+  crossings: number;
+}
+
+/**
+ * Picks the variant by fit; every candidate is laid out on trial and scored.
+ * - variant=auto: among the clean ones within 10% of the best, the scene id
+ *   picks (stable per scene, varied across scenes).
+ * - a named variant, or none (the template default): kept when clean,
+ *   otherwise the best clean variant replaces it. A named variant that had
+ *   to be replaced is reported (NAR416).
+ */
+function chooseVariant(scene: Scene, ctx: LayoutContext, kept: Map<string, Box>, tpl: TemplateManifest): SceneLayout {
+  const trial = (v: string) => {
+    const l = new SceneLayouter(scene, ctx, kept, v);
+    const out = l.run();
+    return { out, score: l.score(v) };
+  };
+  const requested = scene.attrs.variant;
+  if (requested !== "auto") {
+    const out = new SceneLayouter(scene, ctx, kept).run();
+    const unfit = out.diagnostics.find((d) => UNFIT.has(d.code));
+    if (!unfit) return out;
+    const alt = tpl.variants.filter((v) => v !== out.variant).map(trial).filter((t) => t.score.clean);
+    if (!alt.length) return out;
+    const best = alt.reduce((a, b) => (b.score.value > a.score.value ? b : a));
+    if (requested !== undefined) {
+      best.out.diagnostics.push({
+        code: LayoutCodes.VariantSwitched,
+        severity: "warning",
+        message: `variant \`${requested}\` does not fit this content (${unfit.message}); used \`${best.score.variant}\``,
+        span: scene.span,
+        fixed: `variant=${best.score.variant}`,
+      });
+    }
+    return best.out;
+  }
+  const trials = tpl.variants.map(trial);
+  const clean = trials.filter((t) => t.score.clean);
+  if (!clean.length) {
+    return trials.reduce((a, b) => (b.score.issues < a.score.issues || (b.score.issues === a.score.issues && b.score.value > a.score.value) ? b : a)).out;
+  }
+  const top = Math.max(...clean.map((t) => t.score.value));
+  const good = clean.filter((t) => t.score.value >= top - 0.1 * Math.abs(top));
+  return good[hash(scene.id + (scene.title ?? "")) % good.length]!.out;
+}
+
+/** Scores every variant of the scene's template on its content (gallery, tests). */
+export function scoreVariants(scene: Scene, ctx: LayoutContext): VariantScore[] {
+  const tpl = scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
+  if (!tpl) return [];
+  return tpl.variants.map((v) => {
+    const l = new SceneLayouter(scene, ctx, new Map(), v);
+    l.run();
+    return l.score(v);
+  });
 }
 
 class SceneLayouter {
@@ -52,11 +128,14 @@ class SceneLayouter {
   /** Fill factor for put() and gap multiplier, from `density=`. */
   private readonly fill: number;
   private readonly gapK: number;
+  private chosen?: string;
 
   constructor(
     private readonly scene: Scene,
     private readonly ctx: LayoutContext,
     private readonly kept: Map<string, Box>,
+    /** A variant to lay out instead of the scene's own (trial layouts). */
+    private readonly forced?: string,
   ) {
     this.els = scene.steps.flatMap((s) => s.elements);
     this.byId = new Map(this.els.map((e) => [e.id, e]));
@@ -75,11 +154,17 @@ class SceneLayouter {
 
   /** The scene's variant; `auto` picks one from the scene id, so it is stable per scene. */
   private variant(tpl: TemplateManifest): string {
-    const v = this.scene.attrs.variant;
+    const v = this.forced ?? this.scene.attrs.variant;
     if (!v) return tpl.variants[0]!;
     if (v === "auto") return tpl.variants[hash(this.scene.id + (this.scene.title ?? "")) % tpl.variants.length]!;
     // Plugins (approved, or drafts the validator let through) count as variants.
     return tpl.variants.includes(v) || VARIANT_PLUGINS[`${tpl.name}:${v}`] ? v : tpl.variants[0]!;
+  }
+
+  /** Average width / height of elements at natural size (how wide a grid cell should be). */
+  private aspectOf(els: ElementDecl[]): number {
+    if (!els.length) return 1;
+    return els.reduce((sum, e) => sum + this.sizes.get(e.id)!.w / this.sizes.get(e.id)!.h, 0) / els.length;
   }
 
   /** Space weights for items: the emphasized one gets more room. */
@@ -135,6 +220,7 @@ class SceneLayouter {
       boxes: this.boxes,
       params: this.params,
       diagnostics: this.diags,
+      ...(this.chosen !== undefined && { variant: this.chosen }),
       destination(id, place) {
         const el = self.byId.get(id);
         const cur = self.boxes.get(id);
@@ -233,7 +319,7 @@ class SceneLayouter {
       case "stack":
         return els.forEach((e, i) => this.put(e, colCells(area, els.length, this.gap, this.weights(els))[i]!));
       case "grid":
-        return els.forEach((e, i) => this.put(e, gridCells(area, els.length, this.ctx.width / this.ctx.height, this.gap)[i]!));
+        return els.forEach((e, i) => this.put(e, gridCells(area, els.length, this.aspectOf(els), this.gap)[i]!));
       case "split": {
         const [l, r] = rowCells(area, 2);
         const left = els.filter((_, i) => i % 2 === 0);
@@ -265,6 +351,7 @@ class SceneLayouter {
     }
 
     const variant = this.variant(tpl);
+    this.chosen = variant;
     const plugin = VARIANT_PLUGINS[`${tpl.name}:${variant}`];
     if (plugin) {
       const e = this.scene.attrs.emphasis;
@@ -276,7 +363,7 @@ class SceneLayouter {
         put: (el, cell, fill) => this.put(el, cell, fill),
         rowCells: (a, n, w) => rowCells(a, n, this.gap, w),
         colCells: (a, n, w) => colCells(a, n, this.gap, w),
-        gridCells: (a, n) => gridCells(a, n, this.ctx.width / this.ctx.height, this.gap),
+        gridCells: (a, n) => gridCells(a, n, this.aspectOf(items), this.gap),
         emphasis: e === "first" ? 0 : e === "last" ? items.length - 1 : items.findIndex((x) => x.id === e),
       });
     }
@@ -642,6 +729,49 @@ class SceneLayouter {
     };
   }
 
+  /**
+   * Fit score of the finished layout. Unfit warnings disqualify; among the
+   * rest, bigger content, more of the frame used, a centred composition and
+   * arrows that don't cut through other elements win. Content outside the
+   * variant's declared item range costs a little.
+   */
+  score(variant: string): VariantScore {
+    const issues = this.diags.filter((d) => UNFIT.has(d.code)).length;
+    const solid = this.els.filter((e) => !LINK_KINDS.has(e.kind) && this.boxes.has(e.id));
+    const boxes = solid.map((e) => this.boxes.get(e.id)!);
+    const scales = [...this.scales.values()].map((v) => Math.min(1, v));
+    const size = scales.length ? scales.reduce((a, b) => a + b, 0) / scales.length : 1;
+    let coverage = 0;
+    let balance = 1;
+    if (boxes.length) {
+      const x0 = Math.min(...boxes.map((b) => b.x));
+      const y0 = Math.min(...boxes.map((b) => b.y));
+      const x1 = Math.max(...boxes.map((b) => b.x + b.w));
+      const y1 = Math.max(...boxes.map((b) => b.y + b.h));
+      coverage = ((x1 - x0) * (y1 - y0)) / (this.safe.w * this.safe.h);
+      const dx = Math.abs((x0 + x1) / 2 - (this.safe.x + this.safe.w / 2)) / (this.safe.w / 2);
+      const dy = Math.abs((y0 + y1) / 2 - (this.safe.y + this.safe.h / 2)) / (this.safe.h / 2);
+      balance = 1 - Math.min(1, (dx + dy) / 2);
+    }
+    let crossings = 0;
+    for (const e of this.els) {
+      if (!LINK_KINDS.has(e.kind) || !e.link) continue;
+      const a = this.boxes.get(e.link.from);
+      const b = this.boxes.get(e.link.to);
+      if (!a || !b) continue;
+      for (const o of solid) {
+        if (o.id === e.link.from || o.id === e.link.to) continue;
+        if (segmentHits(a, b, shrink(this.boxes.get(o.id)!, 0.15))) crossings++;
+      }
+    }
+    const tpl = this.scene.attrs.template ? findTemplate(this.scene.attrs.template) : undefined;
+    const range = tpl ? variantGuide(tpl, variant).items : undefined;
+    const items = tpl ? solid.filter((e) => !tpl.slots.some((s) => s.name === e.id)).length : 0;
+    const outside = range && (items < range[0] || items > range[1]) ? 0.15 : 0;
+    const value = 0.45 * size + 0.3 * Math.min(1, coverage / 0.7) + 0.25 * balance - 0.1 * crossings - outside;
+    return { variant, clean: issues === 0, value: Math.round(value * 1000) / 1000, issues, crossings };
+  }
+
   private checkOverlaps(): void {
     const solid = this.els.filter((e) => !LINK_KINDS.has(e.kind) && e.place?.kind !== "relative" && this.boxes.has(e.id));
     for (let i = 0; i < solid.length; i++)
@@ -681,11 +811,63 @@ export function colCells(area: Box, n: number, gap = GAP, weights?: number[]): B
   return split(area.h, n, gap, weights).map(([o, h]) => ({ x: area.x, y: area.y + o, w: area.w, h }));
 }
 
-export function gridCells(area: Box, n: number, aspect: number, gap = GAP): Box[] {
-  const cols = Math.min(n, Math.ceil(Math.sqrt(n * aspect)));
+/**
+ * Cells for n items in rows. The column count is the one that lets items of
+ * the given aspect (width / height) be largest; ties go to fewer empty cells,
+ * then fewer columns. A shorter last row is centred.
+ */
+export function gridCells(area: Box, n: number, itemAspect = 1, gap = GAP): Box[] {
+  if (n <= 0) return [];
+  let cols = 1;
+  let best = -1;
+  let bestEmpty = Infinity;
+  for (let c = 1; c <= n; c++) {
+    const r = Math.ceil(n / c);
+    const cw = (area.w - gap * (c - 1)) / c;
+    const ch = (area.h - gap * (r - 1)) / r;
+    const side = Math.round(Math.min(cw / itemAspect, ch));
+    const empty = c * r - n;
+    if (side > best || (side === best && empty < bestEmpty)) {
+      cols = c;
+      best = side;
+      bestEmpty = empty;
+    }
+  }
   const rows = Math.ceil(n / cols);
   const rowsBoxes = colCells(area, rows, gap);
-  return Array.from({ length: n }, (_, i) => rowCells(rowsBoxes[Math.floor(i / cols)]!, cols, gap)[i % cols]!);
+  return Array.from({ length: n }, (_, i) => {
+    const row = Math.floor(i / cols);
+    const cell = rowCells(rowsBoxes[row]!, cols, gap)[i % cols]!;
+    const inRow = row === rows - 1 ? n - row * cols : cols;
+    const shift = ((cols - inRow) * (cell.w + gap)) / 2;
+    return { ...cell, x: cell.x + shift };
+  });
+}
+
+function shrink(b: Box, k: number): Box {
+  return { x: b.x + b.w * k, y: b.y + b.h * k, w: b.w * (1 - 2 * k), h: b.h * (1 - 2 * k) };
+}
+
+/** Does the straight line between two boxes' centres pass through box `o`? (Liang–Barsky clipping.) */
+function segmentHits(a: Box, b: Box, o: Box): boolean {
+  const x0 = a.x + a.w / 2;
+  const y0 = a.y + a.h / 2;
+  const dx = b.x + b.w / 2 - x0;
+  const dy = b.y + b.h / 2 - y0;
+  let t0 = 0;
+  let t1 = 1;
+  const edges: [number, number][] = [[-dx, x0 - o.x], [dx, o.x + o.w - x0], [-dy, y0 - o.y], [dy, o.y + o.h - y0]];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 > t1) return false;
+  }
+  return true;
 }
 
 function hash(str: string): number {

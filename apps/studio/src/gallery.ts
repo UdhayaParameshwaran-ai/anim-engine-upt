@@ -49,7 +49,7 @@ function build(c: Case): Promise<Built> {
   const key = `${lookSel.value}\n${c.script}`;
   let p = cache.get(key);
   if (!p) {
-    p = limited(async () => (await fetch(`/api/build?tts=beeps&theme=${lookSel.value}`, { method: "POST", body: c.script })).json() as Promise<Built>);
+    p = limited(async () => (await fetch(`/api/build?tts=beeps&variants=exact&theme=${lookSel.value}`, { method: "POST", body: c.script })).json() as Promise<Built>);
     cache.set(key, p);
   }
   return p;

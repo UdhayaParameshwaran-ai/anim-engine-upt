@@ -1,3 +1,4 @@
+import { TEMPLATE_GUIDES, type Shape, type TemplateGuide, type VariantGuide } from "./guide.js";
 import { EXTRA_VARIANTS } from "./variants.js";
 
 /**
@@ -155,12 +156,14 @@ export interface TemplateManifest {
   graph?: { maxNodes: number };
   /** Arrangements of the same slots (`variant=`); the first is the default. */
   variants: readonly string[];
+  /** What the template means and when to use it (guide.ts). */
+  guide: TemplateGuide;
 }
 
 const VISUAL = ["icon", "asset", "shape", "box", "circle", "card", "chart", "formula"] as const;
 const TEXTUAL = ["title", "text", "label", "list"] as const;
 
-const BASE_TEMPLATES: readonly TemplateManifest[] = [
+const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
   { name: "compare", version: 1, summary: "two things side by side", slots: [{ name: "left", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "right", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], variants: ["side", "stacked", "diagonal", "asymmetric"] },
   { name: "steps", version: 1, summary: "ordered sequence left to right", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 }, variants: ["row", "zigzag", "column", "staircase", "grid"] },
@@ -285,10 +288,23 @@ export function findVerb(name: string): VerbManifest | undefined {
 }
 
 /** Templates, with approved variants from the authoring pipeline appended. */
-export const TEMPLATES: readonly TemplateManifest[] = BASE_TEMPLATES.map((t) => ({
-  ...t,
-  variants: [...t.variants, ...EXTRA_VARIANTS.filter((v) => v.template === t.name && v.status === "approved").map((v) => v.name)],
-}));
+export const TEMPLATES: readonly TemplateManifest[] = BASE_TEMPLATES.map((t) => {
+  const extra = EXTRA_VARIANTS.filter((v) => v.template === t.name && v.status === "approved");
+  const guide = TEMPLATE_GUIDES[t.name]!;
+  const variants: Record<string, VariantGuide> = { ...guide.variants };
+  for (const v of extra) variants[v.name] ??= { when: v.summary };
+  return { ...t, variants: [...t.variants, ...extra.map((v) => v.name)], guide: { ...guide, variants } };
+});
+
+/** How to use one variant of a template (falls back to the template summary). */
+export function variantGuide(tpl: TemplateManifest, variant: string): VariantGuide {
+  return tpl.guide.variants[variant] ?? { when: tpl.summary };
+}
+
+/** Templates that show a shape, in registry order. */
+export function templatesFor(shape: Shape): TemplateManifest[] {
+  return TEMPLATES.filter((t) => t.guide.shape === shape);
+}
 
 /** Draft variants of a template (usable only when drafts are allowed). */
 export function draftVariants(template: string): string[] {
@@ -304,6 +320,7 @@ export function findComponent(kind: string): ComponentManifest | undefined {
 }
 
 export * from "./grid.js";
+export { SHAPES, TEMPLATE_GUIDES, type Shape, type TemplateGuide, type VariantGuide } from "./guide.js";
 export { EXTRA_VARIANTS, type ExtraVariant } from "./variants.js";
 export { findPlace, PLACES } from "./places.js";
 export { AssetLibrary, flowNodes, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";

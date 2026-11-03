@@ -73,4 +73,12 @@ describe("style director", () => {
     const used = new Set(variants.flatMap((r) => Object.entries(r.choice.scenes).map(([id, s]) => `${id}:${s.variant ?? ""}`)));
     expect(used.size).toBeGreaterThan(4);
   });
+
+  it("only rotates to variants whose card covers the scene's item count", () => {
+    const five = [1, 2, 3, 4, 5].map((i) => `i${i} = icon:sun "Input ${i}"`).join("\n");
+    const src = `video 1 "X"\n\nscene need "Needs" template=converge\nresult = asset:leaf "Leaf"\n${five}\n> {1}Many inputs.\n1 fade result,i1,i2,i3,i4,i5\n`;
+    const used = new Set<string>();
+    for (let i = 0; i < 30; i++) used.add(/variant=(\w+)/.exec(direct(src, { topic: `Plants ${i}` }).script)?.[1] ?? "left");
+    expect([...used]).toEqual(["around"]);
+  });
 });

@@ -1,4 +1,4 @@
-import { COMPOSE_PATTERNS, FRAME_MODES, GRID, GRID_ELEMENTS, GRID_LAYOUTS, TEMPLATES, type GridElement, type GridLayout, type TemplateManifest } from "@anim/registry";
+import { COMPOSE_PATTERNS, FRAME_MODES, GRID, GRID_ELEMENTS, GRID_LAYOUTS, TEMPLATES, variantGuide, type GridElement, type GridLayout, type TemplateManifest } from "@anim/registry";
 
 /** One gallery tile: a complete, compilable script and what it shows. */
 export interface Case {
@@ -40,11 +40,14 @@ export function templateGroup(density: Density): Group {
   return {
     id: "templates",
     title: "Templates",
-    intro: "Diagram scenes. The LLM names a template and a variant and fills slots; the template's layout places everything.",
+    intro: "Diagram scenes. The LLM names a template and fills its slots; the engine picks the variant that fits the content (a named variant is kept when it fits). Here every variant is shown as is.",
     sections: TEMPLATES.map((t) => ({
       title: t.name,
-      note: `${t.summary}${slotsNote(t)} · ${t.variants.length} variants`,
-      cases: t.variants.map((v) => ({ id: `tpl-${t.name}-${v}`, title: v, note: `template=${t.name} variant=${v}`, script: templateScript(t, v, density) })),
+      note: `shape: ${t.guide.shape} · use when ${t.guide.useWhen} · not if ${t.guide.avoidWhen}${slotsNote(t)} · ${t.variants.length} variants`,
+      cases: t.variants.map((v) => {
+        const g = variantGuide(t, v);
+        return { id: `tpl-${t.name}-${v}`, title: v, note: `${g.when}${g.items ? ` · fits ${g.items[0]}–${g.items[1]} items` : ""}`, script: templateScript(t, v, density) };
+      }),
     })),
   };
 }
@@ -62,8 +65,14 @@ function itemCount(t: TemplateManifest, density: Density): number {
   return Math.max(t.items.min, Math.min(t.items.max, n));
 }
 
-function templateScript(t: TemplateManifest, variant: string, density: Density): string {
-  if (t.name === "flow") return flowScript(variant, density);
+/**
+ * A complete script showing template `t` in `variant`. `size` is a density or
+ * an exact item count (flow: node count); `long` gives every item a long label
+ * (the quality test stresses layouts with it).
+ */
+export function templateScript(t: TemplateManifest, variant: string, size: Density | number, long = false): string {
+  if (t.name === "flow") return flowScript(variant, size, long);
+  const label = (l: string) => (long ? `${l} ${LONG}` : l);
   const decl: string[] = [];
   const show: string[] = [];
   const slot = (name: string) => t.slots.some((s) => s.name === name);
@@ -77,24 +86,24 @@ function templateScript(t: TemplateManifest, variant: string, density: Density):
   if (t.name === "hub") (decl.push(`center = icon:cloud "Cloud app"`), show.push("center"));
   if (t.name === "spotlight") (decl.push(`main = asset:heart.anatomy "Heart"`), show.push("main"));
   const pool = ITEMS[t.name] ?? [];
-  const n = itemCount(t, density);
+  const n = typeof size === "number" ? size : itemCount(t, size);
   const ids = Array.from({ length: n }, (_, i) => `i${i + 1}`);
   // process: inputs, then the process, then outputs, joined by arrows through the process.
   if (t.name === "process") {
     const ins = Math.ceil(n / 2);
     const inputs = ids.slice(0, ins);
     const outputs = ids.slice(ins);
-    inputs.forEach((id, i) => decl.push(`${id} = ${pool[i]![0]} "${pool[i]![1]}"`));
+    inputs.forEach((id, i) => decl.push(`${id} = ${pool[i]![0]} "${label(pool[i]![1])}"`));
     decl.push(`process = asset:leaf "Photosynthesis"`);
-    outputs.forEach((id, i) => decl.push(`${id} = ${pool[4 + i]![0]} "${pool[4 + i]![1]}"`));
+    outputs.forEach((id, i) => decl.push(`${id} = ${pool[4 + i]![0]} "${label(pool[4 + i]![1])}"`));
     const arrows = [...inputs.map((id, i) => `p${i + 1} = arrow ${id}->process`), ...outputs.map((id, i) => `q${i + 1} = arrow process->${id}`)];
     decl.push(...arrows);
     show.push(...inputs, "process", ...outputs, ...arrows.map((a) => a.split(" ")[0]!));
     return scene(`template=process variant=${variant}`, decl, show);
   }
   ids.forEach((id, i) => {
-    const [kind, label] = pool[i % pool.length]!;
-    decl.push(`${id} = ${kind} "${label}"`);
+    const [kind, text] = pool[i % pool.length]!;
+    decl.push(`${id} = ${kind} "${label(text)}"`);
     show.push(id);
   });
   // converge / diverge: one arrow per item, into or out of the hub.
@@ -109,12 +118,15 @@ function templateScript(t: TemplateManifest, variant: string, density: Density):
   return scene(`template=${t.name} variant=${variant}`, decl, show);
 }
 
+/** Appended to every label for the long-label stress setting (about 35 characters in all). */
+const LONG = "and what follows";
+
 const TITLES: Record<string, string> = { converge: "What a Plant Needs", diverge: "What Electricity Does", process: "Inside the Leaf", compare: "Plant vs Animal Cells", steps: "The Water Cycle", timeline: "A Short History of Vaccines", grid: "Energy Sources", hub: "What Runs a Cloud App" };
 
-function flowScript(variant: string, density: Density): string {
-  const nodes = density === "min" ? 3 : density === "max" ? 8 : 5;
+function flowScript(variant: string, size: Density | number, long = false): string {
+  const nodes = typeof size === "number" ? Math.min(8, size) : size === "min" ? 3 : size === "max" ? 8 : 5;
   const labels = ["Should I learn to code?", "Pick one language", "Try a free tutorial", "Build a small project", "Share it", "Get feedback", "Improve", "Ship v2"];
-  const decl = labels.slice(0, nodes).map((l, i) => `n${i + 1} = node "${l}"`);
+  const decl = labels.slice(0, nodes).map((l, i) => `n${i + 1} = node "${long ? `${l} ${LONG}` : l}"`);
   const edges = [[1, 2, "yes"], [1, 3, "not sure"], [2, 4, ""], [3, 4, ""], [4, 5, ""], [5, 6, ""], [6, 7, ""], [7, 8, ""]].filter(([a, b]) => (b as number) <= nodes);
   edges.forEach(([a, b, l], i) => decl.push(`e${i + 1} = n${a} -> n${b}${l ? ` "${l}"` : ""}`));
   const show = [...labels.slice(0, nodes).map((_, i) => `n${i + 1}`), ...edges.map((_, i) => `e${i + 1}`)];

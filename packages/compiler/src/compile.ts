@@ -15,6 +15,8 @@ export interface CompileOptions {
   settings?: Record<string, string>;
   /** Accept draft layout variants (the authoring pipeline's checker does). */
   drafts?: boolean;
+  /** "fit" (default) swaps a template variant that would crowd its content for one that fits; "exact" keeps it (the gallery shows each variant as is). */
+  variants?: "fit" | "exact";
 }
 
 export interface CompileResult {
@@ -44,7 +46,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const ok = !diagnostics.some((d) => d.severity === "error" && !d.fixed);
   if (!ok) return { script: validated.script, diagnostics: sortDiagnostics(diagnostics), ok };
 
-  const lowered = lower(validated.script, assets);
+  const lowered = lower(validated.script, assets, options.variants ?? "fit");
   return { ir: lowered.ir, script: validated.script, diagnostics: sortDiagnostics([...diagnostics, ...lowered.diagnostics]), ok };
 }
 

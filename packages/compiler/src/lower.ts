@@ -23,14 +23,14 @@ export const DEFAULTS = {
  * versions, runs layout, and fills every default so later stages never
  * consult the registry for defaults.
  */
-export function lower(script: Script, assets: AssetLibrary): { ir: VideoIR; diagnostics: Diagnostic[] } {
+export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "exact" = "fit"): { ir: VideoIR; diagnostics: Diagnostic[] } {
   const diagnostics: Diagnostic[] = [];
   const setting = (settings: Setting[], key: string) => settings.find((s) => s.key === key)?.args;
   const size = setting(script.settings, "size");
   const [w, h] = size?.[0]?.split("x").map(Number) ?? [DEFAULTS.width, DEFAULTS.height];
   const motion = findMotion(setting(script.settings, "motion")?.[0]);
   const fps = Number(setting(script.settings, "fps")?.[0] ?? size?.[1] ?? DEFAULTS.fps);
-  const ctx = { width: w!, height: h!, assets };
+  const ctx = { width: w!, height: h!, assets, variants };
 
   const lock: Record<string, string> = {};
   const scenes: SceneIR[] = [];

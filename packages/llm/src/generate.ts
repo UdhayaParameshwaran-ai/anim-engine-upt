@@ -1,7 +1,7 @@
 import { compile, report } from "@anim/compiler";
 import { print, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
-import { AssetLibrary } from "@anim/registry";
+import { AssetLibrary, findTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
 import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
@@ -141,14 +141,16 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
   if ((opts.mode ?? "outline") === "outline") {
     // Planning only needs scene types and asset names, not the whole language.
     const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant));
-    const outline = tidyOutline(clean(planned.text));
+    const routed = routeOutline(tidyOutline(clean(planned.text)));
+    const outline = routed.text;
+    if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
     const plan = split(outline);
     if (!plan.scenes.length) {
       note(ctx, planned.trace, { verdict: "no scenes; falling back to a single pass" });
       opts.onLog?.("outline had no scenes; falling back to a single pass");
       return run(topic, { ...opts, mode: "single" }, ctx);
     }
-    note(ctx, planned.trace, { verdict: `${plan.scenes.length} scenes: ${plan.scenes.map((s) => s.id).join(", ")}` });
+    note(ctx, planned.trace, { verdict: `${plan.scenes.length} scenes: ${plan.scenes.map((s) => s.id).join(", ")}${routed.changes.length ? ` · routed ${routed.changes.join("; ")}` : ""}` });
     header = direct(ensureHeader(plan.header, topic));
     opts.onLog?.(`outline: ${plan.scenes.map((s) => s.id).join(", ")}`);
     const written: string[] = [];
@@ -339,8 +341,9 @@ function sceneIdOf(text: string): string | undefined {
 /**
  * Repairs common outline slips so planning never fails on form: numeric scene
  * ids (`scene 1` → `scene s1`, which ids can't be), the same id planned twice
- * (`stages`, `stages` → `stages`, `stages2`; scenes are written and repaired by id)
- * and `variants=` for `variant=`.
+ * (`stages`, `stages` → `stages`, `stages2`; scenes are written and repaired by id),
+ * `variants=` for `variant=`, and prompt syntax copied literally (`[mirror=true]`,
+ * `template=title | grid=L1-01`).
  */
 export function tidyOutline(text: string): string {
   const used = new Set<string>();
@@ -348,7 +351,14 @@ export function tidyOutline(text: string): string {
     .split("\n")
     .map((l) => {
       if (!/^\s*scene\s/.test(l)) return l;
-      const line = l.replace(/^(\s*scene\s+)(\d)/, "$1s$2").replace(/\bvariants=/, "variant=");
+      let line = l
+        .replace(/^(\s*scene\s+)(\d)/, "$1s$2")
+        .replace(/\bvariants=/, "variant=")
+        // Syntax copied from the prompt: `[mirror=true]` → `mirror=true`.
+        .replace(/\[(\w+=[^\]\s]+)\]/g, "$1");
+      // `template=title | grid=L1-01`: a scene is one or the other; the template wins.
+      if (/\btemplate=\S/.test(line)) line = line.replace(/\s*\|\s*grid=\S+/, "").replace(/\s+grid=\S+/, "");
+      line = line.replace(/\s+\|\s+/g, " ");
       const id = sceneIdOf(line);
       if (!id) return line;
       let unique = id;
@@ -357,6 +367,35 @@ export function tidyOutline(text: string): string {
       return unique === id ? line : line.replace(/^(\s*scene\s+)\S+/, `$1${unique}`);
     })
     .join("\n");
+}
+
+/**
+ * Routes each planned scene by its shape label (`# shape: many-to-one · goal: …`):
+ * a template that is unknown or of another shape is replaced with the
+ * shape's template, since the shape is the simpler judgement. Scenes
+ * without a known shape, and grid pages, stay as planned.
+ */
+export function routeOutline(text: string): { text: string; changes: string[] } {
+  const lines = text.split("\n");
+  const changes: string[] = [];
+  let scene = -1;
+  lines.forEach((l, i) => {
+    if (/^\s*scene\s/.test(l)) scene = i;
+    const shape = /^\s*#\s*shape:\s*([a-z-]+)/i.exec(l)?.[1]?.toLowerCase();
+    if (scene < 0 || !shape || !(shape in SHAPES)) return;
+    const line = lines[scene]!;
+    const fits = templatesFor(shape as Shape);
+    const named = /\btemplate=(\S+)/.exec(line)?.[1];
+    if (!fits.length || named === undefined) return;
+    const tpl = findTemplate(named);
+    if (tpl && tpl.guide.shape === shape) return;
+    const to = fits[0]!.name;
+    // A variant of the old template means nothing to the new one.
+    lines[scene] = line.replace(/\btemplate=\S+/, `template=${to}`).replace(/\s+variant=\S+/, "");
+    changes.push(`${sceneIdOf(line) ?? "?"}: ${named} → ${to} (shape ${shape})`);
+    scene = -1;
+  });
+  return { text: lines.join("\n"), changes };
 }
 
 /** Strips markdown fences and any chatter before the script starts. */

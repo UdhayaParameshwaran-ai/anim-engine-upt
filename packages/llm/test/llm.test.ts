@@ -1,6 +1,6 @@
 import { compile } from "@anim/compiler";
 import { Director, type HistoryEntry } from "@anim/director";
-import { AssetLibrary } from "@anim/registry";
+import { AssetLibrary, TEMPLATES } from "@anim/registry";
 import { describe, expect, it } from "vitest";
 import {
   clean,
@@ -12,7 +12,11 @@ import {
   qualityIssues,
   ReplayClient,
   retrieveAssets,
+  routeOutline,
+  scenePrompt,
+  shapeTable,
   systemPrompt,
+  templateCard,
   tidyOutline,
   type CallTrace,
   type ChatRequest,
@@ -383,7 +387,8 @@ describe("generation fixes from the traced run", () => {
     await generate("plants", { client: llm });
     const [outline, scene] = llm.requests;
     expect(outline!.messages[0]!.content).toContain("PLANNING RULES");
-    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 3);
+    // The shape table (how to choose a template) is the bulk of it; still well under half the full language.
+    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 2.5);
   });
 
   it("tells later scenes what earlier scenes already said", async () => {
@@ -455,5 +460,49 @@ describe("tidyOutline", () => {
       'scene stages2 "C"',
       'scene stages3 "D"',
     ]);
+  });
+});
+
+describe("template knowledge", () => {
+  it("repairs prompt syntax copied into the outline", () => {
+    const out = tidyOutline(['scene intro "A" template=title | grid=L1-01', 'scene facts "B" grid=L2-01 [mirror=true]'].join("\n"));
+    expect(out.split("\n")).toEqual(['scene intro "A" template=title', 'scene facts "B" grid=L2-01 mirror=true']);
+  });
+
+  it("routes a planned scene to the template of its shape", () => {
+    const outline = [
+      'video 1 "Plants"',
+      'scene need "Needs" template=steps variant=zigzag',
+      "# shape: many-to-one · goal: sun, water and CO2 make a leaf grow",
+      'scene make "Make" template=processing',
+      "# shape: transform · goal: inputs become glucose",
+      'scene loop "Loop" template=cycle',
+      "# shape: loop · goal: the cycle repeats",
+      'scene facts "Facts" grid=L3-01',
+      "# shape: page · goal: numbers",
+    ].join("\n");
+    const { text, changes } = routeOutline(outline);
+    expect(text.split("\n").filter((l) => l.startsWith("scene"))).toEqual([
+      'scene need "Needs" template=converge',
+      'scene make "Make" template=process',
+      'scene loop "Loop" template=cycle',
+      'scene facts "Facts" grid=L3-01',
+    ]);
+    expect(changes).toEqual(["need: steps → converge (shape many-to-one)", "make: processing → process (shape transform)"]);
+  });
+
+  it("lists every template under its shape for planning", () => {
+    const table = shapeTable();
+    for (const t of TEMPLATES) expect(table).toMatch(new RegExp(`→ ${t.name}[ :]`));
+  });
+
+  it("sends the planned template's card, with its example, only with that scene", () => {
+    const outline = ['video 1 "Plants"', 'scene need "Needs" template=converge', "# shape: many-to-one · goal: x", 'scene facts "Facts" grid=L3-01'].join("\n");
+    const converge = TEMPLATES.find((t) => t.name === "converge")!;
+    const prompt = scenePrompt(outline, "need");
+    expect(prompt).toContain(templateCard(converge));
+    for (const v of converge.variants) expect(prompt).toContain(converge.guide.variants[v]!.when);
+    expect(prompt).not.toContain("TEMPLATE process");
+    expect(scenePrompt(outline, "facts")).not.toContain("TEMPLATE ");
   });
 });
