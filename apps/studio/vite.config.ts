@@ -1,6 +1,6 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { basename, join } from "node:path";
+import { basename, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 
@@ -99,12 +99,12 @@ async function build(server: ViteDevServer, source: string, tts: Tts) {
 
 async function providers(server: ViteDevServer) {
   const { THEMES, THEME_SUMMARIES, MOTIONS, BACKGROUNDS } = await server.ssrLoadModule("@anim/registry");
+  const { configuredProviders } = await server.ssrLoadModule("@anim/llm");
   return {
     themes: THEMES.map((name: keyof typeof THEME_SUMMARIES) => ({ name, summary: THEME_SUMMARIES[name] })),
     motions: MOTIONS.map((m: { name: string; summary: string }) => ({ name: m.name, summary: m.summary })),
     backgrounds: BACKGROUNDS.filter((b: { name: string }) => b.name !== "auto"),
-    openrouter: Boolean(process.env.OPENROUTER_API_KEY),
-    groq: Boolean(process.env.GROQ_API_KEY),
+    llm: configuredProviders(process.env),
     tts: defaultTts(),
     examples: readdirSync(examples).filter((f) => f.endsWith(".txt")),
   };
@@ -160,6 +160,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
       mode,
       ...(director && { director }),
       onLog: (m: string) => send("log", m),
+      onCall: (call: unknown) => send("call", call),
       onScene: (text: string, index: number, header: string) => {
         scenes[index] = text;
         if (index === 0 && director) send("log", styleLine());
@@ -174,17 +175,28 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     });
     await chain;
     if (director && result.ok) await store.add("studio", director.entry());
+    const traceFile = saveTrace(topic || "replay", client.name, mode, result);
     const built = await build(server, result.script, tts);
     send("done", {
       ...built,
       script: result.script,
       generated: result.ok,
-      stats: { calls: result.calls, repairs: result.repairs, usage: result.usage, seconds: (performance.now() - started) / 1000 },
+      stats: { calls: result.calls, repairs: result.repairs, usage: result.usage, seconds: (performance.now() - started) / 1000, traceFile },
     });
   } catch (e) {
     send("fail", { error: e instanceof Error ? e.message : String(e) });
   }
   res.end();
+}
+
+/** Keeps every generation's call trace (prompts, replies, timings, tokens) in out/traces/ for later inspection. */
+function saveTrace(topic: string, provider: string, mode: string, result: { trace: unknown[]; usage: unknown; ms: number; ok: boolean; script: string }): string {
+  const dir = join(repo, "out", "traces");
+  mkdirSync(dir, { recursive: true });
+  const slug = topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "video";
+  const file = join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${slug}.json`);
+  writeFileSync(file, JSON.stringify({ topic, provider, mode, ok: result.ok, ms: result.ms, usage: result.usage, calls: result.trace, script: result.script }, null, 2));
+  return relative(repo, file).replace(/\\/g, "/");
 }
 
 function body(req: IncomingMessage): Promise<string> {

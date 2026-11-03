@@ -2,7 +2,7 @@ import { compile, report } from "@anim/compiler";
 import { print, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary } from "@anim/registry";
-import type { ChatMessage, LlmClient, Usage } from "./client.js";
+import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
 import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
@@ -31,6 +31,51 @@ export interface GenerateOptions {
    */
   onScene?: (sceneText: string, index: number, header: string) => void;
   onLog?: (message: string) => void;
+  /**
+   * Every LLM call as it happens: once when it starts (status "running"),
+   * again when it ends, and again once its reply has been validated
+   * (`check`, `verdict`). The same `id` each time, so consumers upsert.
+   */
+  onCall?: (call: CallTrace) => void;
+}
+
+export type CallKind = "outline" | "scene" | "repair" | "quality" | "single";
+
+/** One LLM call: what was asked, what came back, how long it took and what it cost. */
+export interface CallTrace {
+  id: number;
+  kind: CallKind;
+  /** Scene id the call is about (not for outline/single). */
+  scene?: string;
+  /** Repair attempt, from 1. */
+  attempt?: number;
+  status: "running" | "done" | "failed";
+  /** Provider and model that served it (a fallback client reports the one that answered). */
+  provider?: string;
+  model?: string;
+  /** Start, in ms since generation began. */
+  start: number;
+  ms?: number;
+  /** Streaming only: ms until the first text arrived. */
+  firstTokenMs?: number;
+  usage?: Usage;
+  /** True when the provider reported no usage and it was estimated from characters (~4 per token). */
+  estimated?: boolean;
+  /** Which system prompt was sent. */
+  system: "outline" | "full";
+  systemChars: number;
+  /** Messages sent before this call's new user message (conversation context). */
+  history: number;
+  /** This call's new user message. */
+  prompt: string;
+  reply?: string;
+  /** What triggered a repair or quality pass: the diagnostics or problems sent to the model. */
+  reason?: string;
+  /** Validation of the reply (scene calls). */
+  check?: { errors: number; warnings: number; quality: number };
+  /** What happened to the reply, e.g. "kept", "repair needed", "rejected: no better". */
+  verdict?: string;
+  error?: string;
 }
 
 export interface GenerateResult {
@@ -45,6 +90,10 @@ export interface GenerateResult {
   usage: Usage;
   /** Quality problems left in the final script (see quality.ts). */
   quality: string[];
+  /** Every LLM call, in start order. */
+  trace: CallTrace[];
+  /** Wall time of the whole generation. */
+  ms: number;
 }
 
 interface Ctx {
@@ -53,6 +102,15 @@ interface Ctx {
   usage: Usage;
   calls: number;
   repairs: number;
+  started: number;
+  trace: CallTrace[];
+}
+
+interface CallMeta {
+  kind: CallKind;
+  scene?: string;
+  attempt?: number;
+  reason?: string;
 }
 
 /**
@@ -61,10 +119,17 @@ interface Ctx {
  * scenes go back to the LLM with compact diagnostics, and deterministic
  * auto-fixes handle whatever is left.
  */
-export async function generate(topic: string, opts: GenerateOptions): Promise<GenerateResult> {
+export function generate(topic: string, opts: GenerateOptions): Promise<GenerateResult> {
+  return run(topic, opts);
+}
+
+/** `inherited` carries the trace and counters into the single-pass fallback. */
+async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promise<GenerateResult> {
   const assets = opts.assets ?? new AssetLibrary();
   const relevant = retrieveAssets(topic, assets);
-  const ctx: Ctx = { opts, system: systemPrompt(relevant), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0 };
+  const ctx: Ctx = inherited
+    ? { ...inherited, opts }
+    : { opts, system: systemPrompt(relevant), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0, started: performance.now(), trace: [] };
   const range = opts.scenes ?? { min: 2, max: 4 };
   let header = "";
   // The look is set on the header, before the first scene plays; scenes are arranged as they arrive.
@@ -75,12 +140,15 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
   let scenes: string[];
   if ((opts.mode ?? "outline") === "outline") {
     // Planning only needs scene types and asset names, not the whole language.
-    const outline = clean(await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }], undefined, outlineSystemPrompt(relevant)));
+    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant));
+    const outline = tidyOutline(clean(planned.text));
     const plan = split(outline);
     if (!plan.scenes.length) {
+      note(ctx, planned.trace, { verdict: "no scenes; falling back to a single pass" });
       opts.onLog?.("outline had no scenes; falling back to a single pass");
-      return generate(topic, { ...opts, mode: "single" });
+      return run(topic, { ...opts, mode: "single" }, ctx);
     }
+    note(ctx, planned.trace, { verdict: `${plan.scenes.length} scenes: ${plan.scenes.map((s) => s.id).join(", ")}` });
     header = direct(ensureHeader(plan.header, topic));
     opts.onLog?.(`outline: ${plan.scenes.map((s) => s.id).join(", ")}`);
     const written: string[] = [];
@@ -88,8 +156,9 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
       // Earlier scenes that are already written (all of them when scenes run one at a time).
       const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
       const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier) };
-      const text = sceneOnly(clean(await chat(ctx, [first])), s.id);
-      const fixed = arrange(await repairLoop(ctx, header, text, [first]));
+      const reply = await chat(ctx, [first], { kind: "scene", scene: s.id });
+      const text = sceneOnly(clean(reply.text), s.id);
+      const fixed = arrange(await repairLoop(ctx, header, text, [first], s.id, reply.trace));
       written[i] = fixed;
       emit(fixed, i);
       return fixed;
@@ -102,15 +171,17 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
     const onSceneText = (text: string) => {
       const i = pending.length;
       pending.push(
-        repairLoop(ctx, headerText!, text, [request]).then(arrange).then((fixed) => {
+        repairLoop(ctx, headerText!, text, [request], sceneIdOf(text)).then(arrange).then((fixed) => {
           emit(fixed, i);
           return fixed;
         }),
       );
     };
     const splitter = streamSplitter((h) => (header = headerText = direct(ensureHeader(h, topic))), onSceneText);
-    const full = await chat(ctx, [request], (delta) => splitter.push(delta));
+    const streamed = await chat(ctx, [request], { kind: "single" }, (delta) => splitter.push(delta));
+    const full = streamed.text;
     splitter.end();
+    note(ctx, streamed.trace, { verdict: `${pending.length} scene(s)` });
     headerText ??= direct(ensureHeader(split(clean(full)).header, topic));
     header = headerText;
     scenes = await Promise.all(pending);
@@ -128,6 +199,8 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
     calls: ctx.calls,
     usage: ctx.usage,
     quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text).map((q) => `${sc.id}: ${q.message}`)),
+    trace: ctx.trace,
+    ms: Math.round(performance.now() - ctx.started),
   };
 }
 
@@ -136,59 +209,154 @@ export async function generate(topic: string, opts: GenerateOptions): Promise<Ge
  * maxRepairs times. A scene without errors but with quality problems gets
  * one improvement pass, kept only if it stays error-free and gets better.
  */
-async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[]): Promise<string> {
-  const ask = async (current: string, report: string, kind: "errors" | "quality") => {
+async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[], scene?: string, written?: CallTrace): Promise<string> {
+  const ask = async (current: string, report: string, kind: "errors" | "quality", attempt?: number) => {
     ctx.repairs++;
-    const reply = await chat(ctx, [...history, { role: "assistant", content: current }, { role: "user", content: repairPrompt(current, report, kind) }]);
-    return sceneOnly(clean(reply));
+    const meta: CallMeta = { kind: kind === "errors" ? "repair" : "quality", reason: report, ...(scene && { scene }), ...(attempt && { attempt }) };
+    const reply = await chat(ctx, [...history, { role: "assistant", content: current }, { role: "user", content: repairPrompt(current, report, kind) }], meta);
+    return { text: sceneOnly(clean(reply.text)), trace: reply.trace };
   };
+  /** Records how a reply validated on the call that produced it. */
+  const judge = (trace: CallTrace | undefined, check: { errors: number; warnings: number }, quality: number, verdict: string) =>
+    trace && note(ctx, trace, { check: { errors: check.errors, warnings: check.warnings, quality }, verdict });
+  const max = ctx.opts.maxRepairs ?? 2;
+  const qualityOn = ctx.opts.qualityRepairs !== false;
+
   let current = text;
+  let last = written;
   let errors = checkScene(header, current);
-  for (let attempt = 0; errors.errors && attempt < (ctx.opts.maxRepairs ?? 2); attempt++) {
-    ctx.opts.onLog?.(`repairing scene (attempt ${attempt + 1}):\n${errors.report}`);
-    current = await ask(current, errors.report, "errors");
+  for (let attempt = 1; errors.errors && attempt <= max; attempt++) {
+    judge(last, errors, 0, "has errors → repair");
+    ctx.opts.onLog?.(`repairing scene (attempt ${attempt}):\n${errors.report}`);
+    const fixed = await ask(current, errors.report, "errors", attempt);
+    current = fixed.text;
+    last = fixed.trace;
     errors = checkScene(header, current);
   }
-  if (errors.errors || ctx.opts.qualityRepairs === false) return current;
-
+  if (errors.errors) {
+    judge(last, errors, 0, "still has errors → auto-fix");
+    return current;
+  }
   const issues = qualityIssues(header, current);
-  if (!issues.length) return current;
+  if (!qualityOn || !issues.length) {
+    judge(last, errors, issues.length, "valid");
+    return current;
+  }
+  judge(last, errors, issues.length, "valid but weak → improve");
   const report = qualityReport(issues);
   ctx.opts.onLog?.(`improving scene:\n${report}`);
   const better = await ask(current, report, "quality");
-  if (checkScene(header, better).errors || qualityIssues(header, better).length >= issues.length) {
+  const after = checkScene(header, better.text);
+  const left = qualityIssues(header, better.text).length;
+  if (after.errors || left >= issues.length) {
+    judge(better.trace, after, left, after.errors ? "rejected: introduced errors" : "rejected: no better");
     ctx.opts.onLog?.("the improvement didn't help; keeping the previous version");
     return current;
   }
-  return better;
+  judge(better.trace, after, left, "kept");
+  return better.text;
 }
 
 /**
  * Compiles a scene with the video header and no auto-fix. Returns the
- * number of errors and a report (errors and warnings) with scene-relative
- * line numbers, ready for a repair prompt.
+ * number of errors and warnings, and a report (errors and warnings) with
+ * scene-relative line numbers, ready for a repair prompt.
  */
-export function checkScene(header: string, sceneText: string): { errors: number; report: string } {
+export function checkScene(header: string, sceneText: string): { errors: number; warnings: number; report: string } {
   const offset = header.split("\n").length;
   const { diagnostics } = compile(`${header}\n${sceneText}\n`, { autofix: false });
   // keep= refers to other scenes, which aren't present when a scene is checked alone.
   const relevant = diagnostics.filter((d) => d.code !== "NAR309" && d.span.line > offset);
   const errors = relevant.filter((d) => d.severity === "error").length;
   const shifted = relevant.map((d) => ({ ...d, span: { ...d.span, line: d.span.line - offset } }));
-  return { errors, report: report(shifted) };
+  return { errors, warnings: relevant.length - errors, report: report(shifted) };
 }
 
 // ------------------------------------------------------------- helpers ---
 
-async function chat(ctx: Ctx, messages: ChatMessage[], onDelta?: (d: string) => void, system = ctx.system): Promise<string> {
+/** One LLM call, traced: timing, tokens (estimated when the provider reports none), prompt and reply. */
+async function chat(
+  ctx: Ctx,
+  messages: ChatMessage[],
+  meta: CallMeta,
+  onDelta?: (d: string) => void,
+  system = ctx.system,
+): Promise<{ text: string; trace: CallTrace }> {
   ctx.calls++;
+  const t0 = performance.now();
+  const trace: CallTrace = {
+    id: ctx.trace.length + 1,
+    ...meta,
+    status: "running",
+    start: Math.round(t0 - ctx.started),
+    system: system === ctx.system ? "full" : "outline",
+    systemChars: system.length,
+    history: messages.length - 1,
+    prompt: messages[messages.length - 1]!.content,
+  };
+  ctx.trace.push(trace);
+  ctx.opts.onCall?.({ ...trace });
+
   const req = { messages: [{ role: "system" as const, content: system }, ...messages], temperature: ctx.opts.temperature ?? 0.4 };
-  const result = onDelta ? await ctx.opts.client.stream(req, onDelta) : await ctx.opts.client.chat(req);
-  if (result.usage) {
-    ctx.usage.prompt += result.usage.prompt;
-    ctx.usage.completion += result.usage.completion;
+  let result: ChatResult;
+  try {
+    result = onDelta
+      ? await ctx.opts.client.stream(req, (d) => {
+          trace.firstTokenMs ??= Math.round(performance.now() - t0);
+          onDelta(d);
+        })
+      : await ctx.opts.client.chat(req);
+  } catch (e) {
+    note(ctx, trace, { status: "failed", ms: Math.round(performance.now() - t0), error: e instanceof Error ? e.message : String(e) });
+    throw e;
   }
-  return result.text;
+  const chars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
+  const usage = result.usage ?? { prompt: Math.ceil(chars / 4), completion: Math.ceil(result.text.length / 4) };
+  ctx.usage.prompt += usage.prompt;
+  ctx.usage.completion += usage.completion;
+  note(ctx, trace, {
+    status: "done",
+    ms: Math.round(performance.now() - t0),
+    provider: result.provider,
+    model: result.model,
+    usage,
+    ...(!result.usage && { estimated: true }),
+    reply: result.text,
+  });
+  return { text: result.text, trace };
+}
+
+/** Updates a call's trace and reports it again. */
+function note(ctx: Ctx, trace: CallTrace, patch: Partial<CallTrace>): void {
+  Object.assign(trace, patch);
+  ctx.opts.onCall?.({ ...trace });
+}
+
+function sceneIdOf(text: string): string | undefined {
+  return /^\s*scene\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(text)?.[1];
+}
+
+/**
+ * Repairs common outline slips so planning never fails on form: numeric scene
+ * ids (`scene 1` → `scene s1`, which ids can't be), the same id planned twice
+ * (`stages`, `stages` → `stages`, `stages2`; scenes are written and repaired by id)
+ * and `variants=` for `variant=`.
+ */
+export function tidyOutline(text: string): string {
+  const used = new Set<string>();
+  return text
+    .split("\n")
+    .map((l) => {
+      if (!/^\s*scene\s/.test(l)) return l;
+      const line = l.replace(/^(\s*scene\s+)(\d)/, "$1s$2").replace(/\bvariants=/, "variant=");
+      const id = sceneIdOf(line);
+      if (!id) return line;
+      let unique = id;
+      for (let n = 2; used.has(unique); n++) unique = `${id}${n}`;
+      used.add(unique);
+      return unique === id ? line : line.replace(/^(\s*scene\s+)\S+/, `$1${unique}`);
+    })
+    .join("\n");
 }
 
 /** Strips markdown fences and any chatter before the script starts. */

@@ -5,6 +5,7 @@ import { createEvaluator, inspect, lineAt, type Evaluator } from "./inspect.js";
 import { renderInspector } from "./inspector.js";
 import { Overlay } from "./overlay.js";
 import { TimelinePanel } from "./timeline-panel.js";
+import { CallsPanel, type CallTrace } from "./calls.js";
 import { $, escape } from "./util.js";
 
 interface BuildResult {
@@ -223,6 +224,7 @@ async function loadExample(): Promise<void> {
 
 let events: EventSource | undefined;
 let queue = Promise.resolve();
+const callsPanel = new CallsPanel($<HTMLElement>("calls-card"), $<HTMLElement>("calls"), $<HTMLElement>("calls-summary"));
 
 function log(text: string, cls = ""): void {
   genLog.insertAdjacentHTML("beforeend", `<li class="${cls}">${escape(text).replace(/\n/g, "<br>")}</li>`);
@@ -234,6 +236,7 @@ function startGeneration(): void {
   teardown();
   panel.clear();
   genLog.innerHTML = "";
+  if (provider.value !== "replay") callsPanel.start();
   const q = new URLSearchParams({
     topic: $<HTMLTextAreaElement>("topic").value,
     provider: provider.value,
@@ -252,6 +255,7 @@ function startGeneration(): void {
   const then = (fn: () => Promise<void> | void) => (queue = queue.then(fn).catch((e) => log(String(e), "error")));
 
   es.addEventListener("log", (e) => log(json(e)));
+  es.addEventListener("call", (e) => callsPanel.upsert(json(e) as CallTrace));
   es.addEventListener("scene", (e) => {
     const d: BuildResult & { index: number; script: string } = json(e);
     then(async () => {
@@ -265,8 +269,9 @@ function startGeneration(): void {
     });
   });
   es.addEventListener("done", (e) => {
-    const d: BuildResult & { script: string; generated: boolean; stats: { calls: number; repairs: number; usage: { prompt: number; completion: number }; seconds: number } } = json(e);
+    const d: BuildResult & { script: string; generated: boolean; stats: { calls: number; repairs: number; usage: { prompt: number; completion: number }; seconds: number; traceFile?: string } } = json(e);
     finishStream(es);
+    callsPanel.finish(d.stats.traceFile);
     then(async () => {
       editor.value = d.script;
       showDiagnostics(d.diagnostics);
@@ -295,6 +300,7 @@ function startGeneration(): void {
 
 function finishStream(es: EventSource): void {
   es.close();
+  callsPanel.stop();
   if (events === es) events = undefined;
   genBtn.disabled = false;
   stopBtn.hidden = true;
@@ -310,17 +316,21 @@ function stopGeneration(): void {
 type Choice = { name: string; summary: string };
 
 async function loadProviders(): Promise<void> {
-  const p: { openrouter: boolean; groq: boolean; tts: string; examples: string[]; themes: Choice[]; motions: Choice[]; backgrounds: Choice[] } = await (await fetch("/api/providers")).json();
+  const p: { llm: Record<string, boolean>; tts: string; examples: string[]; themes: Choice[]; motions: Choice[]; backgrounds: Choice[] } = await (await fetch("/api/providers")).json();
   tts.value = p.tts;
   const options = (list: Choice[]) => list.map((c) => `<option value="${c.name}" title="${c.summary}">${c.name}</option>`).join("");
   look.insertAdjacentHTML("beforeend", options(p.themes));
   motion.insertAdjacentHTML("beforeend", options(p.motions));
   bgPick.insertAdjacentHTML("beforeend", options(p.backgrounds));
   replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
+  const labels: Record<string, string> = { openrouter: "OpenRouter", azure: "Azure", gemini: "Gemini", groq: "Groq" };
+  const any = Object.values(p.llm).some(Boolean);
   $<HTMLParagraphElement>("keys").innerHTML =
-    `OpenRouter ${p.openrouter ? "connected" : "not set"} · Groq ${p.groq ? "connected" : "not set"}` +
-    (p.openrouter || p.groq ? "" : ` — add keys to <code>.env</code>, or replay an example offline.`);
-  if (!p.openrouter && !p.groq) provider.value = "replay";
+    Object.entries(p.llm)
+      .map(([name, ok]) => `${labels[name] ?? name} ${ok ? "connected" : "not set"}`)
+      .join(" · ") + (any ? "" : ` — add keys to <code>.env</code>, or replay an example offline.`);
+  for (const option of provider.options) if (option.value in p.llm) option.disabled = !p.llm[option.value];
+  if (!any) provider.value = "replay";
   $<HTMLLabelElement>("replay-row").hidden = provider.value !== "replay";
 }
 

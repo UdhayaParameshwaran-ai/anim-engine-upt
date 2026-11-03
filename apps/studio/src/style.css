@@ -130,7 +130,7 @@ select option { background: var(--surface); color: var(--fg); }
   transition: background 0.15s;
 }
 .select:hover, .chip:hover { background: var(--subtle); }
-.chip select { height: 30px; font-size: 13px; color: var(--fg-2); }
+.chip select { height: 30px; font-size: 13px; color: var(--fg-2); padding-right: 26px; }
 
 .field {
   display: inline-flex;
@@ -228,7 +228,7 @@ select option { background: var(--surface); color: var(--fg); }
   line-height: 1.5;
 }
 .composer textarea::placeholder { color: var(--fg-3); }
-.composer-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.composer-bar { display: flex; align-items: flex-end; gap: 8px; margin-top: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .send {
   width: 36px;
@@ -263,13 +263,41 @@ select option { background: var(--surface); color: var(--fg); }
 
 .toolbar {
   display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 12px 16px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
-.toolbar .select { flex: 1; min-width: 0; }
-.toolbar .select select { width: 100%; }
+.toolbar-row { display: flex; gap: 8px; align-items: center; }
+.toolbar-row .select { flex: 1; min-width: 0; padding-left: 12px; }
+.toolbar-row .select select { flex: 1; min-width: 0; height: 34px; padding-left: 8px; font-weight: 500; text-overflow: ellipsis; }
+.select-icon { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--fg-3); stroke-width: 1.6; stroke-linejoin: round; }
+.toolbar-row .btn { flex: none; height: 36px; padding: 0 18px; }
+
+/* Look / motion / background / voice / speed: labeled, wraps to the sidebar width. */
+.settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px 8px;
+}
+.setting { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.setting > span { font-size: 11px; font-weight: 500; letter-spacing: 0.02em; color: var(--fg-3); padding-left: 2px; }
+.setting select,
+.setting input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background-color: var(--surface);
+  color: var(--fg);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.setting input { padding: 0 10px; outline: none; }
+.setting select:hover, .setting input:hover { background-color: var(--subtle); }
+.setting select:focus-visible, .setting input:focus-visible { border-color: var(--fg-3); }
 
 .code { flex: 1; display: flex; min-height: 0; background: var(--bg); }
 #gutter, #source { font: 12.5px/1.7 var(--mono); margin: 0; padding: 16px 0; }
@@ -550,3 +578,74 @@ body.render #app { display: block; }
 body.render .viewer { padding: 0; background: none; }
 body.render .stage-card { border: 0; border-radius: 0; box-shadow: none; }
 body.render #stage { width: auto; max-height: none; aspect-ratio: auto; }
+
+/* -------------------------------------------------------------- llm calls */
+
+#calls-summary code { font: 11px var(--mono); }
+#calls { padding: 0 16px 14px; overflow-x: auto; }
+.calls-empty { margin: 0; font-size: 12px; color: var(--fg-3); }
+.scene-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.scene-chip {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.scene-chip b { font: 500 11.5px var(--mono); color: var(--fg); margin-right: 2px; }
+.scene-chip.good { border-color: color-mix(in srgb, #1e8e3e 45%, var(--line-strong)); }
+.scene-chip.bad { border-color: var(--danger); }
+.scene-chip.running { border-style: dashed; }
+
+table.calls { width: 100%; border-collapse: collapse; font-size: 12px; }
+.calls th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--fg-3);
+  padding: 0 8px 6px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.calls td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.calls .num { text-align: right; font-variant-numeric: tabular-nums; }
+.calls .mono { font-family: var(--mono); font-size: 11.5px; }
+.calls tbody tr[data-id] { cursor: pointer; }
+.calls tbody tr[data-id]:hover, .calls tr.open { background: var(--subtle); }
+.calls .muted { color: var(--fg-3); }
+.calls .bad { color: var(--danger); }
+.calls .result { white-space: normal; min-width: 180px; }
+
+.kind { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 6px; background: var(--muted-bg); color: var(--fg); }
+.kind.repair { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.kind.quality { background: color-mix(in srgb, #b06000 16%, transparent); color: #b06000; }
+.kind.outline, .kind.single { background: var(--invert-bg); color: var(--invert-fg); }
+
+.bar-cell { position: relative; width: 32%; min-width: 140px; }
+.bar { position: absolute; top: 50%; height: 8px; margin-top: -4px; border-radius: 3px; background: var(--fg-2); }
+.bar.repair { background: var(--danger); }
+.bar.quality { background: #b06000; }
+.bar.running { opacity: 0.55; background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(255, 255, 255, 0.35) 4px 8px); }
+.bar.failed { background: var(--danger); opacity: 0.5; }
+.bar i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--fg); }
+
+.badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; margin-right: 6px; border: 1px solid currentColor; }
+.badge.good { color: #1e8e3e; }
+.badge.bad { color: var(--danger); }
+
+.calls tr.detail td { white-space: normal; padding: 4px 8px 12px; background: var(--subtle); }
+.calls .facts { margin: 0 0 8px; font-size: 11.5px; color: var(--fg-2); }
+.calls details { margin: 6px 0; }
+.calls summary { cursor: pointer; font-size: 11.5px; font-weight: 500; color: var(--fg-2); }
+.calls pre {
+  margin: 6px 0 0;
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  font: 11.5px/1.6 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

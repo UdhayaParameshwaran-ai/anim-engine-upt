@@ -13,6 +13,8 @@ import {
   ReplayClient,
   retrieveAssets,
   systemPrompt,
+  tidyOutline,
+  type CallTrace,
   type ChatRequest,
   type ChatResult,
   type LlmClient,
@@ -142,7 +144,40 @@ describe("OpenAI-compatible client", () => {
     expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b" } }).name).toBe("openrouter:anthropic/claude-sonnet-4.5 → groq:openai/gpt-oss-120b");
     expect(clientFromEnv({ env: { GROQ_API_KEY: "b", ANIM_GROQ_MODEL: "x/y" } }).name).toBe("groq:x/y");
     expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b", ANIM_LLM_PROVIDERS: "groq,openrouter" }, model: "fast" }).name).toBe("groq:fast → openrouter:anthropic/claude-sonnet-4.5");
-    expect(() => clientFromEnv({ env: {} })).toThrow(/OPENROUTER_API_KEY or GROQ_API_KEY/);
+    expect(() => clientFromEnv({ env: {} })).toThrow(/OPENROUTER_API_KEY or AZURE_OPENAI_ENDPOINT \+ AZURE_OPENAI_API_KEY or GEMINI_API_KEY or GROQ_API_KEY/);
+  });
+
+  it("talks to Azure and Gemini through their OpenAI-compatible endpoints", async () => {
+    const seen: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = [];
+    const fetch = (async (url: string, init: RequestInit) => {
+      seen.push({ url, headers: init.headers as Record<string, string>, body: JSON.parse(init.body as string) });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+    const env = {
+      AZURE_OPENAI_ENDPOINT: "https://res.openai.azure.com/openai/",
+      AZURE_OPENAI_API_KEY: "az",
+      GEMINI_API_KEY: "gm",
+      ANIM_GEMINI_MODEL: "models/gemini-3-flash-preview",
+    };
+    // Azure needs its endpoint too; the key alone isn't enough.
+    expect(clientFromEnv({ env: { AZURE_OPENAI_API_KEY: "az", GROQ_API_KEY: "g" } }).name).toBe("groq:openai/gpt-oss-120b");
+    expect(clientFromEnv({ env }).name).toBe("azure:gpt-4.1 → gemini:gemini-3-flash-preview");
+
+    const ask = { messages: [{ role: "user" as const, content: "x" }], temperature: 0.4, maxTokens: 50 };
+    await clientFromEnv({ env, providers: ["azure"], fetch }).chat(ask);
+    await clientFromEnv({ env, providers: ["gemini"], fetch }).chat(ask);
+    await clientFromEnv({ env: { ...env, AZURE_OPENAI_DEPLOYMENT: "gpt-5.4-nano" }, providers: ["azure"], fetch }).chat(ask);
+    const [azure, gemini, reasoning] = seen;
+    expect(azure!.url).toBe("https://res.openai.azure.com/openai/v1/chat/completions");
+    expect(azure!.headers["api-key"]).toBe("az");
+    expect(azure!.headers.authorization).toBeUndefined();
+    expect(azure!.body).toMatchObject({ model: "gpt-4.1", temperature: 0.4, max_tokens: 50 });
+    // gpt-5 models only take the default temperature and use max_completion_tokens.
+    expect(reasoning!.body).toMatchObject({ model: "gpt-5.4-nano", max_completion_tokens: 50 });
+    expect(reasoning!.body).not.toHaveProperty("temperature");
+    expect(gemini!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+    expect(gemini!.headers.authorization).toBe("Bearer gm");
+    expect(gemini!.body).toMatchObject({ model: "gemini-3-flash-preview", temperature: 0.4, max_tokens: 50 });
   });
 });
 
@@ -197,6 +232,39 @@ describe("generate", () => {
     expect(msg).toContain("L4:3 NAR301 error: `mian` is not declared (did you mean `main`?)");
     expect(msg).toContain("L5:1 NAR303 error");
     expect(repair.messages.at(-2)).toMatchObject({ role: "assistant" });
+  });
+
+  it("traces every call with its purpose, tokens, timing and how the reply validated", async () => {
+    const seen: CallTrace[] = [];
+    const r = await generate("how plants make food", { client: new ScriptedLlm(respond(true)), concurrency: 1, onCall: (c) => seen.push(c) });
+    expect(r.trace.map((c) => [c.kind, c.scene, c.attempt])).toEqual([
+      ["outline", undefined, undefined],
+      ["scene", "need", undefined],
+      ["scene", "leaf", undefined],
+      ["repair", "leaf", 1],
+    ]);
+    const [outline, need, leaf, repair] = r.trace;
+    expect(outline).toMatchObject({ status: "done", system: "outline", verdict: "2 scenes: need, leaf", usage: { prompt: 10, completion: 5 }, provider: "scripted", model: "m" });
+    expect(need).toMatchObject({ system: "full", check: { errors: 0 }, verdict: "valid" });
+    expect(leaf!.check!.errors).toBe(2);
+    expect(leaf!.verdict).toBe("has errors → repair");
+    expect(repair).toMatchObject({ history: 2, check: { errors: 0 }, verdict: "valid" });
+    // The repair carries the diagnostics that triggered it, and both sides of the exchange.
+    expect(repair!.reason).toContain("NAR301");
+    expect(repair!.prompt).toContain("This scene has errors");
+    expect(repair!.reply).toContain("1 draw main");
+    for (const c of r.trace) expect(c.ms).toBeGreaterThanOrEqual(0);
+    // Each call is reported when it starts, when it ends and once validated (same id, so consumers upsert).
+    expect(seen.filter((c) => c.id === 3).map((c) => c.status)).toEqual(["running", "done", "done"]);
+    expect(seen.find((c) => c.id === 3 && c.status === "running")!.reply).toBeUndefined();
+  });
+
+  it("estimates tokens when the provider reports none", async () => {
+    const quiet: LlmClient = { name: "q", chat: async () => ({ text: "x".repeat(400), provider: "q", model: "m" }), stream: async () => ({ text: "", provider: "q", model: "m" }) };
+    const seen: CallTrace[] = [];
+    // The reply has no scenes, so generation fails, but the call is still traced.
+    await expect(generate("plants", { client: quiet, onCall: (c) => seen.push(c) })).rejects.toThrow(/no scenes/);
+    expect(seen.find((c) => c.id === 1 && c.status === "done")).toMatchObject({ estimated: true, usage: { completion: 100 } });
   });
 
   it("falls back to auto-fix when repairs don't help", async () => {
@@ -375,5 +443,17 @@ describe("style director in generation", () => {
       history.push(director.entry());
     }
     expect(new Set(looks).size).toBe(3);
+  });
+});
+
+describe("tidyOutline", () => {
+  it("fixes numeric and repeated scene ids and variants=", () => {
+    const out = tidyOutline(['video 1 "X"', 'scene 1 "A" template=steps variants=row', 'scene stages "B"', "# goal: b", 'scene stages "C"', 'scene stages "D"'].join("\n"));
+    expect(out.split("\n").filter((l) => l.startsWith("scene"))).toEqual([
+      'scene s1 "A" template=steps variant=row',
+      'scene stages "B"',
+      'scene stages2 "C"',
+      'scene stages3 "D"',
+    ]);
   });
 });

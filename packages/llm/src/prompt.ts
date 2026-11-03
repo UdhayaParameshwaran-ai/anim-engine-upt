@@ -208,7 +208,7 @@ LINES
 video 1 "Title"
 theme <look>
 motion <personality>
-scene <id> "Title" template=<t> [variant=<v>] | grid=<layout code> [mirror=true]
+scene <id> "Title" template=<t> [variant=<v>] | grid=<layout code> [mirror=true]     <id> is one short lowercase word (intro, stages, recap), never a number
 # goal: <one line>
 
 ${styleSection()}

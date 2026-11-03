@@ -113,7 +113,13 @@ function lowerElement(el: ElementDecl, step: number, layout: SceneLayout, assets
   const comp = findComponent(el.kind)!;
   let component: string;
   if (el.kind === "icon" || el.kind === "asset") {
-    const m = assets.resolve(el.kind, el.name!)!.manifest;
+    const found = assets.resolve(el.kind, el.name!);
+    // Unknown names are NAR306 errors; without auto-fix (the scene check before a repair) they still need a body.
+    if (!found) {
+      const { name: _name, version: _version, ...rest } = el;
+      return lowerElement({ ...rest, kind: "placeholder", texts: [el.texts[0] ?? el.name ?? el.id], attrs: {} }, step, layout, assets, lock);
+    }
+    const m = found.manifest;
     component = `${m.kind}:${m.name}`;
     lock[component] = el.version ?? m.version;
   } else {

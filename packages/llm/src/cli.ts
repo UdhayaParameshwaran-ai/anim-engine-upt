@@ -4,10 +4,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { report } from "@anim/compiler";
 import { clientFromEnv, type ProviderName } from "./client.js";
-import { generate } from "./generate.js";
+import { generate, type CallTrace } from "./generate.js";
 
 /**
- *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|groq[,..]] [--model=<id>]
+ *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|azure|gemini|groq[,..]] [--model=<id>]
  *            [--single] [--scenes=2-4] [--style=director|llm] [--render [--voice=kokoro|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
@@ -15,7 +15,7 @@ const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.sp
 const oi = args.indexOf("-o");
 const topic = args.filter((a, i) => !a.startsWith("-") && args[i - 1] !== "-o").join(" ").trim();
 if (!topic) {
-  console.error('usage: generate "<topic>" [-o out.txt] [--provider=openrouter,groq] [--model=<id>] [--single] [--scenes=2-4] [--render] [--verbose]');
+  console.error('usage: generate "<topic>" [-o out.txt] [--provider=azure,gemini,...] [--model=<id>] [--single] [--scenes=2-4] [--render] [--verbose]');
   process.exit(2);
 }
 if (existsSync(".env")) process.loadEnvFile(".env");
@@ -53,6 +53,11 @@ const result = await generate(topic, {
 
 await mkdir(dirname(out), { recursive: true });
 await writeFile(out, result.script);
+// Every call with its prompt, reply, timing, tokens and validation, for later inspection.
+const traceFile = out.replace(/\.[^.]+$/, "") + ".trace.json";
+await writeFile(traceFile, JSON.stringify({ topic, provider: client.name, ok: result.ok, ms: result.ms, usage: result.usage, calls: result.trace }, null, 2));
+console.error(callTable(result.trace));
+console.error(`trace: ${traceFile}`);
 if (director && result.ok) {
   await store.add("cli", director.entry());
   const c = director.choice;
@@ -71,4 +76,24 @@ if (args.includes("--render")) {
   const data = await prepare(result.script, { provider: voiceProvider(value("voice")) });
   const r = await renderVideo(data, { out: mp4 });
   console.error(`rendered ${mp4}: ${r.duration.toFixed(1)}s in ${r.seconds.toFixed(1)}s`);
+}
+
+/** One line per LLM call: step, scene, tokens, time and how its reply validated. */
+function callTable(calls: CallTrace[]): string {
+  const rows = calls.map((c) => {
+    const step = `${c.kind}${c.attempt ? ` ${c.attempt}` : ""}`;
+    const est = c.estimated ? "~" : "";
+    const check = c.check ? (c.check.errors ? `${c.check.errors} err` : "valid") : "";
+    return [
+      String(c.id).padStart(2),
+      step.padEnd(9),
+      (c.scene ?? "-").padEnd(12),
+      `${est}${c.usage?.prompt ?? 0}`.padStart(7),
+      `${est}${c.usage?.completion ?? 0}`.padStart(6),
+      `${((c.ms ?? 0) / 1000).toFixed(1)}s`.padStart(7),
+      check.padEnd(6),
+      c.error ? `FAILED ${c.error.slice(0, 60)}` : (c.verdict ?? ""),
+    ].join("  ");
+  });
+  return ["  #  step       scene             in     out     time  check   result", ...rows].map((l) => `  ${l}`).join("\n");
 }

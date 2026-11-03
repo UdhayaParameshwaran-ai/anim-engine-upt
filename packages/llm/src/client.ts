@@ -1,6 +1,7 @@
 /**
- * Provider-neutral chat client. OpenRouter and Groq both speak the OpenAI
- * chat-completions protocol, so one implementation covers both; a fallback
+ * Provider-neutral chat client. OpenRouter, Groq, Azure OpenAI (v1 API) and
+ * Gemini (its OpenAI-compatible endpoint) all speak the OpenAI
+ * chat-completions protocol, so one implementation covers them; a fallback
  * client tries providers in order.
  */
 
@@ -18,6 +19,8 @@ export interface ChatRequest {
 export interface Usage {
   prompt: number;
   completion: number;
+  /** Prompt tokens served from the provider's prompt cache, when reported. */
+  cached?: number;
 }
 
 export interface ChatResult {
@@ -55,9 +58,17 @@ export interface ProviderPreset {
   headers?: Record<string, string>;
   /** Parallel requests; omitted = no limit beyond the caller's. */
   concurrency?: number;
+  /** Env var holding the endpoint, for providers whose URL is per account (Azure). Overrides baseUrl. */
+  baseUrlEnv?: string;
+  /** Turns the configured endpoint into the chat-completions base URL. */
+  endpoint?: (url: string) => string;
+  /** How the key is sent; default `Authorization: Bearer`. */
+  auth?: "bearer" | "api-key";
+  /** Normalizes a configured model name (e.g. Gemini's "models/" prefix). */
+  model?: (name: string) => string;
 }
 
-export const PROVIDERS: Record<"openrouter" | "groq", ProviderPreset> = {
+export const PROVIDERS: Record<"openrouter" | "groq" | "azure" | "gemini", ProviderPreset> = {
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
     defaultModel: "anthropic/claude-sonnet-4.5",
@@ -73,6 +84,27 @@ export const PROVIDERS: Record<"openrouter" | "groq", ProviderPreset> = {
     // The free tier allows ~8k tokens per minute and each call sends a ~4k-token prompt.
     concurrency: 1,
   },
+  azure: {
+    baseUrl: "",
+    baseUrlEnv: "AZURE_OPENAI_ENDPOINT",
+    // https://<resource>.openai.azure.com/openai → .../openai/v1 (the v1 API takes the deployment as "model").
+    endpoint: (url) => {
+      const u = url.trim().replace(/\/+$/, "");
+      if (/\/openai\/v1$/.test(u)) return u;
+      return /\/openai$/.test(u) ? `${u}/v1` : `${u}/openai/v1`;
+    },
+    defaultModel: "gpt-4.1",
+    keyEnv: "AZURE_OPENAI_API_KEY",
+    modelEnv: "AZURE_OPENAI_DEPLOYMENT",
+    auth: "api-key",
+  },
+  gemini: {
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    defaultModel: "gemini-3-flash-preview",
+    keyEnv: "GEMINI_API_KEY",
+    modelEnv: "ANIM_GEMINI_MODEL",
+    model: (name) => name.replace(/^models\//, ""),
+  },
 };
 
 export type ProviderName = keyof typeof PROVIDERS;
@@ -84,6 +116,8 @@ export interface CompatOptions {
   model: string;
   headers?: Record<string, string>;
   concurrency?: number;
+  /** How the key is sent; default `Authorization: Bearer`. */
+  auth?: "bearer" | "api-key";
   /** Retries for 429/5xx/network errors, with backoff. */
   retries?: number;
   timeoutMs?: number;
@@ -92,7 +126,7 @@ export interface CompatOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-/** OpenAI-compatible chat-completions client (OpenRouter, Groq, ...). */
+/** OpenAI-compatible chat-completions client (OpenRouter, Groq, Azure, Gemini, ...). */
 export class OpenAICompatibleClient implements LlmClient {
   readonly name: string;
   readonly concurrency?: number;
@@ -112,7 +146,7 @@ export class OpenAICompatibleClient implements LlmClient {
       const body = (await res.json()) as {
         choices?: { message?: { content?: string } }[];
         model?: string;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        usage?: RawUsage;
       };
       const text = body.choices?.[0]?.message?.content;
       if (typeof text !== "string") throw new LlmError(`${this.opts.name}: response has no message content`);
@@ -132,8 +166,8 @@ export class OpenAICompatibleClient implements LlmClient {
         const chunk = JSON.parse(event) as {
           choices?: { delta?: { content?: string } }[];
           model?: string;
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
-          x_groq?: { usage?: { prompt_tokens?: number; completion_tokens?: number } };
+          usage?: RawUsage;
+          x_groq?: { usage?: RawUsage };
           error?: { message?: string };
         };
         if (chunk.error) throw new LlmError(`${this.opts.name}: ${chunk.error.message ?? "stream error"}`, undefined, true);
@@ -152,16 +186,21 @@ export class OpenAICompatibleClient implements LlmClient {
 
   private async post(req: ChatRequest, stream: boolean): Promise<Response> {
     let res: Response;
+    // Reasoning models (gpt-5*, o1/o3/o4…) only accept the default temperature and use max_completion_tokens.
+    const reasoning = isReasoningModel(this.opts.model);
+    const auth: Record<string, string> = this.opts.auth === "api-key" ? { "api-key": this.opts.apiKey } : { authorization: `Bearer ${this.opts.apiKey}` };
     try {
       res = await this.fetchFn(`${this.opts.baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${this.opts.apiKey}`, ...this.opts.headers },
+        headers: { "content-type": "application/json", ...auth, ...this.opts.headers },
         body: JSON.stringify({
           model: this.opts.model,
           messages: req.messages,
-          temperature: req.temperature ?? 0.4,
-          ...(req.maxTokens && { max_tokens: req.maxTokens }),
+          ...(!reasoning && { temperature: req.temperature ?? 0.4 }),
+          ...(req.maxTokens && { [reasoning ? "max_completion_tokens" : "max_tokens"]: req.maxTokens }),
           stream,
+          // Without this most providers send no token counts while streaming.
+          ...(stream && { stream_options: { include_usage: true } }),
         }),
         signal: AbortSignal.timeout(this.opts.timeoutMs ?? 180_000),
       });
@@ -235,7 +274,7 @@ export class FallbackClient implements LlmClient {
 }
 
 export interface FromEnvOptions {
-  /** Provider order; default $ANIM_LLM_PROVIDERS or "openrouter,groq". */
+  /** Provider order; default $ANIM_LLM_PROVIDERS or "openrouter,azure,gemini,groq". */
   providers?: ProviderName[];
   /** Model override for the first provider. */
   model?: string;
@@ -249,31 +288,57 @@ export interface FromEnvOptions {
  */
 export function clientFromEnv(opts: FromEnvOptions = {}): LlmClient {
   const env = opts.env ?? process.env;
-  const order = opts.providers ?? ((env.ANIM_LLM_PROVIDERS ?? "openrouter,groq").split(",").map((s) => s.trim()).filter(Boolean) as ProviderName[]);
+  const order = opts.providers ?? ((env.ANIM_LLM_PROVIDERS ?? DEFAULT_ORDER).split(",").map((s) => s.trim()).filter(Boolean) as ProviderName[]);
   const clients: LlmClient[] = [];
   order.forEach((name, i) => {
     const preset = PROVIDERS[name];
     if (!preset) throw new Error(`unknown LLM provider \`${name}\` (known: ${Object.keys(PROVIDERS).join(", ")})`);
     const apiKey = env[preset.keyEnv];
-    if (!apiKey) return;
+    const configured = preset.baseUrlEnv ? env[preset.baseUrlEnv] : preset.baseUrl;
+    if (!apiKey || !configured) return;
+    const model = (i === 0 && opts.model) || env[preset.modelEnv] || preset.defaultModel;
     clients.push(
       new OpenAICompatibleClient({
         name,
-        baseUrl: preset.baseUrl,
+        baseUrl: preset.endpoint ? preset.endpoint(configured) : configured,
         apiKey,
-        model: (i === 0 && opts.model) || env[preset.modelEnv] || preset.defaultModel,
+        model: preset.model ? preset.model(model) : model,
+        ...(preset.auth && { auth: preset.auth }),
         ...(preset.headers && { headers: preset.headers }),
         ...(preset.concurrency && { concurrency: preset.concurrency }),
         ...(opts.fetch && { fetch: opts.fetch }),
       }),
     );
   });
-  if (!clients.length) throw new Error(`no LLM API key found; set ${order.map((n) => PROVIDERS[n].keyEnv).join(" or ")} (see .env.example)`);
+  if (!clients.length) throw new Error(`no LLM API key found; set ${order.map((n) => required(PROVIDERS[n]).join(" + ")).join(" or ")} (see .env.example)`);
   return clients.length === 1 ? clients[0]! : new FallbackClient(clients);
 }
 
-function usage(u: { prompt_tokens?: number; completion_tokens?: number }): Usage {
-  return { prompt: u.prompt_tokens ?? 0, completion: u.completion_tokens ?? 0 };
+const DEFAULT_ORDER = "openrouter,azure,gemini,groq";
+
+/** The env vars a provider needs before it can be used. */
+function required(p: ProviderPreset): string[] {
+  return p.baseUrlEnv ? [p.baseUrlEnv, p.keyEnv] : [p.keyEnv];
+}
+
+/** Which providers have everything they need in `env`. */
+export function configuredProviders(env: Record<string, string | undefined> = process.env): Record<ProviderName, boolean> {
+  return Object.fromEntries(Object.entries(PROVIDERS).map(([name, p]) => [name, required(p).every((k) => Boolean(env[k]))])) as Record<ProviderName, boolean>;
+}
+
+export function isReasoningModel(model: string): boolean {
+  return /(^|\/)(gpt-5|o[1-9])/.test(model);
+}
+
+interface RawUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+}
+
+function usage(u: RawUsage): Usage {
+  const cached = u.prompt_tokens_details?.cached_tokens;
+  return { prompt: u.prompt_tokens ?? 0, completion: u.completion_tokens ?? 0, ...(cached && { cached }) };
 }
 
 /** Parses a server-sent-events stream into `data:` payloads. */

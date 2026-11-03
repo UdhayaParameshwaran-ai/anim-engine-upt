@@ -125,6 +125,24 @@ describe("lowering", () => {
 });
 
 describe("failure handling", () => {
+  it("lowers an unknown icon or asset to a placeholder even without auto-fix", () => {
+    for (const kind of ["icon:mountain", "asset:sun.ray"]) {
+      const src = `video 1 "x"
+scene a "A" template=steps
+m = ${kind} "Peak"
+n = icon:sun "Sun"
+> Hi {1}there and {2}here.
+1 pop m
+2 pop n
+`;
+      for (const autofix of [false, true]) {
+        const r = compile(src, { autofix });
+        expect(r.diagnostics.map((d) => d.code)).toContain("NAR306");
+        expect(r.ir!.scenes[0]!.elements.find((e) => e.id === "m")).toMatchObject({ kind: "placeholder", texts: ["Peak"] });
+      }
+    }
+  });
+
   it("returns diagnostics and no IR when errors remain", () => {
     const r = compile(`video 1\nscene s template=compare\nleft = icon:sun\n> {1}Hi.\n1 pop left\n`);
     expect(r.ok).toBe(false);
