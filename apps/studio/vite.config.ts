@@ -26,6 +26,8 @@ function api(): Plugin {
       if (defaultTts() === "kokoro") void voice(server, "kokoro").catch(() => undefined);
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://localhost");
+        // The layout gallery is its own page.
+        if (url.pathname === "/gallery" || url.pathname === "/gallery/") req.url = "/gallery.html" + url.search;
         try {
           if (url.pathname === "/api/examples") return json(res, readdirSync(examples).filter((f) => f.endsWith(".txt")));
           if (url.pathname === "/api/source") return send(res, "text/plain; charset=utf-8", readFileSync(join(examples, basename(url.searchParams.get("file") ?? "")), "utf8"));

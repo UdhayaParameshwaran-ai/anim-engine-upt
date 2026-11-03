@@ -649,3 +649,7 @@ table.calls { width: 100%; border-collapse: collapse; font-size: 12px; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.gallery-link { display: inline-flex; align-items: center; height: 32px; padding: 0 14px; font-size: 13px; color: var(--fg-2); text-decoration: none; }
+.gallery-link:hover { color: var(--fg); }
