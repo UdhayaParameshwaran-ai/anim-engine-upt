@@ -1,4 +1,4 @@
-import { TEMPLATE_GUIDES, type Shape, type TemplateGuide, type VariantGuide } from "./guide.js";
+import { SHAPES, TEMPLATE_GUIDES, type Shape, type TemplateGuide, type VariantGuide } from "./guide.js";
 import { EXTRA_VARIANTS } from "./variants.js";
 
 /**
@@ -171,7 +171,7 @@ const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "flow", version: 1, summary: "flowchart / graph of nodes and edges", slots: [], graph: { maxNodes: 12 }, variants: ["auto", "down", "across"] },
   { name: "timeline", version: 1, summary: "events along a horizontal line", slots: [], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 7 }, variants: ["alternate", "line", "vertical"] },
   { name: "hub", version: 1, summary: "central idea with spokes", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: true }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 8 }, variants: ["ring", "sides"] },
-  { name: "grid", version: 1, summary: "cards in a grid", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 9 }, variants: ["auto", "feature", "strip"] },
+  { name: "cards", version: 1, summary: "cards of equal weight in rows", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 9 }, variants: ["auto", "feature", "strip"] },
   { name: "spotlight", version: 1, summary: "one large visual with labels around it", slots: [{ name: "main", accepts: [...VISUAL], required: true }], items: { accepts: ["label", "text"], min: 0, max: 6 }, variants: ["center", "left", "right"] },
   // Flow shapes: the template places the parts; declared arrows (a1 = arrow sun->leaf) connect them.
   { name: "converge", version: 1, summary: "several inputs flow into one result (declare arrows input->result)", slots: [{ name: "result", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 5 }, variants: ["left", "top", "around"] },
@@ -304,6 +304,19 @@ export function variantGuide(tpl: TemplateManifest, variant: string): VariantGui
 /** Templates that show a shape, in registry order. */
 export function templatesFor(shape: Shape): TemplateManifest[] {
   return TEMPLATES.filter((t) => t.guide.shape === shape);
+}
+
+/** Old or mistaken template names: `grid` was renamed `cards` (it clashed with `grid=` pages). */
+export const TEMPLATE_ALIASES: Readonly<Record<string, string>> = { grid: "cards" };
+
+/**
+ * The template a name means: a template name, an alias (`grid` → `cards`)
+ * or a shape name written as a template (`template=transform` → `process`).
+ */
+export function resolveTemplate(name: string): TemplateManifest | undefined {
+  const alias = TEMPLATE_ALIASES[name];
+  if (alias) return findTemplate(alias);
+  return findTemplate(name) ?? (name in SHAPES ? templatesFor(name as Shape)[0] : undefined);
 }
 
 /** Draft variants of a template (usable only when drafts are allowed). */

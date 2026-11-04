@@ -1,13 +1,18 @@
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { compile } from "@anim/compiler";
 import { Director, type HistoryEntry } from "@anim/director";
 import { AssetLibrary, TEMPLATES } from "@anim/registry";
 import { describe, expect, it } from "vitest";
 import {
+  ClaudeCodeClient,
   clean,
   clientFromEnv,
+  flatten,
   FallbackClient,
   generate,
   LlmError,
+  modelChoices,
   OpenAICompatibleClient,
   qualityIssues,
   ReplayClient,
@@ -388,7 +393,7 @@ describe("generation fixes from the traced run", () => {
     const [outline, scene] = llm.requests;
     expect(outline!.messages[0]!.content).toContain("PLANNING RULES");
     // The shape table (how to choose a template) is the bulk of it; still well under half the full language.
-    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 2.5);
+    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 2.2);
   });
 
   it("tells later scenes what earlier scenes already said", async () => {
@@ -493,7 +498,7 @@ describe("template knowledge", () => {
 
   it("lists every template under its shape for planning", () => {
     const table = shapeTable();
-    for (const t of TEMPLATES) expect(table).toMatch(new RegExp(`→ ${t.name}[ :]`));
+    for (const t of TEMPLATES) expect(table).toMatch(new RegExp(`→ template=${t.name}[ :]`));
   });
 
   it("sends the planned template's card, with its example, only with that scene", () => {
@@ -504,5 +509,94 @@ describe("template knowledge", () => {
     for (const v of converge.variants) expect(prompt).toContain(converge.guide.variants[v]!.when);
     expect(prompt).not.toContain("TEMPLATE process");
     expect(scenePrompt(outline, "facts")).not.toContain("TEMPLATE ");
+    // Grid pages get their own card: slots in fill order, what fits each, the page rules.
+    expect(scenePrompt(outline, "facts")).toMatch(/GRID PAGE L3-01 Three columns\nExactly 3 content elements[\s\S]*slot 3: /);
+  });
+});
+
+describe("local fixes", () => {
+  it("adds missing cues itself instead of spending a repair call", async () => {
+    const UNMARKED = `scene need "Needs" template=steps
+sun = icon:sun "Light"
+water = icon:droplet "Water"
+a1 = arrow sun->water
+> Plants need light and then they need water.
+1 pop sun
+2 draw a1 then pop water`;
+    const llm = new ScriptedLlm((last) => (last.startsWith("Plan a narrated") ? OUTLINE : last.includes('Write scene "need"') ? UNMARKED : last.includes('Write scene "leaf"') ? LEAF_OK : "x"));
+    const r = await generate("plants", { client: llm });
+    expect(r.ok).toBe(true);
+    expect(r.repairs).toBe(0);
+    expect(r.script).toMatch(/> Plants need .*\{1\}.*\{2\}/);
+  });
+});
+
+describe("model choices", () => {
+  it("offers the Claude models, the Azure deployments and the Gemini key's text models", async () => {
+    expect(await modelChoices("claude", { ANIM_CLAUDE_MODEL: "claude-sonnet-5-5" })).toEqual({
+      default: "claude-sonnet-5-5",
+      models: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
+    });
+    expect(await modelChoices("azure", { AZURE_OPENAI_DEPLOYMENT: "gpt-4.1", AZURE_OPENAI_DEPLOYMENTS: "gpt-5.4-nano, gpt-4.1,gpt-5-mini" })).toEqual({
+      default: "gpt-4.1",
+      models: ["gpt-4.1", "gpt-5.4-nano", "gpt-5-mini"],
+    });
+    const list = { data: [{ id: "models/gemini-2.5-flash" }, { id: "models/gemini-3-pro-preview" }, { id: "models/text-embedding-004" }, { id: "models/gemini-2.5-flash-preview-tts" }] };
+    const gem = await modelChoices("gemini", { GEMINI_API_KEY: "k-test-1" }, async () => jsonResponse(list));
+    expect(gem).toEqual({ default: "gemini-3-flash-preview", models: ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash"] });
+    const offline = await modelChoices("gemini", { GEMINI_API_KEY: "k-test-2" }, async () => jsonResponse({}, 403));
+    expect(offline.models).toEqual(["gemini-3-flash-preview"]);
+  });
+});
+
+describe("claude (subscription via the Claude Code CLI)", () => {
+  /** A fake `claude -p` process that replays stream-json lines. */
+  function fakeCli(lines: object[], record: { args?: string[]; input?: string; env?: NodeJS.ProcessEnv } = {}) {
+    return (_bin: string, args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv }) => {
+      record.args = args;
+      record.env = opts.env;
+      const child = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; stdin: PassThrough; kill: () => void };
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.kill = () => undefined;
+      let input = "";
+      child.stdin.on("data", (c) => (input += c));
+      child.stdin.on("finish", () => {
+        record.input = input;
+        for (const l of lines) child.stdout.write(`${JSON.stringify(l)}\n`);
+        child.stdout.end();
+        setTimeout(() => child.emit("close", 0), 0);
+      });
+      return child as never;
+    };
+  }
+  const delta = (text: string) => ({ type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text } } });
+  const done = { type: "result", is_error: false, result: "scene a", usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 900, cache_creation_input_tokens: 100 }, modelUsage: { "claude-opus-5-5": {} } };
+
+  it("streams the reply, reports usage, and never passes an API key to the CLI", async () => {
+    const rec: { args?: string[]; input?: string; env?: NodeJS.ProcessEnv } = {};
+    const client = new ClaudeCodeClient({ model: "claude-opus-5-5", spawn: fakeCli([delta("scene "), delta("a"), done], rec), env: { ANTHROPIC_API_KEY: "secret", PATH: "x" } });
+    const parts: string[] = [];
+    const r = await client.stream({ messages: [{ role: "system", content: "SYS" }, { role: "user", content: "write" }] }, (d) => parts.push(d));
+    expect(parts).toEqual(["scene ", "a"]);
+    expect(r).toEqual({ text: "scene a", provider: "claude", model: "claude-opus-5-5", usage: { prompt: 1010, completion: 5, cached: 900 } });
+    expect(rec.args).toEqual(expect.arrayContaining(["-p", "--model", "claude-opus-5-5", "--tools", "", "--system-prompt", "SYS"]));
+    expect(rec.input).toBe("write");
+    expect(rec.env?.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it("writes a multi-turn exchange as one prompt", () => {
+    const { system, prompt } = flatten([{ role: "system", content: "S" }, { role: "user", content: "a" }, { role: "assistant", content: "b" }, { role: "user", content: "fix it" }]);
+    expect(system).toBe("S");
+    expect(prompt).toContain("<user>\na\n</user>\n<assistant>\nb\n</assistant>");
+    expect(prompt.endsWith("fix it")).toBe(true);
+  });
+
+  it("turns a CLI error into a retryable LlmError only when it is a limit", async () => {
+    const limit = new ClaudeCodeClient({ model: "m", spawn: fakeCli([{ type: "result", is_error: true, result: "Claude usage limit reached" }]) });
+    await expect(limit.chat({ messages: [{ role: "user", content: "x" }] })).rejects.toMatchObject({ retryable: true });
+    const auth = new ClaudeCodeClient({ model: "m", spawn: fakeCli([{ type: "result", is_error: true, result: "Invalid API key · Please run /login" }]) });
+    await expect(auth.chat({ messages: [{ role: "user", content: "x" }] })).rejects.toMatchObject({ retryable: false });
   });
 });

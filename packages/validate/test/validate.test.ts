@@ -193,3 +193,28 @@ describe("semantics", () => {
     expect(r.codes).toEqual([C.BeatTooLong]);
   });
 });
+
+describe("audit fixes", () => {
+  it("reads `grid` and shape names as template aliases, with a fixed warning", () => {
+    const grid = check("a = icon:sun \"A\"\nb = icon:wind \"B\"\n> {1}One and {2}two.\n1 pop a\n2 pop b", { scene: "template=grid" });
+    expect(grid.diagnostics.map((d) => [d.code, d.severity, d.fixed])).toEqual([[C.UnknownTemplate, "warning", "used `cards`"]]);
+    expect(grid.printed).toContain("template=cards");
+    const shape = check("a = icon:sun \"A\"\nb = icon:wind \"B\"\nc = icon:cloud \"C\"\n> {1}One, {2}two, {3}three.\n1 pop a\n2 pop b\n3 pop c", { scene: "template=sequence" });
+    expect(shape.printed).toContain("template=steps");
+  });
+
+  it("adds cues the narration never marked instead of dropping the actions", () => {
+    const r = check("a = icon:sun \"A\"\nb = icon:wind \"B\"\n> The sun rises over the hills and the wind starts to blow.\n1 pop a\n2 pop b");
+    expect(r.diagnostics.map((d) => d.fixed)).toEqual(["added cue {1} to the narration", "added cue {2} to the narration"]);
+    expect(r.printed).toMatch(/> The sun .*\{1\}.*\{2\}/);
+    expect(r.printed).toContain("1 pop a");
+    expect(r.printed).toContain("2 pop b");
+    expect(validate(parse(r.printed).script).diagnostics).toEqual([]);
+  });
+
+  it("never puts an added cue inside a span cue", () => {
+    const r = check("a = icon:sun \"A\"\nb = icon:wind \"B\"\n> First {1 the bright sun} then more words follow here.\n1 pop a\n2 pop b");
+    expect(parse(r.printed).diagnostics).toEqual([]);
+    expect(r.printed).toMatch(/\{1 the bright sun\} then .*\{2\}/);
+  });
+});

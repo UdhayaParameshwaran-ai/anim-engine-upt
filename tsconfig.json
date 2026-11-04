@@ -26,6 +26,9 @@
       "path": "packages/tts-kokoro"
     },
     {
+      "path": "packages/tts-piper"
+    },
+    {
       "path": "packages/timeline"
     },
     {

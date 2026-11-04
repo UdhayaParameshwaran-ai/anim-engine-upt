@@ -34,6 +34,7 @@ water = icon:droplet
 | `packages/compiler` | ✅ layout + lowering + CLI | DSL → VideoIR; the layout engine decides every coordinate |
 | `packages/tts` | ✅ interface, mock, aligner, cache | Provider-neutral TTS; any timing granularity → word timings |
 | `packages/tts-kokoro` | ✅ local neural voice | Kokoro-82M (q4f16 ONNX) on the CPU with exact word timings from the model's durations |
+| `packages/tts-piper` | ✅ fast local voice | Piper (VITS ONNX), ~4x faster than Kokoro; sentence timings spread over the words |
 | `packages/timeline` | ✅ resolver + evaluator | Cues → absolute frame-quantized tweens; stateless `at(t)` |
 | `packages/director` | ✅ style director | Mood → look/motion, novelty memory per user, scene arrangements |
 | `packages/llm` | ✅ OpenRouter + Groq, generation pipeline | Prompt → outline → scenes → validate → LLM repair → auto-fix |
@@ -45,7 +46,7 @@ water = icon:droplet
 
 A scene picks one of two layout systems. The LLM never writes coordinates in either:
 
-- `template=`: 12 diagram templates (`title`, `compare`, `steps`, `cycle`, `flow`, `timeline`, `hub`, `grid`, `spotlight`, and the flow shapes `converge`, `diverge`, `process`). Every template, variant and grid layout is rendered at `/gallery` in the Studio. Each template has a card (shape, when to use it, what each variant is for); the LLM picks the template by shape and the layout engine picks the variant that fits the content (§6c of `docs/dsl-spec.md`).
+- `template=`: 12 diagram templates (`title`, `compare`, `steps`, `cycle`, `flow`, `timeline`, `hub`, `cards` (formerly `grid`, still accepted), `spotlight`, and the flow shapes `converge`, `diverge`, `process`). Every template, variant and grid layout is rendered at `/gallery` in the Studio. Each template has a card (shape, when to use it, what each variant is for); the LLM picks the template by shape and the layout engine picks the variant that fits the content (§6c of `docs/dsl-spec.md`).
 - `grid=`: editorial pages from the [Template Rule Book v2](docs/rulebook-v2.html). It has 27 slot layouts on a 12-column grid, 6 frame modes (header and footer on or off), and 32 elements (stats, charts, tables, lists, quotes, steppers, flowcharts, maps…), each with its own motion. Rules R1–R11 are checked and auto-fixed where possible. See `examples/rulebook-gallery.txt` for every element.
 
 ## Generate from a prompt
@@ -84,7 +85,7 @@ Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmp
 - **Inspector:** shows the current scene, step, beat and word, each element's values, and the tween driving it. Click to jump to the source.
 - **Bounds overlay** (O): shows each element's current box and id, following the camera.
 
-The Studio and the renderer narrate with the local Kokoro voice by default. **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
+The Studio and the renderer narrate with the local Kokoro voice by default. **Piper** (`ANIM_TTS=piper`, `--voice=piper`) is about 4x faster with a plainer voice; it needs the Piper binary and a voice in `.cache/piper` (`piper/piper.exe` from the [Piper releases](https://github.com/rhasspy/piper/releases) and `en_US-lessac-medium.onnx` + `.onnx.json` from [piper-voices](https://huggingface.co/rhasspy/piper-voices)). **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
 
 ## Looks and motion
 

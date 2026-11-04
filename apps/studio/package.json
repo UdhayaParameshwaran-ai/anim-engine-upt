@@ -15,6 +15,7 @@
     "@anim/registry": "workspace:*",
     "@anim/timeline": "workspace:*",
     "@anim/tts": "workspace:*",
-    "@anim/tts-kokoro": "workspace:*"
+    "@anim/tts-kokoro": "workspace:*",
+    "@anim/tts-piper": "workspace:*"
   }
 }

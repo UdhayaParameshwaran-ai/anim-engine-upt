@@ -4,14 +4,14 @@ import { basename } from "node:path";
 import { prepare, renderVideo, voiceProvider } from "./render.js";
 
 /**
- *   render <script> [-o out.mp4] [--voice=kokoro|beeps] [--speed=1] [--workers=N] [--from=s] [--to=s] [--crf=18] [--jpeg]
+ *   render <script> [-o out.mp4] [--voice=kokoro|piper|beeps] [--speed=1] [--workers=N] [--from=s] [--to=s] [--crf=18] [--jpeg]
  */
 const args = process.argv.slice(2);
 const file = args.find((a, i) => !a.startsWith("-") && args[i - 1] !== "-o");
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
 const num = (name: string) => (value(name) !== undefined ? Number(value(name)) : undefined);
 if (!file) {
-  console.error("usage: render <script> [-o out.mp4] [--voice=kokoro|beeps] [--speed=1] [--workers=N] [--from=s] [--to=s] [--crf=18] [--jpeg]");
+  console.error("usage: render <script> [-o out.mp4] [--voice=kokoro|piper|beeps] [--speed=1] [--workers=N] [--from=s] [--to=s] [--crf=18] [--jpeg]");
   process.exit(2);
 }
 const oi = args.indexOf("-o");

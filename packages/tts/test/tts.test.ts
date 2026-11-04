@@ -90,3 +90,22 @@ describe("scene synthesis", () => {
     }
   });
 });
+
+describe("overlapping builds", () => {
+  it("speak a scene once when two builds ask for it at the same time", async () => {
+    const { ir } = compile('video 1 "X"\n\nscene a "A"\nx = text "Hi"\n> Hello {1}there, this is shared.\n1 fade x\n');
+    let calls = 0;
+    const slow: TtsProvider = {
+      id: "slow-test",
+      capabilities: { timing: "none", ssml: false, maxChars: 10_000 },
+      synthesize: async (req) => {
+        calls++;
+        await new Promise((r) => setTimeout(r, 30));
+        return { audio: new Uint8Array(4), format: "wav", sampleRate: 16000, duration: req.text.split(" ").length * 0.4 };
+      },
+    };
+    const [a, b] = await Promise.all([speakScene(ir!.scenes[0]!, ir!, { provider: slow }), speakScene(ir!.scenes[0]!, ir!, { provider: slow })]);
+    expect(calls).toBe(1);
+    expect(a.duration).toBe(b.duration);
+  });
+});

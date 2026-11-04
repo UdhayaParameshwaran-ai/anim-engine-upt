@@ -7,15 +7,15 @@ import { clientFromEnv, type ProviderName } from "./client.js";
 import { generate, type CallTrace } from "./generate.js";
 
 /**
- *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|azure|gemini|groq[,..]] [--model=<id>]
- *            [--single] [--scenes=2-4] [--style=director|llm] [--render [--voice=kokoro|beeps]] [--verbose]
+ *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|azure|gemini|groq|claude[,..]] [--model=<id>]
+ *            [--single] [--scenes=2-4] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
 const oi = args.indexOf("-o");
 const topic = args.filter((a, i) => !a.startsWith("-") && args[i - 1] !== "-o").join(" ").trim();
 if (!topic) {
-  console.error('usage: generate "<topic>" [-o out.txt] [--provider=azure,gemini,...] [--model=<id>] [--single] [--scenes=2-4] [--render] [--verbose]');
+  console.error('usage: generate "<topic>" [-o out.txt] [--provider=azure,gemini,claude,...] [--model=<id>] [--single] [--scenes=2-4] [--render] [--verbose]');
   process.exit(2);
 }
 if (existsSync(".env")) process.loadEnvFile(".env");

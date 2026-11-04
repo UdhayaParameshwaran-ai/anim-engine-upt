@@ -8,17 +8,17 @@
  * there are); the router then offers only the templates of that shape.
  */
 export const SHAPES = {
-  intro: "opening or closing headline; one message",
-  sequence: "ordered stages where order matters (first, then, finally)",
+  intro: "the opening headline of the video (first scene only)",
+  sequence: "stages that happen one after another in time (first, then, finally); not a set of options or methods",
   loop: "stages that repeat: the last leads back to the first",
   compare: "two things side by side: versus, before/after, pros/cons",
-  "many-to-one": "several inputs combine into one result",
+  "many-to-one": "several inputs or ingredients combine into one result (what a fire needs to burn, what a cake is made of)",
   "one-to-many": "one source produces or splits into several outputs",
   transform: "inputs go through a process and come out as outputs",
-  hub: "one central idea with related aspects, no direction",
-  collection: "a set of peers of equal weight: kinds, examples, features",
-  timeline: "dated events in chronological order",
-  focus: "one picture whose parts are labelled",
+  hub: "aspects or factors of one abstract idea, each related to it (what makes a startup succeed, what affects health)",
+  collection: "kinds, types, examples, options or methods of equal weight, in no order, each with a picture",
+  timeline: "events with a date or year each, in chronological order",
+  focus: "the physical parts of one object, labelled on its picture (parts of the heart, a leaf, a cell)",
   graph: "branches, decisions or dependencies between nodes",
 } as const;
 
@@ -43,8 +43,8 @@ export interface TemplateGuide {
 export const TEMPLATE_GUIDES: Record<string, TemplateGuide> = {
   title: {
     shape: "intro",
-    useWhen: "the opening or closing scene; a headline with at most 3 small visuals",
-    avoidWhen: "there is anything to explain → use a diagram template",
+    useWhen: "the first scene: the headline with at most 3 small visuals",
+    avoidWhen: "it is not the first scene; a closing takeaway → a grid page (quote, bullets or stat) or a diagram that recaps",
     variants: {
       center: { when: "a single headline, optional subtitle and up to 3 icons below", items: [0, 3] },
       left: { when: "a left-aligned headline with 1–3 visuals stacked beside it", items: [0, 3] },
@@ -60,7 +60,7 @@ subtitle = text "How plants make food from light"
   compare: {
     shape: "compare",
     useWhen: "exactly two things are contrasted: A vs B, before/after, problem/solution",
-    avoidWhen: "three or more things → grid or hub",
+    avoidWhen: "three or more things → cards or hub",
     variants: {
       side: { when: "two things of equal weight, side by side" },
       stacked: { when: "two wide things (long text, charts) one above the other" },
@@ -77,8 +77,8 @@ right = asset:cell.animal "Animal cell"
   },
   steps: {
     shape: "sequence",
-    useWhen: "2–6 stages in a fixed order, each happening after the previous",
-    avoidWhen: "the last stage leads back to the first → cycle; stages branch → flow",
+    useWhen: "2–6 stages in a fixed order, each happening after the previous (draw arrows between them)",
+    avoidWhen: "the items are options, methods or kinds with no order → cards; the last stage leads back to the first → cycle; stages branch → flow",
     variants: {
       row: { when: "2–5 steps with short labels, read left to right", items: [2, 5] },
       zigzag: { when: "4–6 steps; alternating heights add rhythm", items: [3, 6] },
@@ -139,8 +139,8 @@ e2 = n1 -> n3 "no"
   },
   timeline: {
     shape: "timeline",
-    useWhen: "2–7 events tied to dates or eras, in chronological order",
-    avoidWhen: "the stages have no dates → steps",
+    useWhen: "2–7 events, each item starting with its date or year (\"1969 · ARPANET\")",
+    avoidWhen: "the stages have no dates → steps; never pad it with undated items",
     variants: {
       alternate: { when: "4–7 dated events, labels above and below the line", items: [3, 7] },
       line: { when: "2–5 events with short labels on one line", items: [2, 5] },
@@ -157,8 +157,8 @@ t3 = box "2020 · mRNA vaccines"
   },
   hub: {
     shape: "hub",
-    useWhen: "one central idea with 2–8 related aspects that have no order or direction",
-    avoidWhen: "things flow into or out of the centre → converge or diverge",
+    useWhen: "one abstract idea with 2–8 aspects or factors that each relate to it",
+    avoidWhen: "the items are physical parts of one object → spotlight; ingredients that combine into a result → converge; kinds or examples → cards",
     variants: {
       ring: { when: "a central idea with 3–8 aspects around it", items: [3, 8] },
       sides: { when: "2–6 aspects in two groups left and right (e.g. pros and cons)", items: [2, 6] },
@@ -174,16 +174,16 @@ h3 = icon:user "Users"
 3 pop h2
 4 pop h3`,
   },
-  grid: {
+  cards: {
     shape: "collection",
-    useWhen: "2–9 peers of equal weight: kinds, examples, features",
-    avoidWhen: "the items have an order → steps; one central item → hub",
+    useWhen: "2–9 kinds, types, examples, options or methods of equal weight, each a picture with a label",
+    avoidWhen: "the items have an order → steps; they are parts of one central idea → hub; numbers, quotes or bullet text → a grid page",
     variants: {
       auto: { when: "2–9 equal cards in rows", items: [2, 9] },
       feature: { when: "one hero card (emphasis=) plus 2–4 supporting ones", items: [3, 5] },
       strip: { when: "2–4 cards in a single row", items: [2, 4] },
     },
-    example: `scene sources "Energy sources" template=grid
+    example: `scene sources "Energy sources" template=cards
 title = title "Energy sources"
 g1 = icon:sun "Solar"
 g2 = icon:wind "Wind"
@@ -197,7 +197,7 @@ g3 = icon:droplet "Hydro"
   spotlight: {
     shape: "focus",
     useWhen: "one large picture (an asset with parts) and labels that name its parts",
-    avoidWhen: "several pictures of equal weight → grid",
+    avoidWhen: "several pictures of equal weight → cards",
     variants: {
       center: { when: "one visual with 2–6 labels on both sides", items: [0, 6] },
       left: { when: "visual on the left, a column of 1–4 labels on the right", items: [0, 4] },

@@ -47,7 +47,7 @@ right = icon:cloud "Night"
 1 pop left
 2 pop right
 
-scene feature "Grid, feature" template=grid variant=feature
+scene feature "Grid, feature" template=cards variant=feature
 a = asset:leaf "Leaf"
 b = icon:sun "Sun"
 c = icon:droplet "Water"

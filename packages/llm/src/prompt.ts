@@ -4,6 +4,7 @@ import {
   frameMode,
   GRID_ELEMENTS,
   GRID_LAYOUTS,
+  findGridLayout,
   LAYOUTS,
   RELATIONS,
   slotRects,
@@ -227,7 +228,10 @@ ASSETS AVAILABLE: ${assets.map((a) => `${a.kind}:${a.name}`).join(" ")}
 
 PLANNING RULES
 - Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
-- Diagrams: label the scene's shape, then use a template of that shape (check its "not if"). Numbers, quotes, lists and charts: a grid page (shape: page).
+- Every scene brings new items: never show the same things in two scenes (say it once, with the best-fitting template).
+- Diagrams: label the scene's shape, then write the template shown after → for that shape (template=<template name>, never the shape name). Check its "not if".
+- Only the first scene uses template=title. End with a takeaway: a grid page (quote, bullets or a stat) or a diagram that ties the story together.
+- Grid pages (shape: page) are for numbers, quotes, bullet text, charts and tables, with at most one icon. Several pictures of equal weight → template=cards.
 - Vary scene types across the video; mirror=true on some grid pages. Leave variant= out: the engine picks the arrangement that fits.
 - Plan visuals from the assets above.
 - Plan only facts you are sure of.`;
@@ -264,7 +268,8 @@ export function scenePrompt(outline: string, sceneId: string, earlier = ""): str
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
   const line = outline.split("\n").find((l) => sceneLineId(l) === sceneId);
   const tpl = line ? findTemplate(/\btemplate=(\S+)/.exec(line)?.[1] ?? "") : undefined;
-  const card = tpl ? `\n\n${templateCard(tpl)}` : "";
+  const grid = line ? gridCard(/\bgrid=(\S+)/.exec(line)?.[1] ?? "") : undefined;
+  const card = tpl ? `\n\n${templateCard(tpl)}` : grid ? `\n\n${grid}` : "";
   return `Video outline:
 ${outline}${said}${card}
 
@@ -331,8 +336,8 @@ export function shapeTable(): string {
     .map((shape) => {
       const tpls = templatesFor(shape);
       if (!tpls.length) return "";
-      if (tpls.length === 1) return `  ${shape.padEnd(12)} ${SHAPES[shape]} → ${tpls[0]!.name} (not if ${tpls[0]!.guide.avoidWhen})`;
-      return [`  ${shape.padEnd(12)} ${SHAPES[shape]}:`, ...tpls.map((t) => `    → ${t.name}: ${t.guide.useWhen} (not if ${t.guide.avoidWhen})`)].join("\n");
+      if (tpls.length === 1) return `  ${shape.padEnd(12)} ${SHAPES[shape]} → template=${tpls[0]!.name} (not if ${tpls[0]!.guide.avoidWhen})`;
+      return [`  ${shape.padEnd(12)} ${SHAPES[shape]}:`, ...tpls.map((t) => `    → template=${t.name}: ${t.guide.useWhen} (not if ${t.guide.avoidWhen})`)].join("\n");
     })
     .filter(Boolean)
     .join("\n");
@@ -354,4 +359,24 @@ Variants (leave variant= out unless one clearly suits the content; the engine re
 ${variants.join("\n")}
 Example:
 ${t.guide.example}`;
+}
+
+/**
+ * What writing one grid page needs: its slots in fill order with their
+ * sizes, which elements fit each slot, and the page rules that drafts break
+ * most (slot count, a primary element in the largest slot, one icon).
+ */
+export function gridCard(code: string): string | undefined {
+  const layout = findGridLayout(code);
+  if (!layout) return undefined;
+  const rects = slotRects(layout, frameMode("title", false));
+  const largest = rects.reduce((best, r, i) => (r.w * r.h > rects[best]!.w * rects[best]!.h ? i : best), 0);
+  const slots = rects.map((r, i) => {
+    const fits = [...new Set(GRID_ELEMENTS.filter((e) => e.minW <= r.w && e.minH <= r.h && (i !== largest || e.role !== "support")).map((e) => e.kind))];
+    return `  slot ${i + 1}: ${r.w}×${r.h}${i === largest && rects.length > 1 ? " (largest: a primary or flex element)" : ""} · fits: ${fits.join(" ")}`;
+  });
+  return `GRID PAGE ${layout.code} ${layout.name}
+Exactly ${rects.length} content element${rects.length > 1 ? "s" : ""}, declared in slot order (also the animation order); add title = title "…" for the header. No @placements.
+${slots.join("\n")}
+Rules: at least one primary or flex element (chart, stat, body, bullets, quote, table, …); at most 1 icon, 1 callout, 2 charts; no element kind twice except stat and charts. Pictures of several things belong in template=cards, not on a grid page.`;
 }

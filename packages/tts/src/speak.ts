@@ -104,17 +104,31 @@ export async function speakScene(scene: SceneIR, video: Pick<VideoIR, "voice" | 
     if (text.length > opts.provider.capabilities.maxChars) {
       throw new Error(`scene ${scene.id}: ${text.length} chars exceeds ${opts.provider.id} limit of ${opts.provider.capabilities.maxChars}`);
     }
-    const result = text ? await opts.provider.synthesize(req) : { audio: new Uint8Array(), format: "wav" as const, duration: 0 };
-    cached = {
-      audio: result.audio,
-      format: result.format,
-      duration: result.duration,
-      words: align(text, result.duration, "timings" in result ? result.timings : undefined),
-    };
-    await cache.set(key, cached);
+    // A scene already being spoken (an earlier build of the same script) is shared, not spoken twice.
+    let pending = inFlight.get(key);
+    if (!pending) {
+      pending = (async () => {
+        const result = text ? await opts.provider.synthesize(req) : { audio: new Uint8Array(), format: "wav" as const, duration: 0 };
+        const speech: CachedSpeech = {
+          audio: result.audio,
+          format: result.format,
+          duration: result.duration,
+          words: align(text, result.duration, "timings" in result ? result.timings : undefined),
+        };
+        await cache.set(key, speech);
+        return speech;
+      })().finally(() => inFlight.delete(key));
+      inFlight.set(key, pending);
+    }
+    cached = await pending;
+    // Shared with a caller that had another cache: store it in this one too.
+    if (!(await cache.get(key))) await cache.set(key, cached);
   }
   return { scene: scene.id, src: cache.path(key, cached.format), duration: cached.duration, text, words: cached.words, beats };
 }
+
+/** Syntheses under way, by speech key (shared by overlapping builds in one process). */
+const inFlight = new Map<string, Promise<CachedSpeech>>();
 
 /** Synthesizes every scene of a video, in parallel. */
 export function speakVideo(video: VideoIR, opts: SpeakOptions): Promise<SceneSpeech[]> {

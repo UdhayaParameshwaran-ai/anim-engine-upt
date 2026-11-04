@@ -1,7 +1,7 @@
 import { compile, report } from "@anim/compiler";
-import { print, type Diagnostic } from "@anim/dsl";
+import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
-import { AssetLibrary, findTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
+import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
 import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
@@ -227,6 +227,13 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
   let current = text;
   let last = written;
   let errors = checkScene(header, current);
+  const local = localFix(header, current, errors.errorCodes);
+  if (local !== undefined) {
+    ctx.opts.onLog?.(`fixed scene locally (no LLM call):\n${errors.report}`);
+    if (last) note(ctx, last, { reason: errors.report });
+    current = local;
+    errors = checkScene(header, current);
+  }
   for (let attempt = 1; errors.errors && attempt <= max; attempt++) {
     judge(last, errors, 0, "has errors → repair");
     ctx.opts.onLog?.(`repairing scene (attempt ${attempt}):\n${errors.report}`);
@@ -264,14 +271,31 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
  * number of errors and warnings, and a report (errors and warnings) with
  * scene-relative line numbers, ready for a repair prompt.
  */
-export function checkScene(header: string, sceneText: string): { errors: number; warnings: number; report: string } {
+export function checkScene(header: string, sceneText: string): { errors: number; warnings: number; report: string; errorCodes: string[] } {
   const offset = header.split("\n").length;
   const { diagnostics } = compile(`${header}\n${sceneText}\n`, { autofix: false });
   // keep= refers to other scenes, which aren't present when a scene is checked alone.
   const relevant = diagnostics.filter((d) => d.code !== "NAR309" && d.span.line > offset);
-  const errors = relevant.filter((d) => d.severity === "error").length;
+  const errorCodes = relevant.filter((d) => d.severity === "error").map((d) => d.code);
   const shifted = relevant.map((d) => ({ ...d, span: { ...d.span, line: d.span.line - offset } }));
-  return { errors, warnings: relevant.length - errors, report: report(shifted) };
+  return { errors: errorCodes.length, warnings: relevant.length - errorCodes.length, report: report(shifted), errorCodes };
+}
+
+/**
+ * Errors with a mechanical fix that keeps the writer's intent, applied
+ * without asking the LLM: actions anchored to cues the narration never
+ * marked (the cue is added to the narration) and template aliases.
+ */
+const LOCAL_FIXES = new Set(["NAR303", "NAR203"]);
+
+/** The scene with its safe errors fixed by the validator, or undefined when other errors remain. */
+function localFix(header: string, sceneText: string, codes: string[]): string | undefined {
+  if (!codes.length || !codes.every((c) => LOCAL_FIXES.has(c))) return undefined;
+  const fixed = compile(`${header}\n${sceneText}\n`, { autofix: true });
+  const scene = fixed.script.scenes[0];
+  if (!scene) return undefined;
+  const text = printScene(scene).join("\n");
+  return checkScene(header, text).errors ? undefined : text;
 }
 
 // ------------------------------------------------------------- helpers ---
@@ -387,9 +411,10 @@ export function routeOutline(text: string): { text: string; changes: string[] } 
     const fits = templatesFor(shape as Shape);
     const named = /\btemplate=(\S+)/.exec(line)?.[1];
     if (!fits.length || named === undefined) return;
-    const tpl = findTemplate(named);
-    if (tpl && tpl.guide.shape === shape) return;
-    const to = fits[0]!.name;
+    const tpl = resolveTemplate(named);
+    if (tpl?.name === named && tpl.guide.shape === shape) return;
+    // An alias of the right shape keeps its template under its real name; otherwise the shape decides.
+    const to = tpl && tpl.guide.shape === shape ? tpl.name : fits[0]!.name;
     // A variant of the old template means nothing to the new one.
     lines[scene] = line.replace(/\btemplate=\S+/, `template=${to}`).replace(/\s+variant=\S+/, "");
     changes.push(`${sceneIdOf(line) ?? "?"}: ${named} → ${to} (shape ${shape})`);

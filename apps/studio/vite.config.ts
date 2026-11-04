@@ -50,11 +50,12 @@ function api(): Plugin {
 }
 
 /** Voice plus look/motion overrides ("" keeps what the script says). */
-type Tts = { name: "kokoro" | "beeps"; speed: number; style: Record<string, string> };
+type Tts = { name: "kokoro" | "piper" | "beeps"; speed: number; style: Record<string, string> };
 
-/** Narration voice: "kokoro" (local neural TTS) or "beeps" (instant mock that ticks on every word). */
+/** Narration voice: "kokoro" (local neural TTS, best quality), "piper" (local, ~4x faster) or "beeps" (instant mock that ticks on every word). */
 function defaultTts(): Tts["name"] {
-  return process.env.ANIM_TTS === "beeps" ? "beeps" : "kokoro";
+  const v = process.env.ANIM_TTS;
+  return v === "beeps" || v === "piper" ? v : "kokoro";
 }
 
 function ttsOf(url: URL): Tts {
@@ -64,7 +65,7 @@ function ttsOf(url: URL): Tts {
     const v = url.searchParams.get(key);
     if (v) style[key] = v;
   }
-  return { name: name === "beeps" || name === "kokoro" ? name : defaultTts(), speed: Number(url.searchParams.get("speed") ?? 1) || 1, style };
+  return { name: name === "beeps" || name === "kokoro" || name === "piper" ? name : defaultTts(), speed: Number(url.searchParams.get("speed") ?? 1) || 1, style };
 }
 
 // One Kokoro instance for the server's lifetime: the model stays loaded.
@@ -73,6 +74,10 @@ async function voice(server: ViteDevServer, name: Tts["name"], speed = 1) {
   if (name === "beeps") {
     const { MockTtsProvider } = await server.ssrLoadModule("@anim/tts");
     return new MockTtsProvider({ audio: "beeps", speed });
+  }
+  if (name === "piper") {
+    const { PiperTtsProvider } = await server.ssrLoadModule("@anim/tts-piper");
+    return new PiperTtsProvider({ dir: join(repo, ".cache", "piper") });
   }
   kokoro ??= server.ssrLoadModule("@anim/tts-kokoro").then(async ({ KokoroTtsProvider }) => {
     const p = new KokoroTtsProvider({ cacheDir: join(repo, ".cache", "models") });
@@ -92,7 +97,7 @@ async function build(server: ViteDevServer, source: string, tts: Tts, variants: 
   if (!compiled.ir) return { ok: false, diagnostics };
   const provider = await voice(server, tts.name, tts.speed);
   // Kokoro's rate is a request setting (part of the cache key); the mock bakes it into its id.
-  const settings = tts.name === "kokoro" && tts.speed !== 1 ? { speed: tts.speed } : undefined;
+  const settings = tts.name !== "beeps" && tts.speed !== 1 ? { speed: tts.speed } : undefined;
   const speech = await speakVideo(compiled.ir, { provider, cache: new FileCache(ttsDir), ...(settings && { settings }) });
   const timeline = resolve(compiled.ir, speech);
   timeline.audio = timeline.audio.map((a: { src: string }) => ({ ...a, src: `/audio/${basename(a.src)}` }));
@@ -101,11 +106,16 @@ async function build(server: ViteDevServer, source: string, tts: Tts, variants: 
 
 async function providers(server: ViteDevServer) {
   const { THEMES, THEME_SUMMARIES, MOTIONS } = await server.ssrLoadModule("@anim/registry");
-  const { configuredProviders } = await server.ssrLoadModule("@anim/llm");
+  const { configuredProviders, modelChoices } = await server.ssrLoadModule("@anim/llm");
+  const llm: Record<string, boolean> = configuredProviders(process.env);
+  // Model menus for the providers that offer a choice (and are set up).
+  const models: Record<string, unknown> = {};
+  for (const p of ["gemini", "azure", "claude"]) if (llm[p]) models[p] = await modelChoices(p, process.env);
   return {
     themes: THEMES.map((name: keyof typeof THEME_SUMMARIES) => ({ name, summary: THEME_SUMMARIES[name] })),
     motions: MOTIONS.map((m: { name: string; summary: string }) => ({ name: m.name, summary: m.summary })),
-    llm: configuredProviders(process.env),
+    llm,
+    models,
     tts: defaultTts(),
     examples: readdirSync(examples).filter((f) => f.endsWith(".txt")),
   };
@@ -121,6 +131,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
   const llm = await server.ssrLoadModule("@anim/llm");
   const topic = url.searchParams.get("topic")?.trim() ?? "";
   const provider = url.searchParams.get("provider") ?? "auto";
+  const model = url.searchParams.get("model")?.trim() || undefined;
   const tts = ttsOf(url);
   let mode = url.searchParams.get("mode") === "single" ? "single" : "outline";
 
@@ -138,7 +149,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
       client = new llm.ReplayClient(readFileSync(join(examples, file), "utf8"), { chunk: 16, delayMs: 60 });
       mode = "single"; // a replayed script is one complete reply
     } else {
-      client = llm.clientFromEnv(provider === "auto" ? {} : { providers: [provider] });
+      client = llm.clientFromEnv(provider === "auto" ? {} : { providers: [provider], ...(model && { model }) });
     }
     if (!topic && provider !== "replay") throw new Error("enter a topic");
     send("log", `generating with ${client.name} (${mode})`);

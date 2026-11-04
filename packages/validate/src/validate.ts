@@ -1,4 +1,4 @@
-import type { Action, Beat, Diagnostic, ElementDecl, Place, Scene, Script, Setting, Span, SpeechBeat, Step, VerbCall } from "@anim/dsl";
+import type { Action, Beat, Cue, Diagnostic, ElementDecl, Place, Scene, Script, Setting, Span, SpeechBeat, Step, VerbCall } from "@anim/dsl";
 import {
   AssetLibrary,
   CHART_TYPES,
@@ -7,6 +7,7 @@ import {
   draftVariants,
   findComponent,
   findTemplate,
+  resolveTemplate,
   findVerb,
   LAYOUT_KNOBS,
   LAYOUTS,
@@ -292,6 +293,10 @@ class Validator {
           desc: `used \`${near ?? "fade"}\``,
           apply: () => (scene.attrs[key] = near ?? "fade"),
         });
+      } else if (key === "template" && !findTemplate(value) && resolveTemplate(value)) {
+        // `grid` (renamed `cards`) or a shape name written as a template (`template=transform`).
+        const to = resolveTemplate(value)!.name;
+        this.warn(C.UnknownTemplate, `\`${value}\` is not a template name; it means \`${to}\``, scene.span, { desc: `used \`${to}\``, apply: () => (scene.attrs.template = to) });
       } else if (key === "template" && !findTemplate(value)) {
         const near = closest(value, TEMPLATES.map((t) => t.name));
         this.error(C.UnknownTemplate, `unknown template \`${value}\` (templates: ${TEMPLATES.map((t) => t.name).join(", ")})`, scene.span, {
@@ -495,14 +500,21 @@ class Validator {
     const anchored = new Set(beat.actions.map((a) => a.anchor));
     const unused = beat.type === "speech" ? beat.cues.map((c) => c.id).filter((id) => !anchored.has(id)) : [];
     const remap = new Map(unknown.slice(0, unused.length).map((a, i) => [a, unused[i]!]));
+    // Anchors with no cue to pair with: add the cue to the narration, spread over the words after the last cue.
+    const added = beat.type === "speech" ? missingCues(beat, unknown.slice(unused.length)) : new Map<string, Cue>();
 
     for (const action of [...beat.actions]) {
       if (isUnknown(action.anchor)) {
         const where = beat.type === "wait" ? "a `wait` only has `start` and `end`" : `cues here: ${[...cueIds].join(", ") || "none"}`;
         const to = remap.get(action.anchor);
-        const fix = to ? { desc: `anchored on cue \`${to}\``, apply: () => (action.anchor = to) } : drop(beat.actions, action, "removed the action");
+        const cue = added.get(action.anchor);
+        const fix = to
+          ? { desc: `anchored on cue \`${to}\``, apply: () => (action.anchor = to) }
+          : cue && beat.type === "speech"
+            ? { desc: `added cue {${cue.id}} to the narration`, apply: () => void (beat.cues.some((c) => c.id === cue.id) || beat.cues.push(cue)) }
+            : drop(beat.actions, action, "removed the action");
         this.error(C.UnknownCue, `anchor \`${action.anchor}\` is not a cue of this beat (${where})`, action.span, fix);
-        if (!to || !this.autofix) continue;
+        if ((!to && !cue) || !this.autofix) continue;
       }
       for (const call of [...action.calls]) this.call(call, action, beat, known, declared);
       if (!action.calls.length && this.autofix) remove(beat.actions, action);
@@ -742,3 +754,22 @@ function drop<T>(arr: T[], item: T, desc: string): Fix {
 }
 
 export type { ComponentManifest };
+
+/**
+ * Cues for anchors the narration never marked (`1 pop sun` under a line with
+ * no `{1}`): point cues at word starts, spread evenly over the words after
+ * the last existing cue, in anchor order. Anchors that don't fit get none.
+ */
+function missingCues(beat: SpeechBeat, anchors: string[]): Map<string, Cue> {
+  const out = new Map<string, Cue>();
+  if (!anchors.length) return out;
+  // After the last cue, and never inside a span cue (its end is exclusive).
+  const after = Math.max(-1, ...beat.cues.map((c) => (c.end !== undefined ? c.end - 1 : c.start)));
+  const starts = [...beat.text.matchAll(/\S+/g)].map((m) => m.index!).filter((i) => i > after);
+  const sorted = [...anchors].sort((a, b) => (Number(a) || 0) - (Number(b) || 0));
+  sorted.forEach((id, k) => {
+    const at = starts[Math.floor(((k + 0.5) * starts.length) / sorted.length)];
+    if (at !== undefined && /^\w+$/.test(id)) out.set(id, { id, start: at, span: beat.span });
+  });
+  return out;
+}

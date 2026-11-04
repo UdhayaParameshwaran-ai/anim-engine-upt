@@ -27,7 +27,7 @@ const ITEMS: Record<string, [string, string][]> = {
   cycle: [["icon:sun", "Heat"], ["icon:cloud", "Clouds"], ["icon:droplet", "Rain"], ["asset:tree", "Plants"], ["icon:wind", "Wind"], ["icon:flame", "Energy"]],
   timeline: [["box", "1796 · First vaccine"], ["box", "1885 · Rabies"], ["box", "1955 · Polio"], ["box", "1980 · Smallpox gone"], ["box", "2020 · mRNA"], ["box", "2030 · Next"], ["box", "2040 · Future"]],
   hub: [["icon:server", "Servers"], ["icon:database", "Data"], ["icon:user", "Users"], ["icon:gear", "Settings"], ["icon:clock", "Uptime"], ["icon:check", "Checks"], ["icon:bolt", "Speed"], ["icon:heart", "Health"]],
-  grid: [["icon:sun", "Solar"], ["icon:wind", "Wind"], ["icon:droplet", "Hydro"], ["icon:flame", "Gas"], ["icon:bolt", "Grid"], ["icon:cube", "Storage"], ["asset:tree", "Biomass"], ["asset:earth", "Global"], ["icon:lightbulb", "Ideas"]],
+  cards: [["icon:sun", "Solar"], ["icon:wind", "Wind"], ["icon:droplet", "Hydro"], ["icon:flame", "Gas"], ["icon:bolt", "Grid"], ["icon:cube", "Storage"], ["asset:tree", "Biomass"], ["asset:earth", "Global"], ["icon:lightbulb", "Ideas"]],
   converge: [["icon:sun", "Sunlight"], ["icon:droplet", "Water"], ["icon:wind", "CO₂"], ["icon:bolt", "Minerals"], ["icon:clock", "Time"]],
   diverge: [["icon:lightbulb", "Light"], ["icon:flame", "Heat"], ["icon:gear", "Motion"], ["icon:server", "Computing"], ["icon:wind", "Cooling"]],
   // process: the first half are inputs (declared before the process), the rest outputs.
@@ -60,7 +60,7 @@ function slotsNote(t: TemplateManifest): string {
 
 function itemCount(t: TemplateManifest, density: Density): number {
   if (!t.items) return 0;
-  const typical = { title: 2, steps: 4, cycle: 4, timeline: 4, hub: 5, grid: 6, spotlight: 4, converge: 3, diverge: 4, process: 5 }[t.name] ?? Math.round((t.items.min + t.items.max) / 2);
+  const typical = { title: 2, steps: 4, cycle: 4, timeline: 4, hub: 5, cards: 6, spotlight: 4, converge: 3, diverge: 4, process: 5 }[t.name] ?? Math.round((t.items.min + t.items.max) / 2);
   const n = density === "min" ? t.items.min : density === "max" ? t.items.max : typical;
   return Math.max(t.items.min, Math.min(t.items.max, n));
 }
@@ -121,7 +121,7 @@ export function templateScript(t: TemplateManifest, variant: string, size: Densi
 /** Appended to every label for the long-label stress setting (about 35 characters in all). */
 const LONG = "and what follows";
 
-const TITLES: Record<string, string> = { converge: "What a Plant Needs", diverge: "What Electricity Does", process: "Inside the Leaf", compare: "Plant vs Animal Cells", steps: "The Water Cycle", timeline: "A Short History of Vaccines", grid: "Energy Sources", hub: "What Runs a Cloud App" };
+const TITLES: Record<string, string> = { converge: "What a Plant Needs", diverge: "What Electricity Does", process: "Inside the Leaf", compare: "Plant vs Animal Cells", steps: "The Water Cycle", timeline: "A Short History of Vaccines", cards: "Energy Sources", hub: "What Runs a Cloud App" };
 
 function flowScript(variant: string, size: Density | number, long = false): string {
   const nodes = typeof size === "number" ? Math.min(8, size) : size === "min" ? 3 : size === "max" ? 8 : 5;

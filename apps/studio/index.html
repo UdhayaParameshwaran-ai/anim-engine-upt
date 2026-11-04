@@ -46,8 +46,12 @@
                     <option value="azure">Azure</option>
                     <option value="gemini">Gemini</option>
                     <option value="groq">Groq</option>
+                    <option value="claude" title="Your Claude subscription, through the Claude Code CLI">Claude (subscription)</option>
                     <option value="replay">Replay</option>
                   </select>
+                </label>
+                <label class="chip" id="model-row" title="Model for this provider" hidden>
+                  <select id="model" aria-label="Model"></select>
                 </label>
                 <label class="chip" title="Outline: plan first, then write each scene. Single: one pass.">
                   <select id="mode" aria-label="Mode">
@@ -98,7 +102,8 @@
               <label class="setting" title="Narration voice">
                 <span>Voice</span>
                 <select id="tts">
-                  <option value="kokoro">Kokoro</option>
+                  <option value="kokoro">Kokoro (best voice)</option>
+                  <option value="piper">Piper (fast)</option>
                   <option value="beeps">Beeps (instant)</option>
                 </select>
               </label>
@@ -118,7 +123,7 @@
 
       <section class="viewer">
         <div class="stage-card">
-          <div id="stage"><div id="waiting" hidden><span class="dot"></span>Writing the next scene</div></div>
+          <div id="stage"><div id="waiting" hidden><span class="dot"></span><span id="waiting-text">Writing the next scene</span></div></div>
         </div>
 
         <div class="transport">

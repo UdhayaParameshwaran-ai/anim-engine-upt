@@ -417,7 +417,7 @@ class SceneLayouter {
         }
         return items.forEach((e, i) => this.put(e, cells[i]!));
       }
-      case "grid": {
+      case "cards": {
         if (variant === "strip") return this.layout("row", items, content);
         if (variant === "feature" && items.length > 1) {
           const e = this.scene.attrs.emphasis;
@@ -437,10 +437,13 @@ class SceneLayouter {
           const h = content.h * 0.5;
           return items.forEach((e, i) => this.put(e, { ...cells[i]!, y: content.y + (content.h - h) / 2, h }));
         }
+        // Items alternate above and below the line, so each can spread over its neighbours' columns.
         const h = content.h * 0.42;
         return items.forEach((e, i) => {
           const c = cells[i]!;
-          this.put(e, { x: c.x, y: i % 2 ? content.y + content.h - h : content.y, w: c.w, h });
+          const w = items.length > 2 ? Math.min(content.w, 2 * c.w + this.gap) : c.w;
+          const x = Math.min(Math.max(content.x, c.x + c.w / 2 - w / 2), content.x + content.w - w);
+          this.put(e, { x, y: i % 2 ? content.y + content.h - h : content.y, w, h });
         });
       }
       case "cycle":

@@ -7,6 +7,7 @@ import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { resolve } from "@anim/timeline";
 import { FileCache, MockTtsProvider, speakVideo, type TtsProvider } from "@anim/tts";
 import { KokoroTtsProvider } from "@anim/tts-kokoro";
+import { PiperTtsProvider } from "@anim/tts-piper";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { mixNarration } from "./audio.js";
 import { encoder, ffmpeg, write } from "./ffmpeg.js";
@@ -18,10 +19,11 @@ export interface Prepared {
   timeline: ResolvedTimeline;
 }
 
-/** Narration voice by name: "kokoro" (local neural TTS, the default) or "beeps" (instant mock that ticks on every word). */
+/** Narration voice by name: "kokoro" (local neural TTS, the default), "piper" (local, ~4x faster) or "beeps" (instant mock that ticks on every word). */
 export function voiceProvider(name = "kokoro", speed = 1): TtsProvider {
   if (name === "beeps") return new MockTtsProvider({ audio: "beeps", speed });
-  if (name !== "kokoro") throw new Error("unknown voice " + JSON.stringify(name) + " (kokoro, beeps)");
+  if (name === "piper") return new PiperTtsProvider({ speed, dir: join(repo, ".cache", "piper") });
+  if (name !== "kokoro") throw new Error("unknown voice " + JSON.stringify(name) + " (kokoro, piper, beeps)");
   return new KokoroTtsProvider({ speed, cacheDir: join(repo, ".cache", "models") });
 }
 

@@ -38,6 +38,7 @@ const style = () => new URLSearchParams({ speed: speed.value, tts: tts.value, th
 const diagnostics = $<HTMLUListElement>("diagnostics");
 const stageBox = $<HTMLDivElement>("stage");
 const waiting = $<HTMLDivElement>("waiting");
+const waitingText = $<HTMLSpanElement>("waiting-text");
 const playBtn = $<HTMLButtonElement>("play");
 const scrub = $<HTMLInputElement>("scrub");
 const clock = $<HTMLSpanElement>("clock");
@@ -50,6 +51,9 @@ const genLog = $<HTMLOListElement>("gen-log");
 const genBtn = $<HTMLButtonElement>("generate");
 const stopBtn = $<HTMLButtonElement>("stop");
 const provider = $<HTMLSelectElement>("provider");
+const modelSel = $<HTMLSelectElement>("model");
+/** Model menus per provider (gemini, azure, claude), from /api/providers. */
+let modelMenus: Record<string, { default: string; models: string[] }> = {};
 const replayExample = $<HTMLSelectElement>("replay-example");
 
 const editor = new Editor($<HTMLTextAreaElement>("source"), $<HTMLPreElement>("gutter"));
@@ -71,7 +75,10 @@ function mount(ir: VideoIR, tl: ResolvedTimeline, live = false): Session {
     live,
     onTime: update,
     onEnd: () => setPlaying(false),
-    onWait: (w) => (waiting.hidden = !w),
+    onWait: (w) => {
+      waitingText.textContent = "Writing the next scene";
+      waiting.hidden = !w;
+    },
   });
   session = { ir, tl, stage, player, ev: createEvaluator(tl), overlay: new Overlay(stage) };
   showTimeline();
@@ -185,10 +192,38 @@ function selectLine(line: number): void {
 
 // ---------------------------------------------------------------- build ---
 
+let building = false;
+
 async function build(): Promise<void> {
+  if (building) return;
   stopGeneration();
-  const res = await fetch(`/api/build?${style()}`, { method: "POST", body: editor.value });
-  const result: BuildResult = await res.json();
+  const buildBtn = $<HTMLButtonElement>("build");
+  // Compiling takes a moment; speaking the narration is what takes time (Kokoro runs locally; beeps are instant).
+  const what = tts.value === "kokoro" ? "speaking the narration with Kokoro" : tts.value === "piper" ? "speaking the narration with Piper" : "building";
+  const started = performance.now();
+  const tick = () => {
+    const s = Math.round((performance.now() - started) / 1000);
+    waitingText.textContent = `Building · ${what}${s >= 2 ? ` · ${s}s` : ""}${tts.value === "kokoro" && s >= 8 ? " (Piper is ~4x faster; Beeps is instant)" : ""}`;
+  };
+  building = true;
+  buildBtn.disabled = true;
+  buildBtn.textContent = "Building…";
+  tick();
+  waiting.hidden = false;
+  const timer = setInterval(tick, 1000);
+  let result: BuildResult;
+  try {
+    const res = await fetch(`/api/build?${style()}`, { method: "POST", body: editor.value });
+    result = await res.json();
+  } catch (e) {
+    result = { ok: false, diagnostics: [], error: `build failed: ${e instanceof Error ? e.message : String(e)} (is the Studio server running?)` } as BuildResult;
+  } finally {
+    clearInterval(timer);
+    waiting.hidden = true;
+    building = false;
+    buildBtn.disabled = false;
+    buildBtn.textContent = "Build";
+  }
   showDiagnostics(result.error ? [result.error] : result.diagnostics);
   if (!result.ok || !result.ir || !result.timeline) return;
   const s = mount(result.ir, result.timeline);
@@ -239,6 +274,7 @@ function startGeneration(): void {
   const q = new URLSearchParams({
     topic: $<HTMLTextAreaElement>("topic").value,
     provider: provider.value,
+    ...(!$<HTMLLabelElement>("model-row").hidden && modelSel.value && { model: modelSel.value }),
     mode: $<HTMLSelectElement>("mode").value,
     style: $<HTMLSelectElement>("style").value,
     example: replayExample.value,
@@ -315,13 +351,13 @@ function stopGeneration(): void {
 type Choice = { name: string; summary: string };
 
 async function loadProviders(): Promise<void> {
-  const p: { llm: Record<string, boolean>; tts: string; examples: string[]; themes: Choice[]; motions: Choice[] } = await (await fetch("/api/providers")).json();
+  const p: { llm: Record<string, boolean>; models?: Record<string, { default: string; models: string[] }>; tts: string; examples: string[]; themes: Choice[]; motions: Choice[] } = await (await fetch("/api/providers")).json();
   tts.value = p.tts;
   const options = (list: Choice[]) => list.map((c) => `<option value="${c.name}" title="${c.summary}">${c.name}</option>`).join("");
   look.insertAdjacentHTML("beforeend", options(p.themes));
   motion.insertAdjacentHTML("beforeend", options(p.motions));
   replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
-  const labels: Record<string, string> = { openrouter: "OpenRouter", azure: "Azure", gemini: "Gemini", groq: "Groq" };
+  const labels: Record<string, string> = { openrouter: "OpenRouter", azure: "Azure", gemini: "Gemini", groq: "Groq", claude: "Claude subscription" };
   const any = Object.values(p.llm).some(Boolean);
   $<HTMLParagraphElement>("keys").innerHTML =
     Object.entries(p.llm)
@@ -330,6 +366,8 @@ async function loadProviders(): Promise<void> {
   for (const option of provider.options) if (option.value in p.llm) option.disabled = !p.llm[option.value];
   if (!any) provider.value = "replay";
   $<HTMLLabelElement>("replay-row").hidden = provider.value !== "replay";
+  modelMenus = p.models ?? {};
+  showModels();
 }
 
 // ------------------------------------------------------------------- ui ---
@@ -388,7 +426,32 @@ overlayToggle.addEventListener("change", () => {
   update(session.player.time);
 });
 for (const list of [cuesList, reportList, diagnostics, inspectorBox]) list.addEventListener("click", onListClick);
-provider.addEventListener("change", () => ($<HTMLLabelElement>("replay-row").hidden = provider.value !== "replay"));
+provider.addEventListener("change", () => {
+  $<HTMLLabelElement>("replay-row").hidden = provider.value !== "replay";
+  showModels();
+});
+modelSel.addEventListener("change", () => {
+  try {
+    localStorage.setItem(`studio.model.${provider.value}`, modelSel.value);
+  } catch {
+    /* storage unavailable: the choice just is not remembered */
+  }
+});
+
+/** Shows the model menu for providers that offer one, remembering the last pick per provider. */
+function showModels(): void {
+  const menu = modelMenus[provider.value];
+  $<HTMLLabelElement>("model-row").hidden = !menu;
+  if (!menu) return;
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(`studio.model.${provider.value}`);
+  } catch {
+    saved = null;
+  }
+  modelSel.innerHTML = menu.models.map((m) => `<option value="${escape(m)}">${escape(m)}${m === menu.default ? " (default)" : ""}</option>`).join("");
+  modelSel.value = saved && menu.models.includes(saved) ? saved : menu.default;
+}
 $<HTMLFormElement>("gen-form").addEventListener("submit", (e) => {
   e.preventDefault();
   startGeneration();

@@ -40,7 +40,8 @@ export function measure(el: ElementDecl, assets: AssetLibrary): Size {
     case "formula":
       return { w: Math.max(240, Math.round(text.length * 30)), h: 110 };
     case "box":
-      return { w: Math.max(300, Math.round(text.length * CHAR_W * 36 + 60)), h: 150 };
+      // The engine wraps a box's label (up to the box), so a narrow cell wraps it rather than shrinking the box.
+      return { w: Math.max(300, Math.round(text.length * CHAR_W * 36 + 60)), h: 150, wraps: { font: 36, chars: Math.max(1, text.length), lineHeight: 1.25, pad: 36 } };
     case "circle":
       return { w: 200, h: 200 };
     case "chart":

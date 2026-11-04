@@ -80,6 +80,9 @@ importers:
       '@anim/tts-kokoro':
         specifier: workspace:*
         version: link:../../packages/tts-kokoro
+      '@anim/tts-piper':
+        specifier: workspace:*
+        version: link:../../packages/tts-piper
       ffmpeg-static:
         specifier: ^5.2.0
         version: 5.3.0
@@ -116,6 +119,9 @@ importers:
       '@anim/tts-kokoro':
         specifier: workspace:*
         version: link:../../packages/tts-kokoro
+      '@anim/tts-piper':
+        specifier: workspace:*
+        version: link:../../packages/tts-piper
 
   packages/compiler:
     dependencies:
@@ -219,6 +225,12 @@ importers:
       phonemizer:
         specifier: ^1.2.1
         version: 1.2.1
+
+  packages/tts-piper:
+    dependencies:
+      '@anim/tts':
+        specifier: workspace:*
+        version: link:../tts
 
   packages/validate:
     dependencies:

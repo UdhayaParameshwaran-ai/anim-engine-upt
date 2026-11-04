@@ -93,7 +93,7 @@ The registry (`packages/registry`) is the source of truth for verbs, their param
 **The LLM never writes positions.** A scene either names a **template** (`template=compare`), which decides the geometry of its slots, or a **layout** (`layout row`), which places elements in declaration order.
 
 - **Named slots:** an element whose id matches a slot name fills that slot (`left`, `right`, `title`, `center`, `main`).
-- **Item templates** (`steps`, `cycle`, `timeline`, `hub`, `grid`): the remaining elements fill in declaration order.
+- **Item templates** (`steps`, `cycle`, `timeline`, `hub`, `cards`): the remaining elements fill in declaration order.
 - **Graph templates** (`flow`): `node` elements plus `a -> b` edges. A deterministic graph layout positions them.
 - **Hints:** `@<slot>` with slots `TL T TR L C R BL B BR`, or relative `@right-of:x` `@left-of:x` `@above:x` `@below:x` `@inside:x`. These are semantic hints only. The layout engine computes the coordinates.
 
@@ -162,7 +162,7 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 | `cycle` | `ring` `arc` |
 | `hub` | `ring` `sides` |
 | `timeline` | `alternate` `line` `vertical` |
-| `grid` | `auto` `feature` (one large item, the rest beside it) `strip` |
+| `cards` (alias `grid`) | `auto` `feature` (one large item, the rest beside it) `strip` |
 | `spotlight` | `center` `left` `right` |
 | `flow` | `auto` `down` `across` |
 | `converge` | `left` (inputs stacked left, result right) `top` `around` |

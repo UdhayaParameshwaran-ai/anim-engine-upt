@@ -2,8 +2,11 @@
  * Provider-neutral chat client. OpenRouter, Groq, Azure OpenAI (v1 API) and
  * Gemini (its OpenAI-compatible endpoint) all speak the OpenAI
  * chat-completions protocol, so one implementation covers them; a fallback
- * client tries providers in order.
+ * client tries providers in order. `claude` is different: it runs the Claude
+ * Code CLI on your own Claude subscription (claude-code.ts).
  */
+
+import { ClaudeCodeClient, claudeCliAvailable } from "./claude-code.js";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -107,7 +110,11 @@ export const PROVIDERS: Record<"openrouter" | "groq" | "azure" | "gemini", Provi
   },
 };
 
-export type ProviderName = keyof typeof PROVIDERS;
+/** `claude` uses your Claude subscription through the Claude Code CLI (no API key). */
+export type ProviderName = keyof typeof PROVIDERS | "claude";
+
+/** Default model for `claude`; override with ANIM_CLAUDE_MODEL. */
+export const CLAUDE_DEFAULT_MODEL = "claude-opus-5-5";
 
 export interface CompatOptions {
   name: string;
@@ -274,7 +281,7 @@ export class FallbackClient implements LlmClient {
 }
 
 export interface FromEnvOptions {
-  /** Provider order; default $ANIM_LLM_PROVIDERS or "openrouter,azure,gemini,groq". */
+  /** Provider order; default $ANIM_LLM_PROVIDERS or "openrouter,azure,gemini,groq" (add `claude` for your Claude subscription). */
   providers?: ProviderName[];
   /** Model override for the first provider. */
   model?: string;
@@ -291,8 +298,14 @@ export function clientFromEnv(opts: FromEnvOptions = {}): LlmClient {
   const order = opts.providers ?? ((env.ANIM_LLM_PROVIDERS ?? DEFAULT_ORDER).split(",").map((s) => s.trim()).filter(Boolean) as ProviderName[]);
   const clients: LlmClient[] = [];
   order.forEach((name, i) => {
+    if (name === "claude") {
+      if (!claudeCliAvailable(env.ANIM_CLAUDE_BIN)) return;
+      const model = (i === 0 && opts.model) || env.ANIM_CLAUDE_MODEL || CLAUDE_DEFAULT_MODEL;
+      clients.push(new ClaudeCodeClient({ model, ...(env.ANIM_CLAUDE_BIN && { bin: env.ANIM_CLAUDE_BIN }) }));
+      return;
+    }
     const preset = PROVIDERS[name];
-    if (!preset) throw new Error(`unknown LLM provider \`${name}\` (known: ${Object.keys(PROVIDERS).join(", ")})`);
+    if (!preset) throw new Error(`unknown LLM provider \`${name}\` (known: ${[...Object.keys(PROVIDERS), "claude"].join(", ")})`);
     const apiKey = env[preset.keyEnv];
     const configured = preset.baseUrlEnv ? env[preset.baseUrlEnv] : preset.baseUrl;
     if (!apiKey || !configured) return;
@@ -310,7 +323,10 @@ export function clientFromEnv(opts: FromEnvOptions = {}): LlmClient {
       }),
     );
   });
-  if (!clients.length) throw new Error(`no LLM API key found; set ${order.map((n) => required(PROVIDERS[n]).join(" + ")).join(" or ")} (see .env.example)`);
+  if (!clients.length) {
+    const needs = order.map((n) => (n === "claude" ? "the Claude Code CLI, logged in" : required(PROVIDERS[n]).join(" + ")));
+    throw new Error(`no LLM provider available; set up ${needs.join(" or ")} (see .env.example)`);
+  }
   return clients.length === 1 ? clients[0]! : new FallbackClient(clients);
 }
 
@@ -323,7 +339,60 @@ function required(p: ProviderPreset): string[] {
 
 /** Which providers have everything they need in `env`. */
 export function configuredProviders(env: Record<string, string | undefined> = process.env): Record<ProviderName, boolean> {
-  return Object.fromEntries(Object.entries(PROVIDERS).map(([name, p]) => [name, required(p).every((k) => Boolean(env[k]))])) as Record<ProviderName, boolean>;
+  const keyed = Object.fromEntries(Object.entries(PROVIDERS).map(([name, p]) => [name, required(p).every((k) => Boolean(env[k]))]));
+  return { ...keyed, claude: claudeCliAvailable(env.ANIM_CLAUDE_BIN) } as Record<ProviderName, boolean>;
+}
+
+/** Claude models offered for the subscription provider (the CLI accepts any model id the account can use). */
+export const CLAUDE_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"] as const;
+
+export interface ModelChoices {
+  /** What a request uses when no model is picked. */
+  default: string;
+  models: string[];
+}
+
+const geminiCache = new Map<string, Promise<string[]>>();
+
+/**
+ * Models to offer for a provider:
+ * - claude: CLAUDE_MODELS.
+ * - azure: your deployment names. Azure can't list them, so they come from
+ *   AZURE_OPENAI_DEPLOYMENTS (comma-separated) plus AZURE_OPENAI_DEPLOYMENT.
+ * - gemini: the text models the key can use, from Gemini's models endpoint
+ *   (fetched once), else just the configured model.
+ * Other providers: only their configured model.
+ */
+export async function modelChoices(provider: ProviderName, env: Record<string, string | undefined> = process.env, fetchFn: typeof fetch = fetch): Promise<ModelChoices> {
+  const unique = (list: (string | undefined)[]) => [...new Set(list.map((s) => s?.trim()).filter((s): s is string => Boolean(s)))];
+  if (provider === "claude") {
+    const def = env.ANIM_CLAUDE_MODEL || CLAUDE_DEFAULT_MODEL;
+    return { default: def, models: unique([def, ...CLAUDE_MODELS]) };
+  }
+  const preset = PROVIDERS[provider];
+  const def = preset.model ? preset.model(env[preset.modelEnv] || preset.defaultModel) : env[preset.modelEnv] || preset.defaultModel;
+  if (provider === "azure") return { default: def, models: unique([def, ...(env.AZURE_OPENAI_DEPLOYMENTS ?? "").split(",")]) };
+  if (provider === "gemini" && env[preset.keyEnv]) {
+    const key = env[preset.keyEnv]!;
+    if (!geminiCache.has(key)) geminiCache.set(key, listGeminiModels(preset.baseUrl, key, fetchFn));
+    return { default: def, models: unique([def, ...(await geminiCache.get(key)!)]) };
+  }
+  return { default: def, models: [def] };
+}
+
+/** Gemini text-generation models, newest names first; [] when the list can't be fetched. */
+async function listGeminiModels(baseUrl: string, key: string, fetchFn: typeof fetch): Promise<string[]> {
+  try {
+    const res = await fetchFn(`${baseUrl}/models`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { data?: { id?: string }[] };
+    return (body.data ?? [])
+      .map((m) => (m.id ?? "").replace(/^models\//, ""))
+      .filter((id) => /^gemini-/.test(id) && !/embedding|tts|image|live|audio|vision|aqa|learnlm|robotics|computer-use|transcribe|banana|customtools/.test(id))
+      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  } catch {
+    return [];
+  }
 }
 
 export function isReasoningModel(model: string): boolean {

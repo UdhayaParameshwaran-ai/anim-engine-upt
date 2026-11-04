@@ -48,7 +48,7 @@ describe("template cards", () => {
 });
 
 describe("fit-based variants", () => {
-  const grid = TEMPLATES.find((t) => t.name === "grid")!;
+  const grid = TEMPLATES.find((t) => t.name === "cards")!;
   const steps = TEMPLATES.find((t) => t.name === "steps")!;
   const variantOf = (script: string, variants: "fit" | "exact" = "fit") => {
     const r = compile(script, { variants });
@@ -121,5 +121,14 @@ describe("template quality", () => {
       if (bad.length) problems.push(`${t.name} ×${n}: ${bad.join("; ")}`);
     }
     expect(problems).toEqual([]);
+  });
+});
+
+describe("audit regressions", () => {
+  it("fits seven dated events with long labels on a timeline", () => {
+    const events = ["1969 · ARPANET sends first message", "1983 · TCP/IP becomes standard", "1991 · World Wide Web opens", "2000s · Broadband and mobile spread", "2007 · Smartphones put it in pockets", "2010s · Cloud computing everywhere", "Today · Billions online all day"];
+    const decl = events.map((e, i) => `t${i + 1} = box "${e}"`).join("\n");
+    const script = `video 1 "T"\n\nscene t "History" template=timeline\n${decl}\n> ${events.map((_, i) => `{${i + 1}}step`).join(" then ")}.\n${events.map((_, i) => `${i + 1} pop t${i + 1}`).join("\n")}\n`;
+    expect(unfit(script, "fit")).toEqual([]);
   });
 });
