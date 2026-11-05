@@ -1,4 +1,5 @@
 import type { Box, Prop, ResolvedScene, ResolvedTimeline, SceneIR, Tween, VideoIR } from "@anim/ir";
+import { findMotion } from "@anim/registry";
 import { createEvaluator, EASES, type FrameState, type Value } from "@anim/timeline";
 import { build, paintFills, round, svg, SVG_NS, type Instance } from "./components.js";
 import { fontFace, fontFaceCss } from "./fonts.js";
@@ -23,6 +24,8 @@ interface SceneView {
 
 type Props = Partial<Record<Prop, Value>>;
 type Css = [property: string, value: string][];
+/** Element kinds that are pictures (they float while idle, and glow when highlighted). */
+const PICTURES = new Set(["icon", "asset"]);
 
 let stageCount = 0;
 const SVG_ROOT_BASE = "position: absolute; left: 0px; top: 0px;";
@@ -64,6 +67,10 @@ export class Stage {
   private readonly evaluator: ReturnType<typeof createEvaluator>;
   private readonly tints = new Map<string, Tween[]>();
   private readonly revealBy = new Map<string, string>();
+  /** When each element has finished appearing (pictures start to float from then on). */
+  private readonly shownAt = new Map<string, number>();
+  /** How far pictures float while on screen (px), from the motion personality. */
+  private readonly idle: number;
   /** Build-time inline styles that dynamic styles are appended to. */
   private readonly baseStyle = new WeakMap<Element, string>();
   private readonly htmlCameraBase: string;
@@ -85,7 +92,9 @@ export class Stage {
     this.width = ir.canvas.width;
     this.height = ir.canvas.height;
     this.evaluator = createEvaluator(timeline);
+    this.idle = findMotion(ir.motion).idle * (this.width / 1920);
     for (const tw of timeline.tracks) {
+      if (tw.prop === "opacity" && tw.to === 1 && !this.shownAt.has(tw.target)) this.shownAt.set(tw.target, tw.t1);
       if (tw.prop === "tint") (this.tints.get(tw.target) ?? this.tints.set(tw.target, []).get(tw.target)!).push(tw);
       if (tw.prop === "reveal" && tw.meta?.by && !this.revealBy.has(tw.target)) this.revealBy.set(tw.target, String(tw.meta.by));
     }
@@ -124,8 +133,9 @@ export class Stage {
       html.dataset.scene = res.id;
       html.style.cssText = SCENE_HTML_BASE;
       const instances = new Map<string, Instance>();
-      // Connectors first so they sit behind what they connect.
-      const ordered = [...sceneIr.elements].sort((a, b) => Number(!a.link) - Number(!b.link));
+      // Panels and axes at the back, then connectors (behind what they connect), then elements, then badges.
+      const depth = (e: (typeof sceneIr.elements)[number]) => (e.kind === "panel" || e.kind === "rule" ? 0 : e.link ? 1 : e.kind === "badge" ? 3 : 2);
+      const ordered = [...sceneIr.elements].sort((a, b) => depth(a) - depth(b));
       for (const el of ordered) {
         const inst = build(doc, el, this.theme, `${this.markId}-${res.id}-${el.id}`);
         paintFills(inst, this.theme);
@@ -280,7 +290,7 @@ export class Stage {
     ];
 
     const x = num(p.x, 0);
-    const y = num(p.y, 0);
+    const y = num(p.y, 0) + this.float(inst, target, opacity);
     const s = num(p.scale, 1);
     const r = num(p.rotate, 0);
     if (inst.layer === "html") {
@@ -302,7 +312,7 @@ export class Stage {
       }
     }
     const fillK = clamp01((draw - 0.5) / 0.5);
-    for (const f of inst.fills) f.setAttribute("fill-opacity", String(round(fillK * (f.getAttribute("data-fill") === "surface" ? 1 : 0.85), 3)));
+    for (const f of inst.fills) f.setAttribute("fill-opacity", String(round(fillK * (f.getAttribute("data-fill") === "surface" || f.hasAttribute("data-solid") ? 1 : 0.85), 3)));
     const innerK = clamp01((draw - 0.6) / 0.4);
     for (const t of inst.innerText) (t as SVGElement).style.opacity = String(round(innerK, 3));
 
@@ -318,12 +328,28 @@ export class Stage {
     const tint = num(p.tint, 0);
     const c = color(this.theme, this.tintMeta(target).color);
     const blur = num(p.blur, 0);
-    const filters = [root.getAttribute("data-shadow") ?? "", blur > 0.05 ? `blur(${round(blur, 2)}px)` : "", this.emphasis(tint, c, 4, 14)];
+    // A marker block suits text; behind a picture it is a crude rectangle, so pictures glow instead.
+    const filters = [root.getAttribute("data-shadow") ?? "", blur > 0.05 ? `blur(${round(blur, 2)}px)` : "", this.emphasis(tint, c, 4, 14, PICTURES.has(inst.el.kind))];
     style.push(["filter", filters.filter(Boolean).join(" ")]);
     if (textual) {
       for (const t of root.querySelectorAll("text")) t.setAttribute("fill", tint > 0.01 ? `color-mix(in srgb, ${c} ${Math.round(tint * 100)}%, ${this.theme.fg})` : this.theme.fg);
     }
     css(root, this.baseStyle.get(root) ?? "", style);
+  }
+
+  /**
+   * Idle float of a picture: a slow, small rise and fall once it has
+   * appeared, each picture on its own phase. A pure function of time, so
+   * seeking and frame export agree.
+   */
+  private float(inst: Instance, target: string, opacity: number): number {
+    if (!this.idle || !PICTURES.has(inst.el.kind) || opacity < 0.5) return 0;
+    const since = this.time - (this.shownAt.get(target) ?? 0);
+    if (since <= 0) return 0;
+    let h = 0;
+    for (const ch of inst.el.id) h = (h * 31 + ch.charCodeAt(0)) % 628;
+    // Eases in over the first second so the entrance settles before the float starts.
+    return Math.sin(this.time * 1.3 + h / 100) * this.idle * Math.min(1, since);
   }
 
   private reveal(inst: Instance, target: string, reveal: number): void {
@@ -371,7 +397,9 @@ export class Stage {
     const my = (start[1] + end[1]) / 2;
     const len = Math.hypot(end[0] - start[0], end[1] - start[1]) || 1;
     const [nx, ny] = [-(end[1] - start[1]) / len, (end[0] - start[0]) / len];
-    const ctrl: [number, number] = arc ? [mx + nx * len * 0.2, my + ny * len * 0.2] : [mx, my];
+    // bend: how far the arc bows, as a share of its length; negative bows the other way.
+    const bend = Number(inst.el.params.bend ?? 0.2);
+    const ctrl: [number, number] = arc ? [mx + nx * len * bend, my + ny * len * bend] : [mx, my];
     c.path.setAttribute("d", arc ? `M${round(start[0])} ${round(start[1])}Q${round(ctrl[0])} ${round(ctrl[1])} ${round(end[0])} ${round(end[1])}` : `M${round(start[0])} ${round(start[1])}L${round(end[0])} ${round(end[1])}`);
     const props = state.get(`${view.res.id}/${inst.el.id}`) ?? {};
     const draw = num(props.draw, 1);
@@ -413,9 +441,9 @@ export class Stage {
   }
 
   /** CSS filter for a highlight of strength `tint`: glow, or one of four marker blocks. */
-  private emphasis(tint: number, c: string, inner: number, outer: number): string {
+  private emphasis(tint: number, c: string, inner: number, outer: number, glow = false): string {
     if (tint <= 0.01) return "";
-    if (this.theme.emphasis === "mark") return `url(#${this.markId}-${Math.min(4, Math.ceil(tint * 4))})`;
+    if (this.theme.emphasis === "mark" && !glow) return `url(#${this.markId}-${Math.min(4, Math.ceil(tint * 4))})`;
     return `drop-shadow(0 0 ${round(inner * tint)}px ${c}) drop-shadow(0 0 ${round(outer * tint)}px ${c})`;
   }
 

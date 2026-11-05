@@ -5,6 +5,7 @@ import { Director, type HistoryEntry } from "@anim/director";
 import { AssetLibrary, TEMPLATES } from "@anim/registry";
 import { describe, expect, it } from "vitest";
 import {
+  CLOSINGS,
   ClaudeCodeClient,
   clean,
   clientFromEnv,
@@ -13,6 +14,8 @@ import {
   generate,
   LlmError,
   modelChoices,
+  OPENINGS,
+  outlinePrompt,
   OpenAICompatibleClient,
   qualityIssues,
   ReplayClient,
@@ -20,6 +23,7 @@ import {
   routeOutline,
   scenePrompt,
   shapeTable,
+  storyArc,
   systemPrompt,
   templateCard,
   tidyOutline,
@@ -193,13 +197,14 @@ describe("OpenAI-compatible client", () => {
 // ---------------------------------------------------------------- prompt ---
 
 describe("prompt", () => {
-  it("is generated from the registry and lists only retrieved assets", () => {
+  it("is generated from the registry and lists only the pictures it is given", () => {
     const assets = retrieveAssets("how leaves use sunlight and water", new AssetLibrary(), 5);
-    expect(assets.map((a) => a.name).slice(0, 3)).toEqual(expect.arrayContaining(["leaf", "sun", "droplet"]));
+    expect(assets.map((a) => a.name)).toEqual(expect.arrayContaining(["leaf", "sun", "droplet"]));
     const sys = systemPrompt(assets);
     for (const verb of ["fade", "pop", "draw", "write", "highlight", "move", "focus"]) expect(sys).toContain(`  ${verb} `);
     for (const tpl of ["compare", "steps", "flow", "cycle"]) expect(sys).toContain(`  ${tpl} `);
-    expect(sys).toContain("asset:leaf(blade,vein,stem)");
+    expect(sys).toContain("Illustrations, written asset:<name> (parts in brackets): leaf(blade,vein,stem)");
+    expect(sys).toContain("Icons, written icon:<name>: droplet glass-water sun bubbles");
     expect(sys).not.toContain("heart.anatomy");
     // The example in the prompt must itself be valid.
     const example = sys.slice(sys.indexOf("EXAMPLE\n") + 8);
@@ -598,5 +603,47 @@ describe("claude (subscription via the Claude Code CLI)", () => {
     await expect(limit.chat({ messages: [{ role: "user", content: "x" }] })).rejects.toMatchObject({ retryable: true });
     const auth = new ClaudeCodeClient({ model: "m", spawn: fakeCli([{ type: "result", is_error: true, result: "Invalid API key · Please run /login" }]) });
     await expect(auth.chat({ messages: [{ role: "user", content: "x" }] })).rejects.toMatchObject({ retryable: false });
+  });
+});
+
+describe("pictures, structure and story arcs", () => {
+  it("shows every scene call the whole picture list, the same for any topic", async () => {
+    const plain = (last: string) => (last.startsWith("Plan") ? OUTLINE : last.includes('"need"') ? NEED_OK : LEAF_OK);
+    const systems = async (topic: string) => {
+      const llm = new ScriptedLlm(plain);
+      await generate(topic, { client: llm });
+      return llm.requests.map((q) => q.messages[0]!.content);
+    };
+    const [outline, scene] = await systems("how plants make food");
+    // Hundreds of icons by name, hand-made ones first; the plan only learns what kinds of picture exist.
+    expect(scene).toMatch(/Icons, written icon:<name>: sun droplet wind .*\bgavel\b.*\blandmark\b.*\bsprout\b/);
+    expect(scene).toContain("Illustrations, written asset:<name> (parts in brackets): leaf(blade,vein,stem)");
+    expect(outline).toMatch(/PICTURES: illustrations of leaf, tree, .*; \d{3} icons of everyday things/);
+    expect(outline).not.toContain("gavel");
+    expect((await systems("how a bill becomes law"))[1]).toBe(scene);
+  });
+
+  it("tells the writer what templates draw themselves, and its examples leave that out", () => {
+    const sys = systemPrompt([]);
+    expect(sys).toContain("Templates draw their own structure");
+    for (const name of ["steps", "cycle", "hub", "converge", "diverge", "process", "cards", "compare", "spotlight", "timeline"]) {
+      const example = TEMPLATES.find((t) => t.name === name)!.guide.example;
+      expect(example, name).not.toMatch(/=\s*(arrow|line)\b/);
+      expect(compile(`video 1\n${example}\n`).diagnostics, name).toEqual([]);
+    }
+  });
+
+  it("asks each plan for one opening and one ending, picked by the topic", () => {
+    const arcs = ["water cycle", "how a bill becomes law", "plant and animal cells", "the fire triangle", "compound interest", "history of the internet", "the human heart", "renewable energy"].map((t) => storyArc(t));
+    // Stable for a topic, varied across topics.
+    expect(storyArc("Water cycle ")).toEqual(arcs[0]);
+    expect(new Set(arcs.map((a) => a.open.name)).size).toBeGreaterThan(2);
+    expect(new Set(arcs.map((a) => a.close.name)).size).toBeGreaterThan(2);
+    const forced = storyArc("water cycle", { open: "cold", close: "recap" });
+    const ask = outlinePrompt("water cycle", { min: 4, max: 6 }, forced);
+    expect(ask).toContain("Open with no title scene: open on the first idea itself");
+    expect(ask).toContain("End with a diagram that pulls the main ideas into one picture");
+    expect(OPENINGS.map((o) => o.name)).toEqual(["title", "question", "cold", "number"]);
+    expect(CLOSINGS.map((c) => c.name)).toEqual(["bullets", "recap", "checklist", "takeaway"]);
   });
 });

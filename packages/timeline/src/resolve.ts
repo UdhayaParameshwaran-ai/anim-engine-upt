@@ -260,6 +260,19 @@ class Resolver {
     const contentEnd = Math.max(cursor, ...scheduled.map((s) => s.t0 + s.dur + Math.max(0, s.targets.length - 1) * s.stagger));
     const t1 = this.q(contentEnd + this.tailPad + trOut.duration);
     this.expand(scene, scheduled);
+    // A slow camera move keeps a held frame alive, unless the script moves the camera itself:
+    // in on one scene, back out on the next, so consecutive scenes don't move alike.
+    const camera = `${scene.id}/camera`;
+    if (this.motion.push > 0 && !this.byKey.get(`${camera}\u0000camera`)?.length) {
+      const { width, height } = this.video.canvas;
+      const k = this.motion.push;
+      const full = { x: 0, y: 0, w: width, h: height };
+      const close = { x: (width * k) / 2, y: (height * k) / 2, w: width * (1 - k), h: height * (1 - k) };
+      const out = this.scenes.length % 2 === 1;
+      // A scene that pulls out starts close: that is its camera before anything moves.
+      if (out) this.initial[camera] = { camera: close };
+      this.add(camera, { prop: "camera", t0, t1, to: out ? full : close, ease: "linear" }, { order: -1, verb: "focus", targets: [], t0, dur: t1 - t0, stagger: 0, params: {}, line: 0 });
+    }
     this.scenes.push({ id: scene.id, t0, t1, transitionIn: trIn, transitionOut: trOut, steps, beats });
     return t1;
   }
@@ -335,8 +348,21 @@ class Resolver {
         const base = id.split(".")[0]!;
         const isPart = id !== base;
         const target = `${scene.id}/${id}`;
-        if (!this.initial[target]) this.initial[target] = { opacity: 1, scale: 1, tint: 0, draw: 1, reveal: 1 };
         const verb = s.verb === "clear" ? "hide" : s.verb;
+        if (isPart && ENTER.has(verb) && elements.has(base) && !visible.has(base)) {
+          // Showing a part of a hidden element (a list revealed item by item) shows the element;
+          // its parts that are entered on their own start hidden and appear on their turn.
+          for (const other of scheduled) {
+            if (!ENTER.has(other.verb)) continue;
+            for (const pid of other.targets) {
+              const key = `${scene.id}/${pid}`;
+              if (pid.startsWith(`${base}.`) && !this.initial[key]) this.initial[key] = { opacity: 0, scale: 1, tint: 0, draw: 1, reveal: 1 };
+            }
+          }
+          this.add(`${scene.id}/${base}`, { prop: "opacity", t0, t1: t0, to: 1, ease: "linear" }, s);
+          visible.add(base);
+        }
+        if (!this.initial[target]) this.initial[target] = { opacity: 1, scale: 1, tint: 0, draw: 1, reveal: 1 };
         const specs = PRIMITIVES[verb]?.({
           t0,
           dur: s.dur,

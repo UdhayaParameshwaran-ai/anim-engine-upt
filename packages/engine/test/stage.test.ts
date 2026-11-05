@@ -269,3 +269,100 @@ describe("wipe", () => {
     expect([...body.querySelectorAll("rect")].some((r) => r.getAttribute("fill") === stage.theme.bg)).toBe(false);
   });
 });
+
+describe("template structure and looks", () => {
+  async function stageOf(src: string, theme?: string): Promise<{ stage: Stage; ir: VideoIR; tl: ResolvedTimeline }> {
+    const ir = compile(src).ir!;
+    const speech = await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) });
+    const tl = resolve(ir, speech);
+    return { stage: new Stage(container, ir, tl, { autoFit: false, ...(theme && { theme }) }), ir, tl };
+  }
+  const CARDS = 'video 1\nscene s "Kinds" template=cards\na = icon:sun "Solar"\nb = icon:wind "Wind"\n> {1}Two kinds.\n1 pop a,b /0.2\n';
+  const STEPS = 'video 1\nscene s "Order" template=steps\na = icon:sun "One"\nb = icon:gear "Two"\n> {1}First, then {2}second.\n1 pop a\n2 pop b\n';
+
+  it("draws panels behind the items and badges above them, each shown with its item", async () => {
+    const { stage, tl } = await stageOf(STEPS);
+    const order = [...stage.root.querySelectorAll('[data-scene="s"] [data-kind]')].map((n) => n.getAttribute("data-kind"));
+    // Connectors first, then the items, then their number badges.
+    expect(order.indexOf("arrow")).toBeLessThan(order.indexOf("icon"));
+    expect(order.lastIndexOf("icon")).toBeLessThan(order.indexOf("badge"));
+    const second = firstTween(tl, "s/b", "opacity");
+    const badge = node(stage, "s", "__badge2");
+    stage.render(second.t0 - 0.05);
+    expect(visible(badge)).toBe(false);
+    stage.render(second.t1 + 1);
+    expect(visible(badge)).toBe(true);
+    expect(badge.textContent).toBe("2");
+
+    const cards = await stageOf(CARDS);
+    const kinds = [...cards.stage.root.querySelectorAll('[data-scene="s"] [data-kind]')].map((n) => n.getAttribute("data-kind"));
+    expect(kinds.filter((k) => k === "panel")).toHaveLength(2);
+    expect(kinds.lastIndexOf("panel")).toBeLessThan(kinds.indexOf("icon"));
+  });
+
+  it("draws icons in the look's own style, colored from its palette", async () => {
+    const backing = (stage: Stage, id: string) => node(stage, "s", id).querySelector("g > circle[data-solid], g > rect[data-solid]");
+    const paper = await stageOf(CARDS, "paper");
+    expect(backing(paper.stage, "a")!.tagName).toBe("circle");
+    // Item 1 takes the accent, item 2 the next palette color.
+    expect(backing(paper.stage, "a")!.getAttribute("fill")).toContain(THEMES.paper!.accent);
+    expect(backing(paper.stage, "b")!.getAttribute("fill")).toContain(THEMES.paper!.good);
+    document.body.innerHTML = "";
+    document.body.append(container = document.createElement("div"));
+    const blueprint = await stageOf(CARDS, "blueprint");
+    expect(backing(blueprint.stage, "a")!.tagName).toBe("rect");
+    expect(backing(blueprint.stage, "a")!.getAttribute("stroke")).toBe(THEMES.blueprint!.fg);
+    document.body.innerHTML = "";
+    document.body.append(container = document.createElement("div"));
+    // Hand-drawn looks keep plain line art, in the item's color.
+    const chalk = await stageOf(CARDS, "chalk");
+    expect(backing(chalk.stage, "a")).toBeNull();
+    expect(node(chalk.stage, "s", "a").querySelector("g[stroke]")!.getAttribute("stroke")).toBe(THEMES.chalk!.accent);
+  });
+
+  it("keeps an icon and its label together in a tall slot", async () => {
+    const { stage, ir } = await stageOf('video 1\nscene s "Page" grid=L2-01\ntitle = title "Page"\np = bullets "One;Two"\ni = icon:check "Done"\n> {1}A page.\n1 draw p\n1 pop i\n');
+    const box = ir.scenes[0]!.elements.find((e) => e.id === "i")!.box;
+    const label = node(stage, "s", "i").querySelector("text")!;
+    const y = Number(/translate\(0 ([-\d.]+)\)/.exec(label.getAttribute("transform")!)![1]);
+    // Right under the icon, not at the bottom of the slot.
+    expect(y).toBeLessThan(box.h / 2 - 100);
+  });
+});
+
+describe("life between cues", () => {
+  async function stageOf(src: string): Promise<{ stage: Stage; tl: ResolvedTimeline }> {
+    const ir = compile(src).ir!;
+    const speech = await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) });
+    const tl = resolve(ir, speech);
+    return { stage: new Stage(container, ir, tl, { autoFit: false }), tl };
+  }
+  const y = (n: Element) => Number(/translate\([-\d.]+ ([-\d.]+)\)/.exec(n.getAttribute("transform")!)![1]);
+
+  it("lets pictures float once they have appeared, and holds them still under the minimal personality", async () => {
+    const src = (motion: string) => `video 1\nmotion ${motion}\nscene s\nx = icon:sun "Sun"\nt = text "Words"\n> A {1}sun, and then a long quiet stretch of narration follows it.\n1 pop x\n1 fade t\n`;
+    const { stage, tl } = await stageOf(src("playful"));
+    const shown = firstTween(tl, "s/x", "opacity").t1;
+    const ys = [1.2, 1.9, 2.6].map((dt) => (stage.render(shown + dt), y(node(stage, "s", "x"))));
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(1);
+    // Text holds still, and a frame is the same however its time was reached.
+    const texts = [1.2, 2.6].map((dt) => (stage.render(shown + dt), y(node(stage, "s", "t"))));
+    expect(texts[0]).toBe(texts[1]);
+    stage.render(shown + 1.9);
+    expect(y(node(stage, "s", "x"))).toBe(ys[1]);
+    document.body.innerHTML = "";
+    document.body.append((container = document.createElement("div")));
+    const calm = await stageOf(src("minimal"));
+    const at = firstTween(calm.tl, "s/x", "opacity").t1;
+    const still = [1.2, 2.6].map((dt) => (calm.stage.render(at + dt), y(node(calm.stage, "s", "x"))));
+    expect(still[0]).toBe(still[1]);
+  });
+
+  it("draws list pages as row cards with a marker in each item's color", async () => {
+    const { stage } = await stageOf('video 1\ntheme paper\nscene s "Page" grid=L1-01\np = bullets "One thing;Another thing;A third"\n> {1}Three things.\n1 draw p\n');
+    const rows = node(stage, "s", "p").querySelectorAll("rect");
+    expect(rows).toHaveLength(3);
+    const dots = [...node(stage, "s", "p").querySelectorAll("circle")].map((c) => c.getAttribute("fill"));
+    expect(dots).toEqual([THEMES.paper!.accent, THEMES.paper!.good, THEMES.paper!.warn]);
+  });
+});

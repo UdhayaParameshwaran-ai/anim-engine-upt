@@ -6,10 +6,24 @@ export interface Size {
   h: number;
   /** Text can wrap to a narrower width instead of scaling down. */
   wraps?: { font: number; chars: number; lineHeight: number; pad: number };
+  /** Pictures may be enlarged up to this factor when their cell has room. */
+  grow?: number;
+  /** The label under a picture, at natural size: its band height, font and lines. */
+  label?: { h: number; font: number; lines: number; chars: number };
+}
+
+/** Label under an icon or illustration: one line, or two when it is long. */
+const LABEL_FONT = 34;
+const LABEL_MAX_W = 340;
+function labelOf(text: string): { w: number; h: number; font: number; lines: number; chars: number } | undefined {
+  if (!text) return undefined;
+  const textW = Math.round(text.length * CHAR_W * LABEL_FONT) + 12;
+  const lines = textW <= LABEL_MAX_W ? 1 : 2;
+  return { w: lines === 1 ? textW : Math.min(LABEL_MAX_W, Math.round(textW * 0.6)), h: Math.round(lines * LABEL_FONT * 1.25 + 14), font: LABEL_FONT, lines, chars: text.length };
 }
 
 /** Average glyph width as a fraction of font size. Real measurement happens in the browser later. */
-const CHAR_W = 0.55;
+export const CHAR_W = 0.55;
 
 const FONT: Record<string, number> = { title: 80, text: 44, label: 34, node: 32, list: 40 };
 
@@ -20,7 +34,8 @@ const FONT: Record<string, number> = { title: 80, text: 44, label: 34, node: 32,
  */
 export function measure(el: ElementDecl, assets: AssetLibrary): Size {
   const text = el.texts[0] ?? "";
-  const labelH = el.texts.length && (el.kind === "icon" || el.kind === "asset") ? 56 : 0;
+  const label = el.kind === "icon" || el.kind === "asset" ? labelOf(text) : undefined;
+  const labelH = label?.h ?? 0;
   switch (el.kind) {
     case "title":
     case "text":
@@ -47,10 +62,10 @@ export function measure(el: ElementDecl, assets: AssetLibrary): Size {
     case "chart":
       return { w: 760, h: 440 };
     case "icon":
-      return { w: 200, h: 200 + labelH };
+      return { w: Math.max(200, label?.w ?? 0), h: 200 + labelH, grow: 2.2, ...(label && { label }) };
     case "asset": {
       const aspect = (el.name && assets.resolve("asset", el.name)?.manifest.aspect) || 1;
-      return { w: 440, h: Math.round(440 / aspect) + labelH };
+      return { w: 440, h: Math.round(440 / aspect) + labelH, grow: 1.5, ...(label && { label }) };
     }
     case "placeholder":
       return { w: 280, h: 180 };

@@ -74,7 +74,9 @@ describe("determinism and quantization", () => {
     for (const tw of tl.tracks) {
       if (forced.has(tw.verb) || tw.t0 === 0) continue;
       const before = ev.valueAt(tw.target, tw.prop, tw.t0 - 1e-6);
-      expect(tw.from, `${tw.target}.${tw.prop} @${tw.t0} (${tw.verb})`).toEqual(before);
+      // A microsecond before a springy tween ends it is still a hair off its end value.
+      if (typeof before === "number") expect(tw.from as number, `${tw.target}.${tw.prop} @${tw.t0} (${tw.verb})`).toBeCloseTo(before, 6);
+      else expect(tw.from, `${tw.target}.${tw.prop} @${tw.t0} (${tw.verb})`).toEqual(before);
     }
   });
 });
@@ -184,5 +186,58 @@ describe("scenes", () => {
     const { tl } = await build(readFileSync(join(EXAMPLES, "learn-to-code.txt"), "utf8"));
     const sorted = [...tl.tracks].sort((x: Tween, y: Tween) => x.t0 - y.t0);
     expect(tl.tracks.map((t) => t.t0)).toEqual(sorted.map((t) => t.t0));
+  });
+});
+
+describe("template motion", () => {
+  const HUB = (motion: string) => `video 1\nmotion ${motion}\nscene s template=hub\ncenter = text "Core"\na = icon:sun "Sun"\nb = icon:heart "Heart"\nc = icon:gear "Gear"\n> {1}Everything {2}connects.\n1 pop center\n2 pop a,b,c /0.1\n`;
+
+  it("brings template items in from the direction their template gives them", async () => {
+    const { tl } = await build(HUB("playful"));
+    // The top item of a hub starts nearer the center (lower on screen) and moves out to its place.
+    const y = tl.tracks.find((t) => t.target === "s/a" && t.prop === "y")!;
+    expect(y.from as number).toBeGreaterThan(y.to as number);
+    expect(Math.round((y.from as number) - (y.to as number))).toBe(80);
+    // Quiet personalities enter in place.
+    const calm = await build(HUB("minimal"));
+    expect(calm.tl.tracks.filter((t) => t.target === "s/a" && (t.prop === "x" || t.prop === "y"))).toEqual([]);
+  });
+
+  it("pushes the camera in slowly for cinematic scenes, unless the script moves it", async () => {
+    const { tl } = await build(HUB("cinematic"));
+    const cam = tl.tracks.filter((t) => t.prop === "camera");
+    expect(cam).toHaveLength(1);
+    expect(cam[0]).toMatchObject({ target: "s/camera", t0: tl.scenes[0]!.t0, t1: tl.scenes[0]!.t1, to: { w: 1920 * 0.95 } });
+    const plain = await build(HUB("minimal"));
+    expect(plain.tl.tracks.filter((t) => t.prop === "camera")).toEqual([]);
+    const focused = await build(HUB("cinematic") + "end focus a\n");
+    expect(focused.tl.tracks.filter((t) => t.prop === "camera").map((t) => t.verb)).toEqual(["focus"]);
+  });
+
+  it("moves the camera in on one scene and back out on the next", async () => {
+    const two = `video 1\nmotion corporate\nscene a\nx = icon:sun\n> {1}One.\n1 pop x\nscene b\ny = icon:sun\n> {1}Two.\n1 pop y\n`;
+    const { tl } = await build(two);
+    const [first, second] = tl.tracks.filter((t) => t.prop === "camera");
+    expect((first!.to as { w: number }).w).toBeLessThan(1920);
+    expect((second!.from as { w: number }).w).toBeLessThan(1920);
+    expect((second!.to as { w: number }).w).toBe(1920);
+  });
+
+  it("lifts a highlighted element a little while it is talked about", async () => {
+    const { tl } = await build('video 1\nscene s\nx = icon:sun\n> A {1}sun that {2 shines brightly}.\n1 pop x\n2 highlight x fit\n');
+    const lift = tl.tracks.filter((t) => t.target === "s/x" && t.prop === "scale" && t.verb === "highlight");
+    expect(lift.map((t) => Math.round((t.to as number) * 100) / 100)).toEqual([1.06, 1]);
+  });
+
+  it("shows a list revealed item by item, although the list itself was never entered", async () => {
+    const { tl } = await build('video 1\nscene s "Page" grid=L1-01\np = bullets "One;Two"\n> {1}First.\n1 draw p.1\n> {1}Second.\n1 draw p.2\n');
+    const ev = createEvaluator(tl);
+    const first = tl.tracks.find((t) => t.target === "s/p.1" && t.prop === "opacity")!;
+    const second = tl.tracks.find((t) => t.target === "s/p.2" && t.prop === "opacity")!;
+    expect(ev.valueAt("s/p", "opacity", first.t0 - 0.01)).toBe(0);
+    expect(ev.valueAt("s/p", "opacity", first.t0 + 0.01)).toBe(1);
+    // The second item waits for its own turn.
+    expect(ev.valueAt("s/p.2", "opacity", first.t0 + 0.01)).toBe(0);
+    expect(ev.valueAt("s/p.2", "opacity", second.t0 + 0.01)).toBe(1);
   });
 });

@@ -71,6 +71,16 @@ export interface MotionProfile {
   pop: { from: number; ease: string; blur?: number };
   /** Distance for rise/slide entrances, in px on a 1920-wide canvas. */
   distance: number;
+  /**
+   * Distance template items travel as they enter, from the direction their
+   * template gives them (out of a hub, in toward a result, along a sequence).
+   * 0 = they enter in place.
+   */
+  drift: number;
+  /** Slow camera move over each scene, as a share of the frame: in on one scene, out on the next (0 = the camera holds still). */
+  push: number;
+  /** How far pictures float while they are on screen, in px on a 1920-wide canvas (0 = they hold still). */
+  idle: number;
   /** Peak scale of `pulse`. */
   pulse: number;
   /** Scene transitions `in=auto` rotates through, scene by scene. */
@@ -79,13 +89,13 @@ export interface MotionProfile {
 
 export const MOTIONS: readonly MotionProfile[] = [
   // The original behavior: older scripts render exactly as before.
-  { name: "standard", summary: "balanced fades and springy pops", durScale: 1, staggerScale: 1, ease: {}, fade: "plain", pop: { from: 0.6, ease: "spring" }, distance: 0, pulse: 1.15, transitions: ["fade"] },
-  { name: "playful", summary: "bouncy and overshooting; things hop in", durScale: 0.9, staggerScale: 1, ease: { out: "back", spring: "elastic" }, fade: "rise", pop: { from: 0.3, ease: "elastic" }, distance: 48, pulse: 1.25, transitions: ["zoom", "iris", "rise"] },
-  { name: "corporate", summary: "quick, clean, subtle rise-ins", durScale: 0.8, staggerScale: 0.8, ease: { out: "quart", spring: "quart" }, fade: "rise", pop: { from: 0.94, ease: "quart" }, distance: 18, pulse: 1.06, transitions: ["rise", "wipe", "fade"] },
-  { name: "cinematic", summary: "slow and smooth; blur-to-focus reveals", durScale: 1.5, staggerScale: 1.6, ease: { out: "expo", spring: "expo", inout: "sine" }, fade: "blur", pop: { from: 1.08, ease: "expo", blur: 14 }, distance: 0, pulse: 1.08, transitions: ["blur", "fade", "zoom"] },
-  { name: "energetic", summary: "fast, punchy slides that snap into place", durScale: 0.65, staggerScale: 0.7, ease: { out: "back", spring: "back", inout: "quart" }, fade: "slide", pop: { from: 0.2, ease: "back" }, distance: 90, pulse: 1.3, transitions: ["wipe", "slide", "zoom"] },
-  { name: "minimal", summary: "calm, quiet fades only", durScale: 1.1, staggerScale: 1.2, ease: { out: "sine", spring: "sine", inout: "sine" }, fade: "plain", pop: { from: 1, ease: "sine" }, distance: 0, pulse: 1.04, transitions: ["fade"] },
-  { name: "dramatic", summary: "weighty zoom-ins from depth", durScale: 1.25, staggerScale: 1.3, ease: { out: "expo", spring: "back" }, fade: "zoom", pop: { from: 1.6, ease: "expo", blur: 8 }, distance: 0, pulse: 1.2, transitions: ["zoom", "iris", "blur"] },
+  { name: "standard", summary: "balanced fades and springy pops", durScale: 1, staggerScale: 1, ease: {}, fade: "plain", pop: { from: 0.6, ease: "spring" }, distance: 0, drift: 36, push: 0.03, idle: 3, pulse: 1.15, transitions: ["fade"] },
+  { name: "playful", summary: "bouncy and overshooting; things hop in", durScale: 0.9, staggerScale: 1, ease: { out: "back", spring: "elastic" }, fade: "rise", pop: { from: 0.3, ease: "elastic" }, distance: 48, drift: 80, push: 0.035, idle: 6, pulse: 1.25, transitions: ["zoom", "iris", "rise"] },
+  { name: "corporate", summary: "quick, clean, subtle rise-ins", durScale: 0.8, staggerScale: 0.8, ease: { out: "quart", spring: "quart" }, fade: "rise", pop: { from: 0.94, ease: "quart" }, distance: 18, drift: 32, push: 0.025, idle: 2, pulse: 1.06, transitions: ["rise", "wipe", "fade"] },
+  { name: "cinematic", summary: "slow and smooth; blur-to-focus reveals", durScale: 1.5, staggerScale: 1.6, ease: { out: "expo", spring: "expo", inout: "sine" }, fade: "blur", pop: { from: 1.08, ease: "expo", blur: 14 }, distance: 0, drift: 28, push: 0.05, idle: 3, pulse: 1.08, transitions: ["blur", "fade", "zoom"] },
+  { name: "energetic", summary: "fast, punchy slides that snap into place", durScale: 0.65, staggerScale: 0.7, ease: { out: "back", spring: "back", inout: "quart" }, fade: "slide", pop: { from: 0.2, ease: "back" }, distance: 90, drift: 130, push: 0.035, idle: 4, pulse: 1.3, transitions: ["wipe", "slide", "zoom"] },
+  { name: "minimal", summary: "calm, quiet fades only", durScale: 1.1, staggerScale: 1.2, ease: { out: "sine", spring: "sine", inout: "sine" }, fade: "plain", pop: { from: 1, ease: "sine" }, distance: 0, drift: 0, push: 0, idle: 0, pulse: 1.04, transitions: ["fade"] },
+  { name: "dramatic", summary: "weighty zoom-ins from depth", durScale: 1.25, staggerScale: 1.3, ease: { out: "expo", spring: "back" }, fade: "zoom", pop: { from: 1.6, ease: "expo", blur: 8 }, distance: 0, drift: 0, push: 0.06, idle: 2, pulse: 1.2, transitions: ["zoom", "iris", "blur"] },
 ];
 
 export function findMotion(name: string | undefined): MotionProfile {
@@ -336,4 +346,4 @@ export * from "./grid.js";
 export { SHAPES, TEMPLATE_GUIDES, type Shape, type TemplateGuide, type VariantGuide } from "./guide.js";
 export { EXTRA_VARIANTS, type ExtraVariant } from "./variants.js";
 export { findPlace, PLACES } from "./places.js";
-export { AssetLibrary, flowNodes, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";
+export { AssetLibrary, flowNodes, isSetIcon, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";

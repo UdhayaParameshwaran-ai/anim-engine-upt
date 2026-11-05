@@ -4,8 +4,10 @@
  * `data-part="<name>"` marks parts addressable from the DSL (`left.wall`).
  * Icons use a 24×24 grid, illustrations 200×200.
  */
+import { LUCIDE } from "./icons-lucide.js";
 
-export const ICONS: Record<string, string> = {
+/** Hand-made icons: they carry colors of their own (water is blue, fire is red). */
+const BUILTIN_ICONS: Record<string, string> = {
   sun: `<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>`,
   droplet: `<path d="M12 2.7C12 2.7 5.5 9.6 5.5 14.2a6.5 6.5 0 0 0 13 0C18.5 9.6 12 2.7 12 2.7z" data-fill="cool"/>`,
   wind: `<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h7"/>`,
@@ -23,6 +25,9 @@ export const ICONS: Record<string, string> = {
   clock: `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`,
   gear: `<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>`,
 };
+
+/** Every icon by name: the Lucide set, with the hand-made icons on top. */
+export const ICONS: Record<string, string> = { ...LUCIDE, ...BUILTIN_ICONS };
 
 export const ILLUSTRATIONS: Record<string, string> = {
   leaf: `

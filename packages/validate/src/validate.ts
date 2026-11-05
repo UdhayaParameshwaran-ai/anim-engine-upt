@@ -277,8 +277,22 @@ class Validator {
     const visible = new Set([...prev.visible].filter((id) => keep.includes(id)));
     const shown = new Set(visible);
     for (const step of scene.steps) for (const beat of step.beats) this.visibility(beat, visible, shown, declared);
+    // An element nothing shows would leave a hole in the scene: it fades in after the first
+    // sentence (a connector, which needs both its ends on screen, after the last).
+    const beats = scene.steps.flatMap((s) => s.beats);
     for (const el of sceneOwn) {
-      if (!shown.has(el.id)) this.warn(C.NeverShown, `element \`${el.id}\` is declared but never shown`, el.span);
+      if (shown.has(el.id)) continue;
+      const link = LINK_KINDS.has(el.kind);
+      const beat = link ? beats.at(-1) : beats[0];
+      this.warn(
+        C.NeverShown,
+        `element \`${el.id}\` is declared but never shown`,
+        el.span,
+        beat && {
+          desc: `added \`end ${link ? "draw" : "fade"} ${el.id}\` to the ${link ? "last" : "first"} sentence`,
+          apply: () => beat.actions.push({ anchor: "end", calls: [{ verb: link ? "draw" : "fade", targets: [el.id], args: { params: {} }, span: el.span }], span: el.span }),
+        },
+      );
     }
     return { declared, visible };
   }

@@ -3,7 +3,7 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
+import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, scenePrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
@@ -16,6 +16,8 @@ export interface GenerateOptions {
   maxRepairs?: number;
   /** Scenes written/repaired at once; default the client's limit, else 3. */
   concurrency?: number;
+  /** How the video opens and ends (names from OPENINGS and CLOSINGS); by default the topic picks. */
+  arc?: { open?: string; close?: string };
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
   qualityRepairs?: boolean;
   /**
@@ -126,7 +128,8 @@ export function generate(topic: string, opts: GenerateOptions): Promise<Generate
 /** `inherited` carries the trace and counters into the single-pass fallback. */
 async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promise<GenerateResult> {
   const assets = opts.assets ?? new AssetLibrary();
-  const relevant = retrieveAssets(topic, assets);
+  // Icon names say what they show, so the model picks by meaning from the whole list.
+  const relevant = assets.all();
   const ctx: Ctx = inherited
     ? { ...inherited, opts }
     : { opts, system: systemPrompt(relevant), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0, started: performance.now(), trace: [] };
@@ -140,7 +143,9 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
   let scenes: string[];
   if ((opts.mode ?? "outline") === "outline") {
     // Planning only needs scene types and asset names, not the whole language.
-    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant));
+    const arc = storyArc(topic, opts.arc);
+    opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
+    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range, arc) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
     const outline = routed.text;
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);

@@ -3,7 +3,7 @@ import type { Box } from "@anim/ir";
 import { findGridLayout, findTemplate, frameRects, GRID, slotRects, SLOTS, variantGuide, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
 import { gridMode, gridParts } from "@anim/validate";
 import { compose, COMPOSE_PATTERNS, type ComposePattern } from "./compose.js";
-import { fit, measure, type Size } from "./measure.js";
+import { CHAR_W, fit, measure, type Size } from "./measure.js";
 import { VARIANT_PLUGINS } from "./variants/index.js";
 
 /**
@@ -30,10 +30,27 @@ export interface LayoutContext {
   variants?: "fit" | "exact";
 }
 
+/**
+ * Something a template draws by itself, so its structure shows without the
+ * script declaring it: the spokes of a hub, the arrows of a loop, the panel
+ * of a card, the number of a step. It appears when the last of the elements
+ * it belongs to does.
+ */
+export interface Decor {
+  id: string;
+  kind: "line" | "arrow" | "panel" | "badge" | "rule";
+  link?: { from: string; to: string };
+  text?: string;
+  follows: string[];
+  params?: Record<string, string | number>;
+}
+
 export interface SceneLayout {
+  /** Boxes of the scene's elements and of its decorations, by id. */
   boxes: Map<string, Box>;
+  decor: Decor[];
   /** Parameters a layout variant implies for an element (e.g. left-aligned text). */
-  params: Map<string, Record<string, string>>;
+  params: Map<string, Record<string, string | number>>;
   diagnostics: Diagnostic[];
   /** The template variant used, when the scene has a template. */
   variant?: string;
@@ -124,11 +141,16 @@ class SceneLayouter {
   private readonly els: ElementDecl[];
   private readonly byId: Map<string, ElementDecl>;
   private readonly safe: Box;
-  private readonly params = new Map<string, Record<string, string>>();
+  private readonly params = new Map<string, Record<string, string | number>>();
+  /** The cell each element was placed in (decorations are drawn against cells). */
+  private readonly cells = new Map<string, Box>();
   /** Fill factor for put() and gap multiplier, from `density=`. */
   private readonly fill: number;
   private readonly gapK: number;
   private chosen?: string;
+  private readonly decor: Decor[] = [];
+  /** Template content area (below the title band). */
+  private content?: Box;
 
   constructor(
     private readonly scene: Scene,
@@ -216,8 +238,10 @@ class SceneLayouter {
     const self = this;
     if (this.scene.attrs.mirror === "true") this.mirror();
     for (const e of this.els) if (LINK_KINDS.has(e.kind) && e.link) this.connector(e);
+    for (const d of this.decor) if (d.link) this.connector({ id: d.id, link: d.link });
     return {
       boxes: this.boxes,
+      decor: this.decor,
       params: this.params,
       diagnostics: this.diags,
       ...(this.chosen !== undefined && { variant: this.chosen }),
@@ -262,16 +286,40 @@ class SceneLayouter {
   // ------------------------------------------------------------ placing ---
 
   /** Places an element centered in a cell, wrapping/scaling to fit. */
-  private put(e: ElementDecl, cell: Box, fill = this.fill): void {
+  private put(e: ElementDecl, cell: Box, fill = this.fill, boost = 1): void {
     const size = this.sizes.get(e.id)!;
-    const f = fit(size, cell.w * fill, cell.h * fill);
+    let f = fit(size, cell.w * fill, cell.h * fill);
+    // Pictures fill a roomy cell instead of sitting small in the middle of it.
+    if (f.scale === 1 && size.grow) {
+      const s = Math.min(size.grow * boost, (cell.w * fill) / size.w, (cell.h * fill) / size.h);
+      if (s > 1.05) f = { w: Math.round(size.w * s), h: Math.round(size.h * s), scale: s };
+    }
     this.boxes.set(e.id, center(cell, f));
     this.scales.set(e.id, f.scale);
+    this.cells.set(e.id, cell);
+    if (size.label) this.label(e);
+    else if (size.grow) this.params.set(e.id, { ...this.params.get(e.id), sized: 1 });
     if (f.scale < 0.5 && size.wraps) {
       this.diags.push(warn(LayoutCodes.TextTooSmall, `text of \`${e.id}\` had to shrink to ${Math.round(f.scale * 100)}%; shorten it`, e));
     } else if (f.scale < 0.35) {
       this.diags.push(warn(LayoutCodes.Overflow, `\`${e.id}\` had to shrink to ${Math.round(f.scale * 100)}% to fit`, e));
     }
+  }
+
+  /**
+   * Sizes the label under a picture. Its font follows the picture, within
+   * readable bounds (or is the one given); it may be as wide as the
+   * picture's cell, and wraps to a second line before it would shrink.
+   */
+  private label(e: ElementDecl, font?: number): void {
+    const l = this.sizes.get(e.id)!.label;
+    const box = this.boxes.get(e.id);
+    if (!l || !box) return;
+    const f = font ?? Math.min(52, Math.max(l.font, Math.round(l.font * (this.scales.get(e.id) ?? 1))));
+    const labelW = Math.round(Math.max(box.w, (this.cells.get(e.id)?.w ?? box.w) * 0.96));
+    const lines = l.chars * CHAR_W * f > labelW ? 2 : 1;
+    // sized: the layout chose this picture's size (the engine only caps pictures it had to size itself).
+    this.params.set(e.id, { ...this.params.get(e.id), labelH: Math.min(Math.round(lines * f * 1.25 + 10), Math.round(box.h * 0.45)), labelFont: f, labelW, sized: 1 });
   }
 
   private slotCell(slot: string): Box {
@@ -337,6 +385,250 @@ class SceneLayouter {
   }
 
   private template(tpl: TemplateManifest, pool: ElementDecl[], area: Box): void {
+    this.arrange(tpl, pool, area);
+    this.furnish(tpl, pool);
+  }
+
+  // ------------------------------------------------------------ furnish ---
+
+  private note(e: ElementDecl, extra: Record<string, string | number>): void {
+    this.params.set(e.id, { ...this.params.get(e.id), ...extra });
+  }
+
+  /** Entrance hint: the element comes in from the direction (dx, dy). */
+  private from(e: ElementDecl, dx: number, dy: number): void {
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return;
+    this.note(e, { enterDx: Math.round((dx / len) * 100) / 100, enterDy: Math.round((dy / len) * 100) / 100 });
+  }
+
+  /** Vector from the centre of `a` to the centre of `b`. */
+  private toward(a: ElementDecl, b: ElementDecl | Box): [number, number] {
+    const ba = this.boxes.get(a.id);
+    const bb = "id" in b ? this.boxes.get(b.id) : b;
+    if (!ba || !bb) return [0, 0];
+    return [bb.x + bb.w / 2 - (ba.x + ba.w / 2), bb.y + bb.h / 2 - (ba.y + ba.h / 2)];
+  }
+
+  /** Is there a declared connector between a and b (either way)? */
+  private linked(a: string, b: string): boolean {
+    return this.els.some((e) => LINK_KINDS.has(e.kind) && e.link && ((e.link.from === a && e.link.to === b) || (e.link.from === b && e.link.to === a)));
+  }
+
+  private linkedAmong(items: ElementDecl[]): boolean {
+    const ids = new Set(items.map((e) => e.id));
+    return this.els.some((e) => LINK_KINDS.has(e.kind) && e.link && ids.has(e.link.from) && ids.has(e.link.to));
+  }
+
+  /** Would a straight connector between a and b pass through another element? */
+  private crosses(a: ElementDecl, b: ElementDecl): boolean {
+    const from = this.boxes.get(a.id);
+    const to = this.boxes.get(b.id);
+    if (!from || !to) return false;
+    return this.els.some((o) => o !== a && o !== b && !LINK_KINDS.has(o.kind) && this.boxes.has(o.id) && segmentHits(from, to, shrink(this.boxes.get(o.id)!, 0.1)));
+  }
+
+  private addDecor(kind: Decor["kind"], follows: ElementDecl[], opts: { box?: Box; link?: [ElementDecl, ElementDecl]; text?: string; params?: Record<string, string | number> } = {}): void {
+    if (follows.some((e) => !this.boxes.has(e.id))) return;
+    if (opts.link && this.crosses(opts.link[0], opts.link[1])) return;
+    const id = `__${kind}${this.decor.length + 1}`;
+    if (opts.box) this.boxes.set(id, round(opts.box));
+    this.decor.push({
+      id,
+      kind,
+      follows: follows.map((e) => e.id),
+      ...(opts.link && { link: { from: opts.link[0].id, to: opts.link[1].id } }),
+      ...(opts.text !== undefined && { text: opts.text }),
+      ...(opts.params && { params: opts.params }),
+    });
+  }
+
+  /**
+   * What the template itself draws and how its items come in: spokes, loop
+   * arrows, panels, numbers, an axis; each item gets a color index and the
+   * direction its entrance comes from. Declared connectors are never doubled.
+   */
+  private furnish(tpl: TemplateManifest, pool: ElementDecl[]): void {
+    const slot = (name: string) => pool.find((e) => e.id === name && this.boxes.has(e.id));
+    const named = new Set(tpl.slots.map((s) => s.name));
+    const items = pool.filter((e) => !named.has(e.id) && this.boxes.has(e.id) && !LINK_KINDS.has(e.kind));
+    const content = this.content ?? this.safe;
+    const variant = this.chosen ?? "";
+    items.forEach((e, i) => this.note(e, { hue: i }));
+    const muted = { tone: "muted" };
+    // Items of one template share one label size (the smallest any of them needs).
+    const labelled = pool.filter((e) => typeof this.params.get(e.id)?.labelFont === "number");
+    const font = Math.min(...labelled.map((e) => this.params.get(e.id)!.labelFont as number));
+    for (const e of labelled) if (this.params.get(e.id)!.labelFont !== font) this.label(e, font);
+    /** The picture inside an item's box (above its label), or the box itself. */
+    const picture = (e: ElementDecl): Box => {
+      const b = this.boxes.get(e.id)!;
+      const labelH = Number(this.params.get(e.id)?.labelH ?? 0);
+      if (!labelH) return b;
+      const side = Math.min(b.w, b.h - labelH);
+      return { x: b.x + (b.w - side) / 2, y: b.y, w: side, h: side };
+    };
+
+    switch (tpl.name) {
+      case "hub": {
+        const mid = slot("center");
+        for (const e of items) {
+          if (mid) {
+            if (!this.linked(mid.id, e.id)) this.addDecor("line", [mid, e], { link: [mid, e], params: muted });
+            this.from(e, ...this.toward(e, mid));
+          } else this.from(e, ...this.toward(e, content));
+        }
+        return;
+      }
+      case "cycle": {
+        for (const e of items) this.from(e, ...this.toward(e, content));
+        if (items.length < 2 || this.linkedAmong(items)) return;
+        const ring = variant !== "arc" && variant !== "sides";
+        items.forEach((e, i) => {
+          const next = items[(i + 1) % items.length]!;
+          if (items.length === 2 && i === 1) return;
+          // The arrow closing the loop appears with the last item.
+          this.addDecor("arrow", [e, next], { link: [e, next], ...(ring && { params: { curve: "arc", bend: -0.22 } }) });
+        });
+        return;
+      }
+      case "compare": {
+        const left = slot("left");
+        const right = slot("right");
+        if (left) {
+          this.note(left, { hue: 0 });
+          this.from(left, -1, 0);
+        }
+        if (right) {
+          this.note(right, { hue: 1 });
+          this.from(right, 1, 0);
+        }
+        if (!left || !right) return;
+        const a = this.cells.get(left.id)!;
+        const b = this.cells.get(right.id)!;
+        if (!items.length && variant !== "diagonal") {
+          const need = [left, right].map((e) => this.boxes.get(e.id)!);
+          const w = Math.min(a.w, b.w, Math.max(...need.map((x) => x.w)) + 200);
+          const h = Math.min(a.h, b.h, Math.max(...need.map((x) => x.h)) + 150) - 20;
+          for (const c of [a, b]) this.addDecor("panel", [c === a ? left : right], { box: { x: c.x + (c.w - w) / 2, y: c.y + (c.h - h) / 2, w, h } });
+        }
+        const cx = (a.x + a.w / 2 + b.x + b.w / 2) / 2;
+        const cy = (a.y + a.h / 2 + b.y + b.h / 2) / 2;
+        this.addDecor("badge", [left, right], { box: { x: cx - 44, y: cy - 44, w: 88, h: 88 }, text: "vs" });
+        return;
+      }
+      case "steps": {
+        const down = variant === "column";
+        items.forEach((e, i) => {
+          const b = picture(e);
+          const pictured = b !== this.boxes.get(e.id);
+          const d = Math.round(Math.min(84, Math.max(56, b.w * 0.24)));
+          // On a picture the number overlaps its corner; on a box it straddles the corner.
+          const inset = pictured ? 0.1 : 0;
+          this.addDecor("badge", [e], { box: { x: b.x + b.w * inset - d / 2, y: b.y + b.h * inset - d / 2, w: d, h: d }, text: String(i + 1) });
+          this.from(e, down ? 0 : -1, down ? 1 : 0);
+        });
+        if (variant !== "grid" && !this.linkedAmong(items)) items.slice(1).forEach((e, i) => this.addDecor("arrow", [items[i]!, e], { link: [items[i]!, e] }));
+        return;
+      }
+      case "cards": {
+        const framed = items.filter((e) => this.cells.has(e.id));
+        const area = (e: ElementDecl) => this.cells.get(e.id)!.w * this.cells.get(e.id)!.h;
+        const hero = variant === "feature" && framed.length > 1 ? framed.reduce((a, b) => (area(b) > area(a) ? b : a)) : undefined;
+        const panels = (group: ElementDecl[]) => {
+          if (!group.length) return;
+          const cells = group.map((e) => this.cells.get(e.id)!);
+          const need = group.map((e) => this.boxes.get(e.id)!);
+          const w = Math.min(Math.min(...cells.map((c) => c.w)), Math.max(...need.map((b) => b.w)) + 110);
+          const h = Math.min(Math.min(...cells.map((c) => c.h)), Math.max(...need.map((b) => b.h)) + 110);
+          group.forEach((e, i) => {
+            const c = cells[i]!;
+            this.addDecor("panel", [e], { box: { x: c.x + (c.w - w) / 2, y: c.y + (c.h - h) / 2, w, h } });
+          });
+        };
+        panels(framed.filter((e) => e !== hero));
+        if (hero) panels([hero]);
+        for (const e of items) this.from(e, 0, 1);
+        return;
+      }
+      case "timeline": {
+        const vertical = variant === "vertical";
+        for (const e of items) {
+          const b = this.boxes.get(e.id)!;
+          const above = b.y + b.h / 2 < content.y + content.h / 2;
+          this.from(e, vertical ? -1 : 0, vertical ? 0 : above ? -1 : 1);
+        }
+        if (vertical || items.length < 2 || this.linkedAmong(items)) return;
+        // The axis: through the middle when items alternate around it, else under them.
+        const bottom = Math.max(...items.map((e) => this.boxes.get(e.id)!.y + this.boxes.get(e.id)!.h));
+        const y = variant === "line" ? Math.min(content.y + content.h - 30, bottom + 44) : content.y + content.h / 2;
+        this.addDecor("rule", [items[0]!], { box: { x: content.x, y: y - 3, w: content.w, h: 6 } });
+        for (const e of items) {
+          const b = this.boxes.get(e.id)!;
+          this.addDecor("badge", [e], { box: { x: b.x + b.w / 2 - 15, y: y - 15, w: 30, h: 30 }, text: "" });
+        }
+        return;
+      }
+      case "spotlight": {
+        const main = slot("main");
+        if (!main) return;
+        for (const e of items) {
+          if (!this.linked(main.id, e.id)) this.addDecor("line", [main, e], { link: [e, main], params: muted });
+          this.from(e, ...this.toward(e, main));
+        }
+        return;
+      }
+      case "converge":
+      case "diverge": {
+        const into = tpl.name === "converge";
+        const hub = slot(into ? "result" : "source");
+        if (!hub) return;
+        for (const e of items) {
+          if (!this.linked(hub.id, e.id)) this.addDecor("arrow", [hub, e], { link: into ? [e, hub] : [hub, e] });
+          const [dx, dy] = this.toward(e, hub);
+          // Inputs arrive from outside; outputs leave the source.
+          this.from(e, into ? -dx : dx, into ? -dy : dy);
+        }
+        return;
+      }
+      case "process": {
+        const proc = slot("process");
+        if (!proc) return;
+        const at = this.els.indexOf(proc);
+        const before = items.filter((e) => this.els.indexOf(e) < at);
+        const split = before.length && before.length < items.length ? before.length : Math.ceil(items.length / 2);
+        if (variant === "equation") {
+          const plus = (a: ElementDecl, b: ElementDecl) => {
+            const pa = picture(a);
+            const pb = picture(b);
+            const x = (pa.x + pa.w + pb.x) / 2;
+            const y = (pa.y + pa.h / 2 + pb.y + pb.h / 2) / 2;
+            this.addDecor("badge", [a, b], { box: { x: x - 26, y: y - 26, w: 52, h: 52 }, text: "+" });
+          };
+          const ins = items.slice(0, split);
+          const outs = items.slice(split);
+          ins.slice(1).forEach((e, i) => plus(ins[i]!, e));
+          outs.slice(1).forEach((e, i) => plus(outs[i]!, e));
+          const lastIn = ins.at(-1);
+          const firstOut = outs[0];
+          if (lastIn && !this.linked(proc.id, lastIn.id)) this.addDecor("arrow", [proc, lastIn], { link: [lastIn, proc] });
+          if (firstOut && !this.linked(proc.id, firstOut.id)) this.addDecor("arrow", [proc, firstOut], { link: [proc, firstOut] });
+          ins.forEach((e) => this.from(e, -1, 0));
+          outs.forEach((e) => this.from(e, -1, 0));
+          return;
+        }
+        items.forEach((e, i) => {
+          const input = i < split;
+          if (!this.linked(proc.id, e.id)) this.addDecor("arrow", [proc, e], { link: input ? [e, proc] : [proc, e] });
+          const [dx, dy] = this.toward(e, proc);
+          this.from(e, input ? -dx : dx, input ? -dy : dy);
+        });
+        return;
+      }
+    }
+  }
+
+  private arrange(tpl: TemplateManifest, pool: ElementDecl[], area: Box): void {
     const slot = (name: string) => pool.find((e) => e.id === name);
     const named = new Set(tpl.slots.map((s) => s.name));
     const items = pool.filter((e) => !named.has(e.id));
@@ -352,6 +644,7 @@ class SceneLayouter {
 
     const variant = this.variant(tpl);
     this.chosen = variant;
+    this.content = content;
     const plugin = VARIANT_PLUGINS[`${tpl.name}:${variant}`];
     if (plugin) {
       const e = this.scene.attrs.emphasis;
@@ -371,10 +664,11 @@ class SceneLayouter {
       case "title": {
         const sub = slot("subtitle");
         if (variant === "center") {
-          const main = { x: area.x, y: area.y + area.h * 0.28, w: area.w, h: area.h * 0.28 };
+          const shown = items.length > 0;
+          const main = { x: area.x, y: area.y + area.h * (shown ? 0.1 : 0.28), w: area.w, h: area.h * (shown ? 0.24 : 0.28) };
           if (title) this.put(title, main, 0.95);
-          if (sub) this.put(sub, { x: area.x, y: main.y + main.h, w: area.w, h: area.h * 0.16 }, 0.9);
-          return this.layout("row", items, { x: area.x, y: area.y + area.h * 0.75, w: area.w, h: area.h * 0.25 });
+          if (sub) this.put(sub, { x: area.x, y: main.y + main.h, w: area.w, h: area.h * (shown ? 0.12 : 0.16) }, 0.9);
+          return this.layout("row", items, { x: area.x, y: area.y + area.h * 0.52, w: area.w, h: area.h * 0.46 });
         }
         // left: a big left-aligned headline with items beside it; split: centered halves.
         const textCol = { x: area.x, y: area.y, w: area.w * (variant === "left" ? 0.6 : 0.5), h: area.h };
@@ -397,8 +691,10 @@ class SceneLayouter {
           cells = [{ x: content.x, y: content.y, w, h }, { x: content.x + content.w - w, y: content.y + content.h - h, w, h }];
         } else if (variant === "asymmetric") cells = rowCells(content, 2, this.gap * 2, big ? [1, 1.618] : [1.618, 1]);
         else cells = rowCells(content, 2, this.gap * 2, e ? (big ? [1, 1.35] : [1.35, 1]) : undefined);
-        if (left) this.put(left, cells[0]!, 0.85);
-        if (right) this.put(right, cells[1]!, 0.85);
+        // Each side sits on a panel (see furnish) unless extra items share the frame; leave the panel padding.
+        const framed = !items.length && variant !== "diagonal";
+        if (left) this.put(left, cells[0]!, framed ? 0.72 : 0.85);
+        if (right) this.put(right, cells[1]!, framed ? 0.72 : 0.85);
         return this.layout("row", items, { ...content, y: content.y + content.h * 0.8, h: content.h * 0.2 });
       }
       case "steps": {
@@ -425,8 +721,9 @@ class SceneLayouter {
           const hero = items[at]!;
           const rest = items.filter((_, i) => i !== at);
           const [l, r] = rowCells(content, 2, this.gap, [1.2, 1]);
-          this.put(hero, l!);
-          return this.layout(rest.length > 2 ? "grid" : "col", rest, r!);
+          // The featured picture is clearly the largest; the rest stack beside it (a grid from four on).
+          this.put(hero, l!, this.fill, 1.5);
+          return this.layout(rest.length > 3 ? "grid" : "col", rest, r!);
         }
         return this.layout("grid", items, content);
       }
@@ -592,6 +889,7 @@ class SceneLayouter {
   /** Flips the scene left-right (connectors are routed afterwards). */
   private mirror(): void {
     for (const [id, bx] of this.boxes) this.boxes.set(id, { ...bx, x: this.ctx.width - bx.x - bx.w });
+    for (const [id, p] of this.params) if (typeof p.enterDx === "number") this.params.set(id, { ...p, enterDx: -p.enterDx });
   }
 
   /** Items evenly on a circle (clockwise from the top), optional center element. */
@@ -603,7 +901,7 @@ class SceneLayouter {
     const cx = area.x + area.w / 2;
     const cy = area.y + area.h / 2;
     const n = Math.max(1, items.length);
-    const cell = Math.min(220, area.h * 0.28);
+    const cell = Math.min(280, area.h * 0.3);
     const rx = Math.min(area.w * 0.36, area.w / 2 - cell / 2);
     const ry = area.h / 2 - cell / 2;
     items.forEach((e, i) => {
@@ -620,16 +918,50 @@ class SceneLayouter {
     const cx = area.x + area.w / 2;
     const cy = area.y + area.h / 2;
     const n = Math.max(1, items.length);
-    const cell = Math.min(280, (Math.min(area.w, area.h) * Math.PI) / (n + 2));
-    const r = Math.min(area.w, area.h) / 2 - cell / 2;
+    let cell = Math.min(mid ? 250 : 300, (Math.min(area.w, area.h) * Math.PI) / (n + 2));
+    let r = 0;
+    let rx = 0;
+    const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    for (;;) {
+      r = Math.min(area.w, area.h) / 2 - cell / 2;
+      // Wider than tall: a 16:9 frame has room at the sides (two items sit top and bottom, so they keep the circle).
+      rx = n > 2 ? Math.min(area.w / 2 - cell / 2, r * 1.5) : r;
+      if (n < 3 || cell <= 150) break;
+      // Length of the straight run between two neighbours once both their cells are cut away.
+      let free = Infinity;
+      for (let i = 0; i < n; i++) {
+        const dx = rx * (Math.cos(angle(i + 1)) - Math.cos(angle(i)));
+        const dy = r * (Math.sin(angle(i + 1)) - Math.sin(angle(i)));
+        const chord = Math.hypot(dx, dy);
+        free = Math.min(free, chord - (cell * chord) / Math.max(Math.abs(dx), Math.abs(dy)));
+      }
+      if (mid) {
+        // A spoke runs from the center's cell to the item's cell; both are cut away.
+        const m = this.centerSize(cell, r) * 0.9;
+        for (let i = 0; i < n; i++) {
+          const dx = rx * Math.cos(angle(i));
+          const dy = r * Math.sin(angle(i));
+          const d = Math.hypot(dx, dy);
+          free = Math.min(free, d - ((cell / 2 + m / 2) * d) / Math.max(Math.abs(dx), Math.abs(dy)));
+        }
+      }
+      if (free >= 90) break;
+      cell -= 10;
+    }
     items.forEach((e, i) => {
       const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-      this.put(e, { x: cx + r * Math.cos(a) - cell / 2, y: cy + r * Math.sin(a) - cell / 2, w: cell, h: cell }, 1);
+      this.put(e, { x: cx + rx * Math.cos(a) - cell / 2, y: cy + r * Math.sin(a) - cell / 2, w: cell, h: cell }, 1);
     });
     if (mid) {
-      const m = Math.max(cell, r * 1.1);
+      // The center stays clear of the items above and below it.
+      const m = this.centerSize(cell, r);
       this.put(mid, { x: cx - m / 2, y: cy - m / 2, w: m, h: m }, 0.9);
     }
+  }
+
+  /** Side of a ring's center cell: a little larger than the items, clear of the ones above and below it. */
+  private centerSize(cell: number, r: number): number {
+    return Math.max(140, Math.min(cell * 1.2, 2 * (r - cell / 2) - 110));
   }
 
   /**
@@ -714,7 +1046,7 @@ class SceneLayouter {
     for (const e of pending) this.put(e, this.slotCell("C"));
   }
 
-  private connector(e: ElementDecl): void {
+  private connector(e: { id: string; link?: { from: string; to: string } }): void {
     const a = this.boxes.get(e.link!.from);
     const b = this.boxes.get(e.link!.to);
     if (!a || !b) return;

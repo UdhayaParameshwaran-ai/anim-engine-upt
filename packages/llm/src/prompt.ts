@@ -41,11 +41,28 @@ export function retrieveAssets(text: string, assets: AssetLibrary, limit = 40): 
     for (const w of a.description.toLowerCase().split(/\W+/)) if (w.length > 3 && stems.has(stem(w))) score += 1;
     return { a, score };
   });
-  // Relevant assets first, then the rest of the library (it is small today), stable by name.
+  // Relevant assets first, then the rest of the library, stable by name.
   return scored
     .sort((x, y) => y.score - x.score || x.a.name.localeCompare(y.a.name))
     .slice(0, limit)
     .map((s) => s.a);
+}
+
+/**
+ * The pictures a script may use, as the prompts list them: illustrations
+ * with their parts, then every icon by name. Icon names say what they show,
+ * so the model picks by meaning; the list is the same for every topic, which
+ * keeps the system prompt cacheable across videos.
+ */
+export function pictureList(assets: AssetManifest[]): string {
+  const art = assets.filter((a) => a.kind === "asset").map((a) => `${a.name}${a.parts.length ? `(${a.parts.join(",")})` : ""}`);
+  const icons = assets.filter((a) => a.kind === "icon").map((a) => a.name);
+  return [
+    art.length ? `Illustrations, written asset:<name> (parts in brackets): ${art.join(" ")}` : "",
+    icons.length ? `Icons, written icon:<name>: ${icons.join(" ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 const EXAMPLE = `video 1 "Plant vs Animal Cells"
@@ -111,7 +128,7 @@ export function systemPrompt(assets: AssetManifest[]): string {
   const kinds = COMPONENTS.filter((c) => c.kind !== "placeholder" && c.kind !== "footer" && !gridOnly.has(c.kind))
     .map((c) => `  ${(c.named === "required" ? `${c.kind}:<name>` : c.kind).padEnd(13)} ${c.summary}`)
     .join("\n");
-  const catalog = assets.map((a) => `${a.kind}:${a.name}${a.parts.length ? `(${a.parts.join(",")})` : ""}`).join(" ");
+  const catalog = pictureList(assets);
 
   return `You write Narrascript: a line-based script language for narrated 2D explainer videos.
 Reply with Narrascript only — no prose, no markdown fences.
@@ -138,10 +155,11 @@ RULES
 - One idea per sentence, at most 25 words. 2–6 sentences per scene.
 - Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).
 - Show an element before emphasizing or moving it. Draw connectors after (or together with) their endpoints.
+- Templates draw their own structure, each part appearing with its item: hub spokes, cycle arrows, step numbers and the arrows between steps, card panels, the "vs" of a compare, the timeline axis, spotlight leader lines, and the arrows of converge, diverge and process. Declare only the items and show them; declare a connector yourself only in template=flow, in a scene without a template, or to put a label on it.
 - Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.
 - Prefer a template. Element ids that equal slot names fill those slots; other elements fill items in order.
 - No template fits? compose=<pattern> arranges 2–6 elements by intent (${COMPOSE_PATTERNS.join("|")}); emphasis=<id> names the hero. An element called title keeps the top band.
-- Use only the assets listed below, exactly as written. For anything else use box "Label" or text.
+- Use only the pictures listed under PICTURES, exactly as written. For anything else use box "Label" or text.
 - Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …
 - Connectors join two declared ids with "->" and no spaces: a1 = arrow sun->leaf (never "arrow sun to leaf").
 - fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.
@@ -149,7 +167,7 @@ RULES
 - Grid elements (stat, bullets, timeline, quote, …) only go in grid= scenes; template scenes use ELEMENT KINDS. A template's name is not an element.
 
 QUALITY
-- Show, don't label: use an icon or asset whose meaning matches its label (e.g. icon:sun "Sunlight"). Use box only for abstract ideas no listed asset fits; never fill a scene with boxes alone.
+- Show, don't label: give each thing the picture that means it (icon:sun "Sunlight", icon:gavel "Law", icon:landmark "Congress"), and a different picture for each thing in a scene. Never reuse one icon for unrelated ideas. Use box only for abstract ideas no listed picture fits; never fill a scene with boxes alone.
 - Be factually correct. Use real, well-known figures; if unsure of a number, describe the trend in words instead of inventing data.
 - Never invent quotes or attributions. Quote only real, famous people with words they actually said; otherwise use callout or body.
 - Each scene adds something new: don't repeat what other scenes cover.
@@ -170,7 +188,7 @@ ${kinds}
 
 ${gridSection()}
 
-ASSETS
+PICTURES
 ${catalog}
 
 EXAMPLE
@@ -224,17 +242,56 @@ ${shapeTable()}
 GRID LAYOUTS (editorial pages; number of content slots in brackets; elements: ${elements})
 ${layouts}
 
-ASSETS AVAILABLE: ${assets.map((a) => `${a.kind}:${a.name}`).join(" ")}
+PICTURES: ${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons of everyday things (people, places, money, law, science, nature, weather, technology, transport, food, tools). The scene writer picks them; plan scenes around things that can be pictured.
 
 PLANNING RULES
 - Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
 - Every scene brings new items: never show the same things in two scenes (say it once, with the best-fitting template).
 - Diagrams: label the scene's shape, then write the template shown after → for that shape (template=<template name>, never the shape name). Check its "not if".
-- Only the first scene uses template=title. End with a takeaway: a grid page (quote, bullets or a stat) or a diagram that ties the story together.
+- Open and end the video the way the request asks. template=title is only ever the first scene.
 - Grid pages (shape: page) are for numbers, quotes, bullet text, charts and tables, with at most one icon. Several pictures of equal weight → template=cards.
 - Vary scene types across the video; mirror=true on some grid pages. Leave variant= out: the engine picks the arrangement that fits.
-- Plan visuals from the assets above.
 - Plan only facts you are sure of.`;
+}
+
+/** One way to open or end a video, as the plan request words it. */
+export interface ArcPart {
+  name: string;
+  ask: string;
+}
+
+/**
+ * Ways to open and to end a video. Each plan is asked for one of each (the
+ * topic picks, see storyArc), so videos don't all share one skeleton of
+ * title scene, diagrams, bullet page.
+ */
+export const OPENINGS: readonly ArcPart[] = [
+  { name: "title", ask: "a title scene (template=title): the headline as a statement, with 1–3 pictures of the topic" },
+  { name: "question", ask: "a title scene (template=title) whose headline is the question this video answers, with one picture" },
+  { name: "cold", ask: "no title scene: open on the first idea itself, as a diagram whose template has a title (compare, steps, cards, converge, diverge or process), so the viewer is inside the topic at once" },
+  { name: "number", ask: "one striking, well-known number about the topic on a grid page (grid=L2-04: a stat, with a callout beside it); if you are not sure of a real number, open with a title scene instead" },
+];
+export const CLOSINGS: readonly ArcPart[] = [
+  { name: "bullets", ask: "a grid page with the three points to remember (bullets)" },
+  { name: "recap", ask: "a diagram that pulls the main ideas into one picture (hub, cycle, steps or converge), not a page of text" },
+  { name: "checklist", ask: "a grid page with a checklist of what the viewer can now do or look for" },
+  { name: "takeaway", ask: "a grid page with the one idea to remember (grid=L2-08: a definition, with a callout under it)" },
+];
+
+export interface StoryArc {
+  open: ArcPart;
+  close: ArcPart;
+}
+
+/** The opening and ending for a topic: stable for the topic, varied across topics. `pick` names them instead. */
+export function storyArc(topic: string, pick: { open?: string; close?: string } = {}): StoryArc {
+  let h = 2166136261;
+  for (const ch of topic.trim().toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  h >>>= 0;
+  return {
+    open: OPENINGS.find((o) => o.name === pick.open) ?? OPENINGS[h % OPENINGS.length]!,
+    close: CLOSINGS.find((c) => c.name === pick.close) ?? CLOSINGS[(h >>> 8) % CLOSINGS.length]!,
+  };
 }
 
 /** Looks and motion personalities with one line each, so the model can match them to the topic. */
@@ -250,9 +307,12 @@ Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS
 }
 
 /** First pass: plan the scenes without writing narration. */
-export function outlinePrompt(topic: string, scenes: { min: number; max: number }): string {
+export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic)): string {
   return `Plan a narrated explainer video about:
 ${topic}
+
+Open with ${arc.open.ask}.
+End with ${arc.close.ask}.
 
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience

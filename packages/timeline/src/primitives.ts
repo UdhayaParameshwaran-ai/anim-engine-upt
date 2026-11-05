@@ -55,6 +55,9 @@ function entrance(c: PrimitiveContext, e: string): TweenSpec[] {
   if (!c.el || c.el.link) return [];
   const t1 = end(c);
   const k = c.canvas.width / 1920;
+  const drifted = drift(c, e);
+  // A template direction replaces the personality's own rise or slide.
+  if (drifted.length && (m.fade === "rise" || m.fade === "slide" || m.fade === "plain")) return drifted;
   switch (m.fade) {
     case "rise": {
       const y = num(c.cur("y"), 0);
@@ -77,6 +80,29 @@ function entrance(c: PrimitiveContext, e: string): TweenSpec[] {
       return [];
   }
 }
+/**
+ * Travel from the direction the element's template gives it (enterDx/enterDy,
+ * set by the layout): out of a hub, in toward a result, along a sequence.
+ */
+function drift(c: PrimitiveContext, e: string): TweenSpec[] {
+  const m = motionOf(c);
+  const dx = Number(c.el?.params.enterDx ?? 0);
+  const dy = Number(c.el?.params.enterDy ?? 0);
+  if (!c.el || c.el.link || !m.drift || (!dx && !dy)) return [];
+  const d = m.drift * (c.canvas.width / 1920);
+  const out: TweenSpec[] = [];
+  // Overshooting eases would carry the element past its place; it settles instead.
+  const settle = OVERSHOOT.has(e) ? "out" : e;
+  if (dx) {
+    const x = num(c.cur("x"), 0);
+    out.push({ prop: "x", t0: c.t0, t1: end(c), from: x + dx * d, to: x, ease: settle });
+  }
+  if (dy) {
+    const y = num(c.cur("y"), 0);
+    out.push({ prop: "y", t0: c.t0, t1: end(c), from: y + dy * d, to: y, ease: settle });
+  }
+  return out;
+}
 const end = (c: PrimitiveContext) => c.t0 + c.dur;
 const num = (v: Value | undefined, d: number) => (typeof v === "number" ? v : d);
 /** HTML-layer elements (cards, formulas) have no strokes to draw. */
@@ -98,6 +124,7 @@ export const PRIMITIVES: Record<string, Primitive> = {
       { prop: "scale", t0: c.t0, t1: end(c), from: m.pop.from, to: 1, ease: e },
     ];
     if (m.pop.blur && c.el) out.push({ prop: "blur", t0: c.t0, t1: end(c), from: m.pop.blur, to: 0, ease: OVERSHOOT.has(e) ? "out" : e });
+    out.push(...drift(c, e));
     return out;
   },
 
@@ -130,10 +157,16 @@ export const PRIMITIVES: Record<string, Primitive> = {
     const meta = { color: String(c.params.color ?? "accent"), style: String(c.params.style ?? "glow") };
     const fadeIn = Math.min(0.25, c.dur / 3);
     const fadeOut = Math.min(0.3, c.dur / 3);
-    return [
+    const out: TweenSpec[] = [
       { prop: "tint", t0: c.t0, t1: c.t0 + fadeIn, to: 1, ease: "out", meta },
       { prop: "tint", t0: end(c) - fadeOut, t1: end(c), to: 0, ease: "in", meta },
     ];
+    // A highlighted element also lifts a little while it is talked about (connectors and parts only tint).
+    if (c.el && !c.el.link) {
+      const s = num(c.cur("scale"), 1);
+      out.push({ prop: "scale", t0: c.t0, t1: c.t0 + fadeIn, to: s * 1.06, ease: "out" }, { prop: "scale", t0: end(c) - fadeOut, t1: end(c), to: s, ease: "inout" });
+    }
+    return out;
   },
 
   pulse: (c) => {

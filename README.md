@@ -98,6 +98,24 @@ motion cinematic      # 7 personalities: how the same verbs move, and which scen
 
 The Studio's Script tab has **Look** and **Motion** menus that override the script, so you can flip one script through every combination. The LLM picks a look and a motion to suit each topic. See `docs/dsl-spec.md` §6b.
 
+Each look also draws icons its own way (plain line art, tinted chips, outlined tiles, solid color, hard-shadowed blocks) and colors a template's items from its palette. Templates draw their own structure (hub spokes, loop arrows, step numbers, card panels, a timeline's axis), and their items enter from the direction the template gives them. See `docs/dsl-spec.md` §6b and §6c.
+
+## Pictures
+
+Scripts name pictures by meaning: `icon:gavel "Law"`, `asset:leaf "Leaf"`.
+
+- **Illustrations** are hand-made (`packages/engine/src/art.ts`), with parts a script can highlight.
+- **Icons** are 16 hand-made ones plus about 550 from [Lucide](https://lucide.dev) (ISC license; portions from Feather, MIT). `pnpm icons` regenerates `icons-lucide.ts` in the engine and the registry from the `lucide-static` dev dependency.
+
+## Openings and endings
+
+A plan is asked for one way to open and one way to end the video, picked by the topic, so videos don't all share one skeleton:
+
+- **Openings:** a title scene, a title scene that asks a question, a cold open on the first diagram, or a striking number.
+- **Endings:** three bullets, a recap diagram, a checklist, or one takeaway.
+
+`generate(topic, { arc: { open: "cold", close: "recap" } })` names them instead (`OPENINGS` and `CLOSINGS` in `packages/llm/src/prompt.ts`).
+
 ## Composition by intent
 
 Scenes that no template fits can say how their elements relate instead: `compose=hero-left` (or `hero-top`, `hero-center`, `pyramid`, `columns`, `rows`, `z`, `auto`) with `emphasis=<id>` for the hero. A Cassowary constraint solver turns that into boxes and the best-scoring candidate wins. Still no coordinates in the script. See `docs/dsl-spec.md` §6d.

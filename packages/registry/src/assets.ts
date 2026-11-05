@@ -1,10 +1,11 @@
+import { LUCIDE_ICONS } from "./icons-lucide.js";
 import type { AssetManifest } from "./index.js";
 
 /**
- * Seed entries of the semantic SVG library. Manifests only for now; the SVG
- * files land with the engine. Names are meanings, not file names.
+ * Hand-made entries of the semantic SVG library: icons with colors of their
+ * own and illustrations with addressable parts. Names are meanings, not file names.
  */
-export const SEED_ASSETS: readonly AssetManifest[] = [
+const BUILTIN: readonly AssetManifest[] = [
   icon("sun", ["weather", "energy", "light"], ["sunlight", "sunshine", "light"], "the sun with rays"),
   icon("droplet", ["water", "liquid"], ["water", "drop", "rain"], "a single water drop"),
   icon("wind", ["weather", "air", "gas"], ["air", "oxygen", "breeze"], "flowing air lines"),
@@ -27,6 +28,32 @@ export const SEED_ASSETS: readonly AssetManifest[] = [
   asset("cell.animal", ["biology", "cell"], ["animal-cell"], ["membrane", "nucleus", "mitochondria"], "animal cell cross-section"),
   asset("heart.anatomy", ["biology", "body"], ["human-heart"], ["left-atrium", "right-atrium", "left-ventricle", "right-ventricle", "valve"], "anatomical human heart"),
   asset("earth", ["planet", "geography"], ["globe", "world", "planet"], [], "planet earth"),
+];
+
+/** Icons that came from the open-source Lucide set (see scripts/build-icons.mjs). */
+const LUCIDE_FILE = "icons/lucide/";
+export const isSetIcon = (m: AssetManifest) => m.file.startsWith(LUCIDE_FILE);
+
+/**
+ * The library: the hand-made entries, then the Lucide icons (a hand-made
+ * icon of the same name wins). Lucide's tags are what the search matches.
+ */
+export const SEED_ASSETS: readonly AssetManifest[] = [
+  ...BUILTIN,
+  ...LUCIDE_ICONS.filter(([name]) => !BUILTIN.some((b) => b.name === name)).map(
+    ([name, tags]): AssetManifest => ({
+      name,
+      version: "1.0.0",
+      kind: "icon",
+      file: `${LUCIDE_FILE}${name}.svg`,
+      tags: tags ? tags.split(" ") : [],
+      synonyms: [],
+      aspect: 1,
+      drawable: true,
+      parts: [],
+      description: name.replace(/-/g, " "),
+    }),
+  ),
 ];
 
 function icon(name: string, tags: string[], synonyms: string[], description: string): AssetManifest {

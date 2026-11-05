@@ -1,6 +1,6 @@
 import type { Box, ElementIR } from "@anim/ir";
 import { ICONS, ILLUSTRATIONS } from "./art.js";
-import { color, shadowFilter, type Theme } from "./theme.js";
+import { color, itemColor, shadowFilter, type Theme } from "./theme.js";
 import { buildWidget, WIDGET_KINDS } from "./widgets.js";
 
 export const SVG_NS = "http://www.w3.org/2000/svg";
@@ -81,6 +81,34 @@ export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${
     case "asset":
       art(doc, inst, g, el, theme);
       break;
+    case "panel": {
+      // A card behind an item: the look's surface, a quiet border, the look's shadow.
+      const hard = theme.shadow === "hard";
+      const r = svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(theme.radius + 6, h / 2), "data-fill": theme.panel, "data-solid": "", stroke: hard ? theme.fg : theme.muted, "stroke-opacity": hard ? 1 : 0.35, "stroke-width": hard ? theme.stroke : Math.max(1.5, theme.stroke * 0.6) });
+      shadow(g, theme);
+      g.append(stroke(inst, r));
+      break;
+    }
+    case "badge": {
+      // A number, "vs" or a plain dot on the look's solid ink.
+      const d = Math.min(w, h);
+      const label = el.texts[0] ?? "";
+      const shape = theme.iconShape === "square" ? svg(doc, "rect", { x: -d / 2, y: -d / 2, width: d, height: d, rx: Math.min(theme.radius, d / 4), fill: theme.ink, stroke: "none" }) : svg(doc, "circle", { cx: 0, cy: 0, r: d / 2, fill: theme.ink, stroke: "none" });
+      g.append(shape);
+      if (label) {
+        const size = d * (label.length > 1 ? 0.4 : 0.52);
+        const t = svg(doc, "text", { "text-anchor": "middle", y: round(size * 0.35), "font-size": round(size), "font-family": theme.headingFont, "font-weight": 700, fill: theme.onInk, stroke: "none" });
+        t.textContent = theme.headingCase === "upper" ? label.toUpperCase() : label;
+        g.append(t);
+      }
+      break;
+    }
+    case "rule": {
+      // An axis along the longer side of its box.
+      const across = w >= h;
+      g.append(stroke(inst, svg(doc, "path", { d: across ? `M${-w / 2} 0H${w / 2}` : `M0 ${-h / 2}V${h / 2}`, stroke: theme.muted, "stroke-width": theme.stroke })));
+      break;
+    }
     case "arrow":
     case "line":
     case "edge":
@@ -221,11 +249,20 @@ function art(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme
   const markup = kind === "icon" ? ICONS[name] : ILLUSTRATIONS[name];
   const grid = kind === "icon" ? 24 : 200;
   const label = el.texts[0];
-  const labelH = label ? 56 : 0;
-  const size = Math.max(10, Math.min(el.box.w, el.box.h - labelH));
+  // The layout says how tall the label band is and how big its text (they scale with the picture).
+  // An icon in a big slot (grid pages) stays an icon: capped, with its label right under it.
+  const roomy = el.params.labelH === undefined && el.box.h > 420;
+  const labelH = label ? Number(el.params.labelH ?? (roomy ? 72 : 56)) : 0;
+  const labelFont = Number(el.params.labelFont ?? (roomy ? 40 : FONT[kind]!));
+  const size = Math.max(10, Math.min(el.box.w, el.box.h - labelH, kind === "icon" && !el.params.sized ? 300 : Infinity));
+  const top = -(size + labelH) / 2;
   const k = size / grid;
-  const holder = svg(doc, "g", { transform: `translate(${round(-size / 2)} ${round(-el.box.h / 2)}) scale(${round(k, 4)})`, "stroke-width": round(theme.stroke / k, 3) });
-  if (markup) {
+  const holder = svg(doc, "g", { transform: `translate(${round(-size / 2)} ${round(top)}) scale(${round(k, 4)})`, "stroke-width": round(theme.stroke / k, 3) });
+  // A template item takes its color from the look's palette; other icons keep the ink color.
+  const hue = el.params.hue !== undefined ? itemColor(theme, Number(el.params.hue)) : undefined;
+  if (kind === "icon" && markup) {
+    iconArt(doc, holder, markup, theme, hue, k);
+  } else if (markup) {
     holder.innerHTML = markup;
   } else {
     holder.append(svg(doc, "rect", { x: 2, y: 2, width: grid - 4, height: grid - 4, rx: grid / 8, "stroke-dasharray": `${grid / 10} ${grid / 14}` }));
@@ -234,18 +271,58 @@ function art(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme
   for (const shape of holder.querySelectorAll("path,rect,circle,ellipse,line,polyline,polygon")) stroke(inst, shape as SVGElement);
   for (const p of holder.querySelectorAll("[data-part]")) addPart(inst, p.getAttribute("data-part")!, p);
   if (label) {
-    const t = text(doc, inst, label, FONT[kind]!, el.box.w, labelH, theme, {});
-    t.setAttribute("transform", `translate(0 ${round(el.box.h / 2 - labelH / 2)})`);
+    const t = text(doc, inst, label, labelFont, Number(el.params.labelW ?? Math.max(el.box.w, size * 1.15)), labelH, theme, {});
+    t.setAttribute("transform", `translate(0 ${round(top + size + labelH / 2)})`);
     g.append(t);
   }
 }
 
+/**
+ * An icon in the look's style. The glyph sits on a 24-unit grid; with a
+ * backing it is drawn smaller, centred on a circle or rounded square.
+ * A glyph with a fill of its own (water is blue, fire is red) keeps that
+ * color and gives it to the backing.
+ */
+function iconArt(doc: Document, holder: SVGElement, markup: string, theme: Theme, hue: string | undefined, k: number): void {
+  const own = /data-fill="(\w+)"/.exec(markup)?.[1];
+  const c = own ? color(theme, own) : (hue ?? theme.fg);
+  const style = theme.iconStyle;
+  if (style === "plain") {
+    holder.innerHTML = markup;
+    if (hue && !own) holder.setAttribute("stroke", c);
+    return;
+  }
+  const square = theme.iconShape === "square";
+  const shape = (inset: number, attrs: Record<string, string | number>) =>
+    square ? svg(doc, "rect", { x: inset, y: inset, width: 24 - 2 * inset, height: 24 - 2 * inset, rx: Math.min(theme.radius / k, 5), ...attrs }) : svg(doc, "circle", { cx: 12, cy: 12, r: 12 - inset, ...attrs });
+  const tinted = `color-mix(in srgb, ${c} 14%, ${theme.bg})`;
+  if (style === "block") {
+    // Hard offset shadow, then a solid block with a dark outline.
+    const off = 5 / k;
+    const shade = shape(0.6, { fill: theme.fg, stroke: "none", transform: `translate(${round(off, 3)} ${round(off, 3)})`, "data-solid": "", "data-fill": theme.fg });
+    holder.append(shade, shape(0.6, { "data-fill": c === theme.fg ? theme.surface : c, "data-solid": "", stroke: theme.fg }));
+  } else if (style === "solid") {
+    holder.append(shape(0.4, { "data-fill": c, "data-solid": "", stroke: "none" }));
+  } else if (style === "outline") {
+    holder.append(shape(0.6, { "data-fill": theme.surface, "data-solid": "", stroke: c }));
+  } else {
+    holder.append(shape(0.4, { "data-fill": tinted, "data-solid": "", stroke: "none" }));
+  }
+  const s = 0.56;
+  const glyph = svg(doc, "g", { transform: `translate(12 12) scale(${s}) translate(-12 -12)`, stroke: style === "solid" ? "#ffffff" : style === "block" ? theme.fg : c, "stroke-width": round(Math.max(theme.stroke * 0.9, 2.4) / (k * s), 3) });
+  // On a solid backing the glyph is a plain outline; its own fill would vanish into the backing.
+  glyph.innerHTML = style === "solid" || style === "block" ? markup.replace(/\sdata-fill="\w+"/g, "") : markup;
+  holder.append(glyph);
+}
+
 function connector(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {
-  const path = stroke(inst, svg(doc, "path", { d: "M0 0", ...(el.params.style === "dashed" && { "stroke-dasharray": "12 10" }) })) as SVGPathElement;
+  // Lines a template draws by itself (spokes, leader lines) stay quiet.
+  const quiet = el.params.tone === "muted";
+  const path = stroke(inst, svg(doc, "path", { d: "M0 0", ...(el.params.style === "dashed" && { "stroke-dasharray": "12 10" }), ...(quiet && { stroke: theme.muted, "stroke-opacity": 0.7 }) })) as SVGPathElement;
   g.append(path);
   const c: NonNullable<Instance["connector"]> = { from: el.link!.from, to: el.link!.to, path };
   if (el.kind !== "line") {
-    c.head = svg(doc, "path", { d: "M0 0", fill: theme.fg, stroke: "none" }) as SVGPathElement;
+    c.head = svg(doc, "path", { d: "M0 0", fill: quiet ? theme.muted : theme.fg, stroke: "none" }) as SVGPathElement;
     g.append(c.head);
   }
   if (el.texts[0]) {
@@ -332,7 +409,11 @@ export function round(n: number, digits = 2): number {
 
 /** Resolves `data-fill` tokens to theme colors once, at build time. */
 export function paintFills(inst: Instance, theme: Theme): void {
-  for (const f of inst.fills) f.setAttribute("fill", color(theme, f.getAttribute("data-fill")!));
+  for (const f of inst.fills) {
+    const token = f.getAttribute("data-fill")!;
+    // A concrete color (an icon backing) is used as is.
+    f.setAttribute("fill", /^(#|rgb|color-mix)/.test(token) ? token : color(theme, token));
+  }
 }
 
 export type { Box };

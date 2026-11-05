@@ -1,7 +1,7 @@
 import { findPlace, flowNodes } from "@anim/registry";
 import type { ElementIR } from "@anim/ir";
 import { fitText, round, svg, type Instance } from "./components.js";
-import type { Theme } from "./theme.js";
+import { itemColor, type Theme } from "./theme.js";
 
 /**
  * Grid elements from the Template Rule Book v2. Each one draws itself
@@ -330,7 +330,7 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   body(c) {
-    const size = Math.max(24, Math.min(30, c.h * 0.12));
+    const size = Math.max(28, Math.min(44, c.h * 0.12));
     // Fit at the look's real size; text() scales again, so it gets the unscaled size back.
     const fitted = fitText(c.el.texts[0] ?? "", size * fontScale, c.w - 16, c.h - 16, charW);
     const lh = fitted.font * 1.4;
@@ -360,10 +360,10 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   callout(c) {
-    const size = Math.max(26, Math.min(40, c.h * 0.2));
+    const size = Math.max(28, Math.min(52, c.h * 0.2));
     const th = textHeight(c.el.texts[0] ?? "", { size, maxW: c.w - 96, maxH: c.h - 48 });
     const bh = Math.min(c.h, th + 56);
-    node(c, "rect", { x: round(c.L), y: round(-bh / 2), width: round(c.w), height: round(bh), fill: c.theme.surface, stroke: "none" });
+    node(c, "rect", { x: round(c.L), y: round(-bh / 2), width: round(c.w), height: round(bh), fill: c.theme.panel, stroke: "none" });
     node(c, "rect", { x: round(c.L), y: round(-bh / 2), width: 12, height: round(bh), fill: c.theme.ink, stroke: "none" });
     text(c, c.el.texts[0] ?? "", c.L + 44, -th / 2, { size, weight: 600, maxW: c.w - 96, maxH: c.h - 48 });
     const w = wipe(c, c.L, -c.h / 2, c.w, c.h);
@@ -862,26 +862,42 @@ const BUILDERS: Record<string, Builder> = {
 function listWidget(c: Ctx, style: "bullet" | "number" | "check"): Motion {
   const list = items(c.el.texts[0]);
   const n = Math.max(1, list.length);
-  const lh = Math.min(96, c.h / n);
-  const size = Math.max(24, Math.min(32, lh * 0.4));
-  const indent = style === "bullet" ? 40 : 64;
-  const heights = list.map((s) => textHeight(s, { size, maxW: c.w - indent - 16, maxH: lh - 8 }));
-  const top = -(n * lh) / 2;
+  // Each item is a row card: a marker in the item's color, then text sized to fill the row.
+  const gap = Math.min(20, c.h * 0.03);
+  const rowH = Math.min(160, (c.h * 0.94 - gap * (n - 1)) / n);
+  const size = Math.max(26, Math.min(46, rowH * 0.34));
+  const pad = Math.round(size * 0.8);
+  const mark = Math.round(size * 1.15);
+  const indent = pad + mark + Math.round(size * 0.6);
+  const opts = { size, maxW: c.w - indent - pad, maxH: rowH - 20 };
+  const heights = list.map((s) => textHeight(s, opts));
+  const top = -(n * rowH + (n - 1) * gap) / 2;
+  const hard = c.theme.shadow === "hard";
   const rows = list.map((s, i) => {
     const it = item(c, String(i + 1));
-    const y = top + i * lh + (lh - heights[i]!) / 2;
+    const y0 = top + i * (rowH + gap);
+    const mid = y0 + rowH / 2;
+    const y = y0 + (rowH - heights[i]!) / 2;
+    const hue = itemColor(c.theme, i);
+    node(c, "rect", { x: round(c.L), y: round(y0), width: round(c.w), height: round(rowH), rx: Math.min(c.theme.radius, 20), fill: c.theme.panel, stroke: hard ? c.theme.fg : "none", "stroke-width": hard ? c.theme.stroke : 0 }, it.inner);
+    const mx = c.L + pad + mark / 2;
     let tick: ((k: number) => void) | undefined;
-    if (style === "bullet") node(c, "rect", { x: round(c.L + 8), y: round(y + size * 0.36), width: 12, height: 12, fill: c.theme.ink, stroke: "none" }, it.inner);
-    if (style === "number") text(c, String(i + 1).padStart(2, "0"), c.L + 8, y, { size, weight: 700, mono: true }, it.inner);
+    if (style === "bullet") node(c, "circle", { cx: round(mx), cy: round(mid), r: round(mark * 0.26), fill: hue, stroke: "none" }, it.inner);
+    if (style === "number") {
+      node(c, "circle", { cx: round(mx), cy: round(mid), r: round(mark / 2), fill: c.theme.ink, stroke: "none" }, it.inner);
+      const num = node<SVGTextElement>(c, "text", { x: round(mx), y: round(mid + size * 0.26), "text-anchor": "middle", "font-size": round(size * 0.74), "font-family": c.theme.headingFont, "font-weight": 700, fill: c.theme.onInk, stroke: "none" }, it.inner);
+      num.textContent = String(i + 1);
+    }
     if (style === "check") {
-      const b = size * 1.1;
-      node(c, "rect", { x: round(c.L + 8), y: round(y - 2), width: round(b), height: round(b), fill: "none", stroke: c.theme.fg, "stroke-width": 2 }, it.inner);
-      tick = drawn(c, "path", { d: `M${round(c.L + 8 + b * 0.2)} ${round(y - 2 + b * 0.52)}L${round(c.L + 8 + b * 0.42)} ${round(y - 2 + b * 0.74)}L${round(c.L + 8 + b * 0.82)} ${round(y - 2 + b * 0.26)}`, stroke: c.theme.fg, "stroke-width": 3.5 }, it.inner);
+      const b = mark * 0.9;
+      const bx = mx - b / 2;
+      const by = mid - b / 2;
+      node(c, "rect", { x: round(bx), y: round(by), width: round(b), height: round(b), rx: Math.min(c.theme.radius, 8), fill: c.theme.bg, stroke: c.theme.fg, "stroke-width": 2.5 }, it.inner);
+      tick = drawn(c, "path", { d: `M${round(bx + b * 0.2)} ${round(by + b * 0.52)}L${round(bx + b * 0.42)} ${round(by + b * 0.74)}L${round(bx + b * 0.82)} ${round(by + b * 0.26)}`, stroke: c.theme.good, "stroke-width": 5 }, it.inner);
     }
     const label = item(c);
     it.inner.append(label.outer);
-    text(c, s, c.L + indent, y, { size, maxW: c.w - indent - 16, maxH: lh - 8 }, label.inner);
-    rule(c, c.L, top + (i + 1) * lh, c.L + c.w, top + (i + 1) * lh, it.inner, 1);
+    text(c, s, c.L + indent, y, opts, label.inner);
     return { inner: it.inner, label: label.inner, tick };
   });
   return (k) => rows.forEach((r, i) => {

@@ -1,6 +1,6 @@
 import type { Action, Args, Diagnostic, ElementDecl, Script, Setting } from "@anim/dsl";
 import { IR_VERSION, type ActionIR, type BeatIR, type Box, type ElementIR, type SceneIR, type VideoIR } from "@anim/ir";
-import { COMPONENTS, findComponent, findMotion, findVerb, partsOf, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
+import { COMPONENTS, findComponent, findMotion, findVerb, partsOf, VERBS, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
 import { layoutScene, type SceneLayout } from "./layout.js";
 
 export const DEFAULTS = {
@@ -83,6 +83,7 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
         }),
       })),
     };
+    furnish(ir, layout, motion);
     scenes.push(ir);
     prevBoxes = layout.boxes;
     prevElements = new Map(elements.map((e) => [e.id, e]));
@@ -168,13 +169,109 @@ function lowerAction(action: Action, elements: ElementIR[], layout: SceneLayout,
         targets: call.targets,
         duration,
         delay: args.delay ?? 0,
-        stagger: round2((args.stagger ?? 0) * motion.staggerScale),
+        // Several elements entering on one cue come in one after another, not as a block.
+        stagger: round2((args.stagger ?? (ENTER.has(verb.name) && call.targets.length > 1 ? 0.14 : 0)) * motion.staggerScale),
         ...(args.to !== undefined && { to: args.to }),
         ...(dest && { dest }),
         params,
       };
     }),
   };
+}
+
+const ENTER = new Set(VERBS.filter((v) => v.category === "enter").map((v) => v.name));
+
+/** When an element first appears: step, beat, position of its anchor in the beat, and seconds after the anchor. */
+interface Moment {
+  step: number;
+  beat: number;
+  rank: number;
+  anchor: string;
+  offset: number;
+  line: number;
+}
+
+const later = (a: Moment, b: Moment) => (a.step - b.step || a.beat - b.beat || a.rank - b.rank || a.offset - b.offset) > 0;
+
+/**
+ * Adds what the template draws by itself (layout.decor) to the scene: each
+ * decoration becomes an element, shown by an action on the same anchor as
+ * the last of the elements it belongs to. A decoration of an element that
+ * is never shown is left out.
+ */
+function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): void {
+  if (!layout.decor.length) return;
+  const first = new Map<string, Moment>();
+  // Elements kept from the previous scene are on screen from the start.
+  const opening: Moment = { step: 0, beat: 0, rank: -1, anchor: "start", offset: 0, line: scene.steps[0]?.beats[0]?.line ?? 0 };
+  for (const id of scene.keep) first.set(id, opening);
+  scene.steps.forEach((step, si) =>
+    step.beats.forEach((beat, bi) => {
+      const rankOf = (anchor: string) => {
+        if (anchor === "start") return -1;
+        if (anchor === "end") return 1e6;
+        const cue = beat.type === "speech" ? beat.cues.find((c) => c.id === anchor) : undefined;
+        return cue ? cue.start : 0;
+      };
+      for (const action of beat.actions) {
+        let elapsed = 0;
+        for (const call of action.calls) {
+          if (ENTER.has(call.verb)) {
+            call.targets.forEach((id, k) => {
+              const known = Number.isFinite(elapsed);
+              const m: Moment = known
+                ? { step: si, beat: bi, rank: rankOf(action.anchor), anchor: action.anchor, offset: elapsed + call.delay + k * call.stagger, line: action.line }
+                : { step: si, beat: bi, rank: 1e6, anchor: "end", offset: 0, line: action.line };
+              if (!first.has(id)) first.set(id, m);
+            });
+          }
+          // A chained call starts when the one before it ends; "fit" and "until" lengths are only known later.
+          elapsed = typeof call.duration === "number" ? elapsed + call.delay + call.duration : NaN;
+        }
+      }
+    }),
+  );
+
+  for (const d of layout.decor) {
+    const moments = d.follows.map((id) => first.get(id));
+    if (moments.some((m) => !m)) continue;
+    const at = (moments as Moment[]).reduce((a, b) => (later(b, a) ? b : a));
+    const beat = scene.steps[at.step]?.beats[at.beat];
+    if (!beat) continue;
+    scene.elements.push({
+      id: d.id,
+      kind: d.kind,
+      component: d.kind,
+      texts: d.text !== undefined ? [d.text] : [],
+      ...(d.link && { link: d.link }),
+      params: { ...d.params, auto: true },
+      box: layout.boxes.get(d.id) ?? { x: 0, y: 0, w: 0, h: 0 },
+      layer: "svg",
+      parts: [],
+      step: at.step,
+      line: at.line,
+    });
+    // Lines are drawn, numbers pop, panels fade in with their item.
+    const verb = findVerb(d.kind === "badge" ? "pop" : d.kind === "panel" ? "fade" : "draw")!;
+    const params: Record<string, string | number | boolean> = {};
+    for (const [k, spec] of Object.entries(verb.params)) if (spec.default !== undefined) params[k] = spec.default;
+    delete params.until;
+    beat.actions.push({
+      anchor: at.anchor,
+      line: at.line,
+      calls: [
+        {
+          verb: verb.name,
+          verbVersion: verb.version,
+          targets: [d.id],
+          duration: round2((d.kind === "badge" || d.kind === "panel" ? verb.defaultDuration : 0.6) * motion.durScale),
+          delay: round2(at.offset + (d.kind === "panel" ? 0 : 0.12)),
+          stagger: 0,
+          params,
+        },
+      ],
+    });
+  }
 }
 
 /** Converts string params to their declared types. */

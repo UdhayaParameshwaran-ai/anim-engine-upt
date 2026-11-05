@@ -99,7 +99,10 @@ The registry (`packages/registry`) is the source of truth for verbs, their param
 
 **Element kinds (v1):** `title` `text` `label` `list` `card` `formula` `box` `circle` `arrow` `line` `node` `edge` `icon:<name>` `asset:<name>` `chart:<type>`.
 
-`icon:` and `asset:` names come from the **semantic SVG library** (`sun`, `leaf`, `cell.plant`). An unknown name is matched through synonyms, or replaced with a labeled placeholder plus a warning.
+`icon:` and `asset:` names come from the **picture library**. An unknown name is matched through synonyms, or replaced with a labeled placeholder plus a warning.
+
+- **Illustrations** (`asset:leaf`, `asset:cell.plant`, `asset:heart.anatomy`, …) are hand-made, colored, and have parts a script can address (`left.wall`).
+- **Icons** (`icon:sun`, `icon:gavel`, `icon:landmark`, `icon:piggy-bank`, …): 16 hand-made ones with colors of their own, plus about 550 from the open-source [Lucide](https://lucide.dev) set (ISC license). `scripts/build-icons.mjs` (`pnpm icons`) generates them from the `lucide-static` dev dependency; it leaves out interface-only icons (alignment, chevrons, panels, text formatting), brand logos and modifier variants. Icon names say what they show, so every scene request lists all of them and the model picks by meaning.
 
 ### 6a. Grid scenes (Template Rule Book v2)
 
@@ -146,6 +149,16 @@ A script's visual style comes from two video-wide settings. Neither changes the 
 
 Narration timing never changes: only default durations scale, and explicit durations, `fit` and `until=` are kept. Unknown names are fixed to the closest one (NAR214).
 
+**Entrances follow the template.** Items of a template enter from the direction their template gives them: out of a hub's center, in toward a `converge` result, out of a `diverge` source or a `process`, along a sequence, up into a row of cards, from each side of a `compare`. How far they travel is the personality's (`energetic` far, `corporate` a little; `minimal` and `dramatic` enter in place).
+
+**Life between cues.** A frame never sits completely still while the narrator talks (except under `minimal`):
+- **Camera:** each scene moves slowly, in on one scene and back out on the next (2.5–6% of the frame, by personality), unless the script uses `focus`.
+- **Idle float:** icons and illustrations rise and fall a few pixels once they have appeared, each on its own phase.
+- **Group entrances:** several elements entering on one cue come in one after another (0.14 s apart) unless the script sets its own stagger (`/0.3`).
+- **Highlight:** the element also lifts to 106% while it is highlighted. Pictures glow; the flat marker block of some looks is kept for text.
+
+**Icons take the look's style.** Each look draws icons its own way: plain line art (`chalk`, `crayon`, `editorial`, `magazine`), on a tinted circle or rounded square (`paper`, `soft-pastel`, `dark`, `light`), outlined (`tech-neon`, `midnight-luxe`, `blueprint`), white on a solid color (`bold-pop`), or as a hard-shadowed block (`neo-brutal`). Items of a template take the look's palette in turn; an icon with a color of its own (water, fire) keeps it.
+
 **Background.** Every video draws on a plain white board, whatever the look; looks differ by ink colors, type, shapes and emphasis. A `bg` line from older scripts is removed with a warning (NAR214).
 
 **Transitions.** `in=` accepts `auto` (default) `cut` `fade` `slide` `wipe` `iris` `zoom` `blur` `rise`. A scene starts empty (its elements appear on their cues), so with any personality other than `standard`, a scene's transition is played as the *previous* scene's exit (unless that scene sets `out=`). `auto` takes the next transition from the personality's set (playful: zoom, iris, rise; corporate: rise, wipe, fade; cinematic: blur, fade, zoom; energetic: wipe, slide, zoom; dramatic: zoom, iris, blur), and the video ends with a fade. Under `standard`, `auto` means fade, as before.
@@ -169,7 +182,25 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 | `diverge` | `right` (source left, outputs stacked right) `bottom` `around` |
 | `process` | `across` (inputs → process → outputs) `down` `equation` (one line: `A + B → [process] → C + D`) |
 
-- **Flow shapes.** `converge` fills its `result` slot and places the inputs; `diverge` fills `source` and places the outputs; in `process`, items declared before the `process` element are inputs and items after it are outputs (if one side is empty they are split in half, with a warning). The template only places the parts: declare the arrows yourself (`a1 = arrow sun->result`) and draw them on cues.
+- **Flow shapes.** `converge` fills its `result` slot and places the inputs; `diverge` fills `source` and places the outputs; in `process`, items declared before the `process` element are inputs and items after it are outputs (if one side is empty they are split in half, with a warning). Arrows you declare (`a1 = arrow sun->result`) are drawn on your cues; any you leave out, the template draws itself.
+- **Templates draw their own structure**, so a scene reads as its shape even when the script only declares the items. Each drawing appears with the item it belongs to, and is skipped where the script already declared a connector between the same two elements.
+
+  | Template | Draws |
+  |---|---|
+  | `hub` | a spoke from the center to each item |
+  | `cycle` | arrows from each item to the next, closing the loop |
+  | `steps` | a number on each item; arrows between them when none are declared |
+  | `cards` | a panel behind each item (one size for all) |
+  | `compare` | a panel behind each side and a "vs" between them |
+  | `timeline` | the axis and a dot for each event (`alternate`, `line`) |
+  | `spotlight` | a leader line from each label to the picture |
+  | `converge` `diverge` `process` | the missing arrows into the result, out of the source, through the process |
+  | `process variant=equation` | a "+" between the inputs and between the outputs, one arrow in and one out |
+
+  An arrow that would run straight through another element is left out.
+- **Pictures fill their cell.** Icons and illustrations grow (icons up to 2.2×, the featured card more) when the layout leaves room. A label is never smaller than its natural size and may be as wide as its picture's cell; every labelled picture in a scene shares one label size.
+- **Rings keep room for their lines.** A `cycle` or `hub` shrinks its items until every arrow between neighbours, and every spoke, has a visible length.
+- **List pages** (`bullets`, `numbered`, `checklist`) draw each item as a row card with a marker in the item's color and type sized to fill the row.
 - **Variants are chosen by fit.** The layout engine checks the variant on the scene's real content.
   - **A named variant**, or none (the template's first variant), is kept when it lays out cleanly: no overflow, tiny text or overlap.
   - **When it doesn't**, the engine lays out every variant on trial and uses the best clean one. A variant the script named is reported as NAR416 (warning, fixed).
@@ -259,7 +290,7 @@ Run `pnpm check <file>` to see them. Most come with a deterministic auto-fix. A 
 | NAR401 | semantic | Scene without narration | — |
 | NAR402 | semantic | Emphasis/transform on a hidden element (warning) | Insert `fade` first |
 | NAR403 | semantic | Hiding something not visible (warning) | Drop the target |
-| NAR404 | semantic | Element declared but never shown (warning) | — |
+| NAR404 | semantic | Element declared but never shown (warning) | fades in after the first sentence (a connector is drawn after the last) |
 | NAR405 | semantic | Too many elements in a scene (warning) | — |
 | NAR406 | semantic | Beat longer than 40 words (warning) | — |
 | NAR407 | semantic | Template slot problem: missing required slot, wrong kind, too many items | — |

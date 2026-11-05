@@ -77,7 +77,7 @@ right = asset:cell.animal "Animal cell"
   },
   steps: {
     shape: "sequence",
-    useWhen: "2–6 stages in a fixed order, each happening after the previous (draw arrows between them)",
+    useWhen: "2–6 stages in a fixed order, each happening after the previous",
     avoidWhen: "the items are options, methods or kinds with no order → cards; the last stage leads back to the first → cycle; stages branch → flow",
     variants: {
       row: { when: "2–5 steps with short labels, read left to right", items: [2, 5] },
@@ -90,14 +90,12 @@ right = asset:cell.animal "Animal cell"
     example: `scene stages "From seed to tree" template=steps
 title = title "From seed to tree"
 s1 = icon:droplet "Water the seed"
-s2 = icon:sun "It sprouts"
+s2 = icon:sprout "It sprouts"
 s3 = asset:tree "It grows"
-a1 = arrow s1->s2
-a2 = arrow s2->s3
 > {1}Water the seed, {2}it sprouts, {3}and it grows.
 1 write title then pop s1
-2 draw a1 then pop s2
-3 draw a2 then pop s3`,
+2 pop s2
+3 pop s3`,
   },
   cycle: {
     shape: "loop",
@@ -225,12 +223,10 @@ l2 = label "Ventricles"
 result = asset:leaf "Leaf"
 i1 = icon:sun "Sunlight"
 i2 = icon:droplet "Water"
-a1 = arrow i1->result
-a2 = arrow i2->result
 > {1}A leaf needs {2}sunlight {3}and water.
 1 fade result
-2 pop i1 then draw a1
-3 pop i2 then draw a2`,
+2 pop i1
+3 pop i2`,
   },
   diverge: {
     shape: "one-to-many",
@@ -245,12 +241,10 @@ a2 = arrow i2->result
 source = icon:cube "Glucose"
 o1 = icon:bolt "Energy"
 o2 = asset:tree "Growth"
-a1 = arrow source->o1
-a2 = arrow source->o2
 > {1}Glucose gives the plant {2}energy {3}and growth.
 1 fade source
-2 draw a1 then pop o1
-3 draw a2 then pop o2`,
+2 pop o1
+3 pop o2`,
   },
   process: {
     shape: "transform",
@@ -266,11 +260,8 @@ i1 = icon:sun "Light"
 i2 = icon:droplet "Water"
 process = asset:leaf "Photosynthesis"
 o1 = icon:cube "Glucose"
-a1 = arrow i1->process
-a2 = arrow i2->process
-a3 = arrow process->o1
 > {1}Light and water enter the leaf {2}and come out as glucose.
-1 pop i1 then pop i2 then draw a1 then draw a2 then fade process
-2 draw a3 then pop o1`,
+1 pop i1,i2 /0.2 then fade process
+2 pop o1`,
   },
 };
