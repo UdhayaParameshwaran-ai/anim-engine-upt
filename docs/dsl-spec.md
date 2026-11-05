@@ -151,6 +151,8 @@ Narration timing never changes: only default durations scale, and explicit durat
 
 **Entrances follow the template.** Items of a template enter from the direction their template gives them: out of a hub's center, in toward a `converge` result, out of a `diverge` source or a `process`, along a sequence, up into a row of cards, from each side of a `compare`. How far they travel is the personality's (`energetic` far, `corporate` a little; `minimal` and `dramatic` enter in place).
 
+**No blank openings.** A template scene that has no title element of its own shows its scene title (`scene s "Where bills come from" template=…`) as a small heading. The heading is on screen from the scene's first frame, so the frame is never empty while the narrator starts, and the content moves down to make room for it. Title scenes, grid pages and scenes that declare `title = …` get no extra heading.
+
 **Life between cues.** A frame never sits completely still while the narrator talks (except under `minimal`):
 - **Camera:** each scene moves slowly, in on one scene and back out on the next (2.5–6% of the frame, by personality), unless the script uses `focus`.
 - **Idle float:** icons and illustrations rise and fall a few pixels once they have appeared, each on its own phase.
@@ -199,7 +201,7 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 
   An arrow that would run straight through another element is left out.
 - **Pictures fill their cell.** Icons and illustrations grow (icons up to 2.2×, the featured card more) when the layout leaves room. A label is never smaller than its natural size and may be as wide as its picture's cell; every labelled picture in a scene shares one label size.
-- **Rings keep room for their lines.** A `cycle` or `hub` shrinks its items until every arrow between neighbours, and every spoke, has a visible length.
+- **Rings keep room for their lines.** A `cycle` shrinks its items until every arrow between neighbours has a visible length. A `hub` shrinks its center first, but never below its items' size; on a ring, labels may run wider than their cell.
 - **List pages** (`bullets`, `numbered`, `checklist`) draw each item as a row card with a marker in the item's color and type sized to fill the row.
 - **Variants are chosen by fit.** The layout engine checks the variant on the scene's real content.
   - **A named variant**, or none (the template's first variant), is kept when it lays out cleanly: no overflow, tiny text or overlap.

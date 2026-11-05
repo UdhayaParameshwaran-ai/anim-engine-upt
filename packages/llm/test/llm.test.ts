@@ -8,6 +8,7 @@ import {
   CLOSINGS,
   ClaudeCodeClient,
   clean,
+  keepPlanned,
   clientFromEnv,
   flatten,
   FallbackClient,
@@ -21,7 +22,9 @@ import {
   ReplayClient,
   retrieveAssets,
   routeOutline,
+  sceneKindOf,
   scenePrompt,
+  sceneSystemPrompt,
   shapeTable,
   storyArc,
   systemPrompt,
@@ -204,8 +207,7 @@ describe("prompt", () => {
     for (const verb of ["fade", "pop", "draw", "write", "highlight", "move", "focus"]) expect(sys).toContain(`  ${verb} `);
     for (const tpl of ["compare", "steps", "flow", "cycle"]) expect(sys).toContain(`  ${tpl} `);
     expect(sys).toContain("Illustrations, written asset:<name> (parts in brackets): leaf(blade,vein,stem)");
-    expect(sys).toContain("Icons, written icon:<name>: droplet glass-water sun bubbles");
-    expect(sys).not.toContain("heart.anatomy");
+    expect(sys).toContain("glass-water");
     // The example in the prompt must itself be valid.
     const example = sys.slice(sys.indexOf("EXAMPLE\n") + 8);
     expect(compile(example).diagnostics).toEqual([]);
@@ -259,7 +261,7 @@ describe("generate", () => {
     ]);
     const [outline, need, leaf, repair] = r.trace;
     expect(outline).toMatchObject({ status: "done", system: "outline", verdict: "2 scenes: need, leaf", usage: { prompt: 10, completion: 5 }, provider: "scripted", model: "m" });
-    expect(need).toMatchObject({ system: "full", check: { errors: 0 }, verdict: "valid" });
+    expect(need).toMatchObject({ system: "scene", check: { errors: 0 }, verdict: "valid" });
     expect(leaf!.check!.errors).toBe(2);
     expect(leaf!.verdict).toBe("has errors → repair");
     expect(repair).toMatchObject({ history: 2, check: { errors: 0 }, verdict: "valid" });
@@ -392,13 +394,21 @@ describe("generation fixes from the traced run", () => {
     expect(open.peak).toBe(2);
   });
 
-  it("plans with a short system prompt", async () => {
+  it("plans with what choosing needs, and writes each scene with what its kind needs", async () => {
     const llm = new ScriptedLlm(plain);
     await generate("plants", { client: llm });
-    const [outline, scene] = llm.requests;
-    expect(outline!.messages[0]!.content).toContain("PLANNING RULES");
-    // The shape table (how to choose a template) is the bulk of it; still well under half the full language.
-    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 2.2);
+    const [outline, scene] = llm.requests.map((q) => q.messages[0]!.content);
+    expect(outline).toContain("PLANNING RULES");
+    // Planning sees how much each template holds and what fits each page layout.
+    expect(outline).toMatch(/template=converge \[2–5 items \+ result\]/);
+    expect(outline).toMatch(/L2-04 Left 2\/3 \+ Right 1\/3: 1141×800 · 555×800/);
+    expect(outline).toMatch(/PAGE ELEMENTS \(the smallest slot each needs\): .*chart 560×320/);
+    // A template scene gets no page section, no other templates and no full example: far less than the whole language.
+    expect(scene).toContain("template=steps [emphasis");
+    expect(scene).not.toContain("GRID SCENES");
+    expect(scene).not.toContain("TEMPLATES (");
+    expect(scene).not.toContain("EXAMPLE\n");
+    expect(scene.length).toBeLessThan(systemPrompt(new AssetLibrary().all()).length / 2.5);
   });
 
   it("tells later scenes what earlier scenes already said", async () => {
@@ -607,20 +617,39 @@ describe("claude (subscription via the Claude Code CLI)", () => {
 });
 
 describe("pictures, structure and story arcs", () => {
-  it("shows every scene call the whole picture list, the same for any topic", async () => {
-    const plain = (last: string) => (last.startsWith("Plan") ? OUTLINE : last.includes('"need"') ? NEED_OK : LEAF_OK);
-    const systems = async (topic: string) => {
-      const llm = new ScriptedLlm(plain);
-      await generate(topic, { client: llm });
-      return llm.requests.map((q) => q.messages[0]!.content);
-    };
-    const [outline, scene] = await systems("how plants make food");
-    // Hundreds of icons by name, hand-made ones first; the plan only learns what kinds of picture exist.
-    expect(scene).toMatch(/Icons, written icon:<name>: sun droplet wind .*\bgavel\b.*\blandmark\b.*\bsprout\b/);
-    expect(scene).toContain("Illustrations, written asset:<name> (parts in brackets): leaf(blade,vein,stem)");
-    expect(outline).toMatch(/PICTURES: illustrations of leaf, tree, .*; \d{3} icons of everyday things/);
-    expect(outline).not.toContain("gavel");
-    expect((await systems("how a bill becomes law"))[1]).toBe(scene);
+  it("offers each scene the pictures that match its words, plus everyday ones", () => {
+    const lib = new AssetLibrary();
+    const names = retrieveAssets('How a bill becomes law\nscene vote "Congress votes" template=steps\n# shape: sequence · goal: the House and Senate vote, then the president signs', lib).map((a) => a.name);
+    // At most 30 matches, plus the hand-made art and the everyday icons: a fraction of the library.
+    expect(names.length).toBeLessThan(lib.all().length / 4);
+    expect(names).toEqual(expect.arrayContaining(["vote", "gavel", "signature"]));
+    // Hand-made art is always on offer; icons that match nothing and aren't everyday ones are not.
+    expect(names).toEqual(expect.arrayContaining(["leaf", "earth"]));
+    expect(names).not.toContain("accessibility");
+  });
+
+  it("writes a grid page with only the page elements that fit its layout", () => {
+    const sys = sceneSystemPrompt(sceneKindOf('scene facts "Facts" grid=L4-03'), new AssetLibrary().all());
+    expect(sys).toContain("PAGE RULES");
+    expect(sys).toContain("EXAMPLE PAGE");
+    expect(sys).toContain('scene <id> "Title" grid=<layout>');
+    // Four rows 1728×176: a stat (360×240) doesn't fit, a progress bar (400×160) does.
+    expect(sys).toContain('progress "60%" "label"');
+    expect(sys).not.toContain('stat "95%" "label"');
+    expect(sys).not.toContain("ELEMENT KINDS");
+    // No plan for the scene: the whole language.
+    expect(sceneSystemPrompt(sceneKindOf(undefined), [])).toBe(systemPrompt([]));
+  });
+
+  it("keeps the planned template or grid layout on the written scene line", () => {
+    expect(keepPlanned('scene a "A" template=cards variant=strip in=fade\nx = icon:sun', 'scene a "A" template=cards')).toEqual({ text: 'scene a "A" template=cards variant=strip in=fade\nx = icon:sun' });
+    expect(keepPlanned('scene a "A" grid=L2-07 in=fade\nx = stat "1" "y"', 'scene a "A" grid=L2-02')).toEqual({
+      text: 'scene a "A" grid=L2-02 in=fade\nx = stat "1" "y"',
+      changed: "grid=L2-02 (it wrote grid=L2-07)",
+    });
+    // Another template's variant means nothing to the planned one.
+    expect(keepPlanned('scene a "A" template=steps variant=zigzag', 'scene a "A" template=cycle').text).toBe('scene a "A" template=cycle');
+    expect(keepPlanned('scene a "A"', 'scene a "A" template=hub').text).toBe('scene a "A" template=hub');
   });
 
   it("tells the writer what templates draw themselves, and its examples leave that out", () => {

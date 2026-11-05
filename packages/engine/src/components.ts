@@ -103,6 +103,16 @@ export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${
       }
       break;
     }
+    case "kicker": {
+      // A scene heading: an accent bar, then the title in the look's heading face.
+      const label = el.texts[0] ?? "";
+      const font = Math.min(52, h * 0.62);
+      g.append(svg(doc, "rect", { x: -w / 2, y: -font * 0.5, width: Math.max(6, theme.stroke * 2), height: font, rx: 2, fill: theme.accent, stroke: "none" }));
+      const t = text(doc, inst, label, font / theme.fontScale, w - 40, h, theme, { heading: true, align: "left" });
+      t.setAttribute("transform", "translate(28 0)");
+      g.append(t);
+      break;
+    }
     case "rule": {
       // An axis along the longer side of its box.
       const across = w >= h;

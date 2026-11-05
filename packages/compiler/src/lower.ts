@@ -235,7 +235,8 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
   for (const d of layout.decor) {
     const moments = d.follows.map((id) => first.get(id));
     if (moments.some((m) => !m)) continue;
-    const at = (moments as Moment[]).reduce((a, b) => (later(b, a) ? b : a));
+    // A decoration that belongs to no element (a scene heading) is there from the start.
+    const at = moments.length ? (moments as Moment[]).reduce((a, b) => (later(b, a) ? b : a)) : opening;
     const beat = scene.steps[at.step]?.beats[at.beat];
     if (!beat) continue;
     scene.elements.push({
@@ -252,7 +253,7 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
       line: at.line,
     });
     // Lines are drawn, numbers pop, panels fade in with their item.
-    const verb = findVerb(d.kind === "badge" ? "pop" : d.kind === "panel" ? "fade" : "draw")!;
+    const verb = findVerb(d.kind === "badge" ? "pop" : d.kind === "panel" || d.kind === "kicker" ? "fade" : "draw")!;
     const params: Record<string, string | number | boolean> = {};
     for (const [k, spec] of Object.entries(verb.params)) if (spec.default !== undefined) params[k] = spec.default;
     delete params.until;
@@ -265,7 +266,8 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
           verbVersion: verb.version,
           targets: [d.id],
           duration: round2((d.kind === "badge" || d.kind === "panel" ? verb.defaultDuration : 0.6) * motion.durScale),
-          delay: round2(at.offset + (d.kind === "panel" ? 0 : 0.12)),
+          // A scene heading is on screen as the scene appears, before the narrator starts.
+          delay: d.kind === "kicker" ? -5 : round2(at.offset + (d.kind === "panel" ? 0 : 0.12)),
           stagger: 0,
           params,
         },

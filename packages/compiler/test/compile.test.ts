@@ -314,3 +314,29 @@ describe("layout polish", () => {
     for (const id of ids) expect(gap(hub, "center", id), id).toBeGreaterThan(40);
   });
 });
+
+describe("scene openings", () => {
+  it("gives a template scene without a heading its title as a heading, on screen from the scene's first moment", () => {
+    const s = compile('video 1\nscene s "Where bills come from" template=cards\na = icon:users "Citizens"\nb = icon:landmark "Groups"\n> A bill starts {1}with people.\n1 pop a,b\n').ir!.scenes[0]!;
+    const kicker = s.elements.find((e) => e.kind === "kicker")!;
+    expect(kicker.texts).toEqual(["Where bills come from"]);
+    const show = s.steps[0]!.beats[0]!.actions.find((a) => a.calls[0]!.targets[0] === kicker.id)!;
+    expect([show.anchor, show.calls[0]!.verb, show.calls[0]!.delay]).toEqual(["start", "fade", -5]);
+    // The items sit below it.
+    for (const id of ["a", "b"]) expect(s.elements.find((e) => e.id === id)!.box.y).toBeGreaterThan(kicker.box.y + kicker.box.h);
+    // A scene with its own title element, a title scene and a grid page get none.
+    const none = (src: string) => compile(src).ir!.scenes[0]!.elements.filter((e) => e.kind === "kicker");
+    expect(none('video 1\nscene s "X" template=cards\ntitle = title "X"\na = icon:sun\n> {1}One.\n1 write title\n1 pop a\n')).toEqual([]);
+    expect(none('video 1\nscene s "X" template=title\ntitle = title "X"\n> {1}One.\n1 write title\n')).toEqual([]);
+  });
+
+  it("keeps a hub's center at least as large as its items", () => {
+    const s = compile('video 1\nscene s "Factors" template=hub\ncenter = icon:sun "Photosynthesis"\n' + ["a", "b", "c", "d", "e"].map((id) => `${id} = icon:sun "Part ${id}"`).join("\n") + "\n> {1}Five.\n1 pop center,a,b,c,d,e\n").ir!.scenes[0]!;
+    // The picture: its box less the label band under it.
+    const pic = (id: string) => {
+      const e = s.elements.find((x) => x.id === id)!;
+      return Math.min(e.box.w, e.box.h - Number(e.params.labelH ?? 0));
+    };
+    for (const id of ["a", "b", "c", "d", "e"]) expect(pic("center")).toBeGreaterThanOrEqual(pic(id) - 2);
+  });
+});

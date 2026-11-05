@@ -205,7 +205,8 @@ class Resolver {
           const cue = cueTimes.get(action.anchor);
           let prevEnd = anchorTime(action.anchor);
           for (const call of action.calls) {
-            const t = this.q(prevEnd + call.delay);
+            // A negative delay (only the compiler writes one: a scene heading) reaches back at most to the scene start.
+            const t = this.q(Math.max(t0, prevEnd + call.delay));
             let target: number;
             let elastic = true;
             if (typeof call.duration === "number") {

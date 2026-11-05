@@ -38,7 +38,7 @@ export interface LayoutContext {
  */
 export interface Decor {
   id: string;
-  kind: "line" | "arrow" | "panel" | "badge" | "rule";
+  kind: "line" | "arrow" | "panel" | "badge" | "rule" | "kicker";
   link?: { from: string; to: string };
   text?: string;
   follows: string[];
@@ -144,6 +144,8 @@ class SceneLayouter {
   private readonly params = new Map<string, Record<string, string | number>>();
   /** The cell each element was placed in (decorations are drawn against cells). */
   private readonly cells = new Map<string, Box>();
+  /** Elements with open space around their cell (on a ring): their labels may be wider than the cell. */
+  private readonly open = new Set<string>();
   /** Fill factor for put() and gap multiplier, from `density=`. */
   private readonly fill: number;
   private readonly gapK: number;
@@ -316,7 +318,9 @@ class SceneLayouter {
     const box = this.boxes.get(e.id);
     if (!l || !box) return;
     const f = font ?? Math.min(52, Math.max(l.font, Math.round(l.font * (this.scales.get(e.id) ?? 1))));
-    const labelW = Math.round(Math.max(box.w, (this.cells.get(e.id)?.w ?? box.w) * 0.96));
+    // Pictures on a ring have open space around them: a label may run wider than its cell there.
+    const natural = Math.round(l.chars * CHAR_W * f + 12);
+    const labelW = Math.round(Math.max(box.w, (this.cells.get(e.id)?.w ?? box.w) * 0.96, this.open.has(e.id) ? Math.min(natural, 420) : 0));
     const lines = l.chars * CHAR_W * f > labelW ? 2 : 1;
     // sized: the layout chose this picture's size (the engine only caps pictures it had to size itself).
     this.params.set(e.id, { ...this.params.get(e.id), labelH: Math.min(Math.round(lines * f * 1.25 + 10), Math.round(box.h * 0.45)), labelFont: f, labelW, sized: 1 });
@@ -640,6 +644,13 @@ class SceneLayouter {
       const band = { ...area, h: Math.round(area.h * 0.18) };
       this.put(title, band, 0.95);
       content = { x: area.x, y: band.y + band.h, w: area.w, h: area.h - band.h };
+    } else if (tpl.name !== "title" && this.scene.title && !pool.some((e) => e.id === "title")) {
+      // No heading of its own: the scene's title shows as a small heading from the first moment,
+      // so the frame isn't empty until the first cue.
+      const h = Math.round(Math.min(84, area.h * 0.09));
+      this.boxes.set("__kicker", round({ x: area.x, y: area.y, w: area.w, h }));
+      this.decor.push({ id: "__kicker", kind: "kicker", text: this.scene.title, follows: [] });
+      content = { x: area.x, y: area.y + h + Math.round(this.gap * 0.5), w: area.w, h: area.h - h - Math.round(this.gap * 0.5) };
     }
 
     const variant = this.variant(tpl);
@@ -756,7 +767,7 @@ class SceneLayouter {
           right.forEach((e, i) => this.put(e, colCells(r!, right.length, this.gap)[i]!));
           return;
         }
-        return this.ring(items, content, mid);
+        return this.ring(items, content, mid, tpl.name === "hub");
       }
       case "spotlight": {
         const main = slot("main");
@@ -914,18 +925,20 @@ class SceneLayouter {
     }
   }
 
-  private ring(items: ElementDecl[], area: Box, mid?: ElementDecl): void {
+  /** `spokes`: lines join the center to every item (a hub), so the center gives way to keep them visible. */
+  private ring(items: ElementDecl[], area: Box, mid?: ElementDecl, spokes = false): void {
     const cx = area.x + area.w / 2;
     const cy = area.y + area.h / 2;
     const n = Math.max(1, items.length);
-    let cell = Math.min(mid ? 250 : 300, (Math.min(area.w, area.h) * Math.PI) / (n + 2));
+    let cell = Math.min(spokes ? 280 : mid ? 250 : 300, (Math.min(area.w, area.h) * Math.PI) / (n + 2));
     let r = 0;
     let rx = 0;
+    let center = 0;
     const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
     for (;;) {
       r = Math.min(area.w, area.h) / 2 - cell / 2;
       // Wider than tall: a 16:9 frame has room at the sides (two items sit top and bottom, so they keep the circle).
-      rx = n > 2 ? Math.min(area.w / 2 - cell / 2, r * 1.5) : r;
+      rx = n > 2 ? Math.min(area.w / 2 - cell / 2, r * (spokes ? 1.75 : 1.5)) : r;
       if (n < 3 || cell <= 150) break;
       // Length of the straight run between two neighbours once both their cells are cut away.
       let free = Infinity;
@@ -935,33 +948,47 @@ class SceneLayouter {
         const chord = Math.hypot(dx, dy);
         free = Math.min(free, chord - (cell * chord) / Math.max(Math.abs(dx), Math.abs(dy)));
       }
-      if (mid) {
-        // A spoke runs from the center's cell to the item's cell; both are cut away.
-        const m = this.centerSize(cell, r) * 0.9;
+      if (free < 70) {
+        cell -= 10;
+        continue;
+      }
+      if (!mid || !spokes) break;
+      // A spoke runs from the center's cell to the item's cell; both are cut away.
+      // The center shrinks first (down to 130), so the items keep their size.
+      const spoke = (m: number) => {
+        let f = Infinity;
         for (let i = 0; i < n; i++) {
           const dx = rx * Math.cos(angle(i));
           const dy = r * Math.sin(angle(i));
           const d = Math.hypot(dx, dy);
-          free = Math.min(free, d - ((cell / 2 + m / 2) * d) / Math.max(Math.abs(dx), Math.abs(dy)));
+          f = Math.min(f, d - ((cell / 2 + (m * 0.9) / 2) * d) / Math.max(Math.abs(dx), Math.abs(dy)));
         }
-      }
-      if (free >= 90) break;
+        return f;
+      };
+      // A center made of words needs room for them; a picture can get small.
+      // The hub stays the largest thing on screen, so it gives way only down to the items' size.
+      const floor = Math.max(this.sizes.get(mid.id)?.wraps ? 220 : 130, cell);
+      for (center = this.centerSize(cell, r); center > floor && spoke(center) < 50; center -= 10);
+      center = Math.max(center, floor);
+      if (spoke(center) >= 50) break;
       cell -= 10;
     }
+    for (const e of mid ? [...items, mid] : items) this.open.add(e.id);
     items.forEach((e, i) => {
       const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
       this.put(e, { x: cx + rx * Math.cos(a) - cell / 2, y: cy + r * Math.sin(a) - cell / 2, w: cell, h: cell }, 1);
     });
     if (mid) {
-      // The center stays clear of the items above and below it.
-      const m = this.centerSize(cell, r);
-      this.put(mid, { x: cx - m / 2, y: cy - m / 2, w: m, h: m }, 0.9);
+      // The center stays clear of the items above and below it (and leaves the spokes room).
+      const m = center || this.centerSize(cell, r);
+      // Filled like the items, so a center as large as their cells is as large as they are.
+      this.put(mid, { x: cx - m / 2, y: cy - m / 2, w: m, h: m }, 1);
     }
   }
 
   /** Side of a ring's center cell: a little larger than the items, clear of the ones above and below it. */
   private centerSize(cell: number, r: number): number {
-    return Math.max(140, Math.min(cell * 1.2, 2 * (r - cell / 2) - 110));
+    return Math.max(140, Math.min(cell * 1.35, 2 * (r - cell / 2) - 90));
   }
 
   /**

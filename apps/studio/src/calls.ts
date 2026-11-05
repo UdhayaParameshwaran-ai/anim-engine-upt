@@ -14,7 +14,7 @@ export interface CallTrace {
   firstTokenMs?: number;
   usage?: { prompt: number; completion: number; cached?: number };
   estimated?: boolean;
-  system: "outline" | "full";
+  system: "outline" | "full" | "scene";
   systemChars: number;
   history: number;
   prompt: string;
@@ -152,7 +152,7 @@ export class CallsPanel {
 function detail(c: CallTrace): string {
   const facts = [
     c.model && `${escape(c.provider ?? "")} · ${escape(c.model)}`,
-    `${c.system === "full" ? "full" : "outline"} system prompt (${tokens(Math.ceil(c.systemChars / 4))} tok)`,
+    `${c.system} system prompt (${tokens(Math.ceil(c.systemChars / 4))} tok)`,
     c.history ? `${c.history} earlier message${c.history === 1 ? "" : "s"} resent` : "no history",
     c.firstTokenMs !== undefined && `first token after ${secs(c.firstTokenMs)}`,
     c.usage?.cached && `${tokens(c.usage.cached)} prompt tokens cached`,

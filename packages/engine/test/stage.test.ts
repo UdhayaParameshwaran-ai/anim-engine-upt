@@ -287,7 +287,7 @@ describe("template structure and looks", () => {
     expect(order.indexOf("arrow")).toBeLessThan(order.indexOf("icon"));
     expect(order.lastIndexOf("icon")).toBeLessThan(order.indexOf("badge"));
     const second = firstTween(tl, "s/b", "opacity");
-    const badge = node(stage, "s", "__badge2");
+    const badge = [...stage.root.querySelectorAll('[data-scene="s"] [data-kind="badge"]')].find((n) => n.textContent === "2") as SVGGElement & HTMLElement;
     stage.render(second.t0 - 0.05);
     expect(visible(badge)).toBe(false);
     stage.render(second.t1 + 1);

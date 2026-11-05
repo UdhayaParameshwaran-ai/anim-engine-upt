@@ -18,7 +18,7 @@ export {
   type Usage,
 } from "./client.js";
 export { ClaudeCodeClient, claudeCliAvailable, flatten, type ClaudeCodeOptions } from "./claude-code.js";
-export { checkScene, clean, generate, routeOutline, split, tidyOutline, type CallKind, type CallTrace, type GenerateOptions, type GenerateResult } from "./generate.js";
-export { CLOSINGS, fullPrompt, narrationOf, OPENINGS, outlinePrompt, outlineSystemPrompt, pictureList, repairPrompt, retrieveAssets, scenePrompt, shapeTable, storyArc, systemPrompt, templateCard, type ArcPart, type StoryArc } from "./prompt.js";
+export { checkScene, clean, generate, keepPlanned, routeOutline, split, tidyOutline, type CallKind, type CallTrace, type GenerateOptions, type GenerateResult } from "./generate.js";
+export { CLOSINGS, fullPrompt, narrationOf, OPENINGS, outlinePrompt, outlineSystemPrompt, pictureList, pictureQuery, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, shapeTable, storyArc, systemPrompt, templateCard, type ArcPart, type SceneKind, type StoryArc } from "./prompt.js";
 export { qualityIssues, qualityReport, type QualityIssue } from "./quality.js";
 export { ReplayClient, type ReplayOptions } from "./replay.js";

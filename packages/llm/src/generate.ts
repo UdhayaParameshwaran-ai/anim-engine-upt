@@ -3,7 +3,7 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, scenePrompt, storyArc, systemPrompt } from "./prompt.js";
+import { fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
@@ -64,7 +64,7 @@ export interface CallTrace {
   /** True when the provider reported no usage and it was estimated from characters (~4 per token). */
   estimated?: boolean;
   /** Which system prompt was sent. */
-  system: "outline" | "full";
+  system: "outline" | "full" | "scene";
   systemChars: number;
   /** Messages sent before this call's new user message (conversation context). */
   history: number;
@@ -163,9 +163,17 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       // Earlier scenes that are already written (all of them when scenes run one at a time).
       const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
       const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier) };
-      const reply = await chat(ctx, [first], { kind: "scene", scene: s.id });
-      const text = sceneOnly(clean(reply.text), s.id);
-      const fixed = arrange(await repairLoop(ctx, header, text, [first], s.id, reply.trace));
+      // Only what this scene's kind needs, and the pictures that match its words.
+      const planned = s.text.split("\n")[0]!;
+      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets));
+      const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
+      // The plan's template or grid layout is binding: a scene line that changed it gets it back.
+      const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);
+      if (kept.changed) {
+        opts.onLog?.(`scene ${s.id}: kept the planned ${kept.changed}`);
+        note(ctx, reply.trace, { reason: `kept the planned ${kept.changed}` });
+      }
+      const fixed = arrange(await repairLoop(ctx, header, kept.text, [first], s.id, reply.trace, system));
       written[i] = fixed;
       emit(fixed, i);
       return fixed;
@@ -216,11 +224,11 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
  * maxRepairs times. A scene without errors but with quality problems gets
  * one improvement pass, kept only if it stays error-free and gets better.
  */
-async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[], scene?: string, written?: CallTrace): Promise<string> {
+async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[], scene?: string, written?: CallTrace, system = ctx.system): Promise<string> {
   const ask = async (current: string, report: string, kind: "errors" | "quality", attempt?: number) => {
     ctx.repairs++;
     const meta: CallMeta = { kind: kind === "errors" ? "repair" : "quality", reason: report, ...(scene && { scene }), ...(attempt && { attempt }) };
-    const reply = await chat(ctx, [...history, { role: "assistant", content: current }, { role: "user", content: repairPrompt(current, report, kind) }], meta);
+    const reply = await chat(ctx, [...history, { role: "assistant", content: current }, { role: "user", content: repairPrompt(current, report, kind) }], meta, undefined, system);
     return { text: sceneOnly(clean(reply.text)), trace: reply.trace };
   };
   /** Records how a reply validated on the call that produced it. */
@@ -320,7 +328,7 @@ async function chat(
     ...meta,
     status: "running",
     start: Math.round(t0 - ctx.started),
-    system: system === ctx.system ? "full" : "outline",
+    system: system === ctx.system ? "full" : meta.kind === "outline" ? "outline" : "scene",
     systemChars: system.length,
     history: messages.length - 1,
     prompt: messages[messages.length - 1]!.content,
@@ -426,6 +434,29 @@ export function routeOutline(text: string): { text: string; changes: string[] } 
     scene = -1;
   });
   return { text: lines.join("\n"), changes };
+}
+
+/**
+ * Puts the outline's template= or grid= back on a written scene line that
+ * changed it (the rest of the line, such as variant= or in=, is kept; a
+ * variant of another template is dropped). Returns what was restored.
+ */
+export function keepPlanned(sceneText: string, plannedLine: string): { text: string; changed?: string } {
+  const lines = sceneText.split("\n");
+  const i = lines.findIndex((l) => /^\s*scene\s/.test(l));
+  if (i < 0) return { text: sceneText };
+  const want = /\b(template|grid)=(\S+)/.exec(plannedLine);
+  if (!want) return { text: sceneText };
+  const line = lines[i]!;
+  const has = /\b(template|grid|compose)=(\S+)/.exec(line);
+  if (has && has[1] === want[1] && has[2] === want[2]) return { text: sceneText };
+  let fixed = line.replace(/\s+(template|grid|compose)=\S+/g, "");
+  if (!has || has[1] !== want[1] || has[2] !== want[2]) fixed = fixed.replace(/\s+variant=\S+/, "");
+  // After the id and the quoted title, if any.
+  const at = /^(\s*scene\s+\S+(?:\s+"[^"]*")?)/.exec(fixed);
+  fixed = at ? `${at[1]} ${want[0]}${fixed.slice(at[1]!.length)}` : `${fixed} ${want[0]}`;
+  lines[i] = fixed;
+  return { text: lines.join("\n"), changed: `${want[0]}${has ? ` (it wrote ${has[0]})` : ""}` };
 }
 
 /** Strips markdown fences and any chatter before the script starts. */

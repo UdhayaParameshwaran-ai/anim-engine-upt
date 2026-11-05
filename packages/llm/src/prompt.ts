@@ -12,6 +12,7 @@ import {
   TEMPLATES,
   SHAPES,
   findTemplate,
+  isSetIcon,
   templatesFor,
   COMPOSE_PATTERNS,
   MOTIONS,
@@ -29,24 +30,54 @@ import {
  * against names, synonyms, tags and descriptions. Keeps the prompt small as
  * the library grows; the LLM may only use names it is shown.
  */
-export function retrieveAssets(text: string, assets: AssetLibrary, limit = 40): AssetManifest[] {
-  const words = new Set(text.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []);
+export function retrieveAssets(text: string, assets: AssetLibrary, limit = 30): AssetManifest[] {
+  const words = new Set((text.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []).flatMap((w) => [w, ...w.split("-")]).filter((w) => w.length > 2 && !STOP.has(w)));
   const stem = (w: string) => w.replace(/ves$/, "f").replace(/(ies|es|s)$/, "");
   const stems = new Set([...words].map(stem));
+  const hit = (w: string) => w.length > 2 && (words.has(w) || stems.has(stem(w)));
   const scored = assets.all().map((a) => {
-    const fields = [a.name, ...a.name.split("."), ...a.synonyms];
+    const fields = new Set([a.name, ...a.name.split(/[.-]/), ...a.synonyms]);
     let score = 0;
-    for (const f of fields) if (words.has(f) || stems.has(stem(f))) score += 3;
-    for (const t of a.tags) if (words.has(t) || stems.has(stem(t))) score += 2;
-    for (const w of a.description.toLowerCase().split(/\W+/)) if (w.length > 3 && stems.has(stem(w))) score += 1;
+    for (const f of fields) if (hit(f)) score += 3;
+    for (const t of new Set(a.tags)) if (hit(t)) score += 2;
+    for (const w of new Set(a.description.toLowerCase().split(/\W+/))) if (w.length > 3 && !fields.has(w) && hit(w)) score += 1;
     return { a, score };
   });
-  // Relevant assets first, then the rest of the library, stable by name.
-  return scored
-    .sort((x, y) => y.score - x.score || x.a.name.localeCompare(y.a.name))
-    .slice(0, limit)
-    .map((s) => s.a);
+  // Matches first; then the hand-made art and a set of everyday icons, so a scene always has
+  // something to show (icons of the set that match nothing are left out).
+  // The best matches (at most 3 of one family: house, house-plug, house-plus …), then all hand-made art and the everyday icons.
+  const family = new Map<string, number>();
+  const ranked = scored
+    .filter((s) => s.score > 0 && isSetIcon(s.a))
+    .sort((x, y) => y.score - x.score || x.a.name.length - y.a.name.length || x.a.name.localeCompare(y.a.name))
+    .filter((s) => {
+      const f = s.a.name.split("-")[0]!;
+      family.set(f, (family.get(f) ?? 0) + 1);
+      return family.get(f)! <= 3;
+    })
+    .slice(0, limit);
+  const always = scored.filter((s) => !isSetIcon(s.a) || (EVERYDAY.has(s.a.name) && s.score === 0));
+  return [...ranked, ...always].map((s) => s.a);
 }
+
+/** The words a scene's pictures are searched by: the topic, the scene's title and goal, without the plan's markup. */
+export function pictureQuery(topic: string, planned: string): string {
+  const plan = planned
+    .replace(/\b(template|grid|variant|in|mirror|emphasis|density)=\S+/g, " ")
+    .replace(/#\s*shape:\s*\S+/g, " ")
+    .replace(/\bgoal:/g, " ")
+    .replace(/^\s*scene\s+\S+/gm, " ");
+  return `${topic}\n${plan}`;
+}
+
+/** Words too common to say anything about a scene. */
+const STOP = new Set(
+  "the and for with from that this how what why who when where are was were its into than then them they their there have has had not but you your our can will one two three four five all any each out off over under about between through show shows scene goal uses using use video explain explains explained make makes made shape sequence loop compare many one-to-many many-to-one transform hub collection timeline focus graph page template title steps cycle cards spotlight converge diverge process flow grid together combine combines into".split(" "),
+);
+/** Icons of the set offered to every scene: people, places, money, time, ideas, direction. */
+const EVERYDAY = new Set(
+  "users house building-2 factory globe map-pin coins banknote trending-up trending-down chart-line chart-bar calendar book-open graduation-cap rocket target scale handshake shield lock key search flag star trophy truck shopping-cart phone mail brain sprout mountain waves snowflake moon thermometer microscope atom dna pill stethoscope car plane ship cpu wifi smartphone laptop camera megaphone newspaper wrench hammer recycle battery-charging plug timer hourglass circle-alert thumbs-up thumbs-down".split(" "),
+);
 
 /**
  * The pictures a script may use, as the prompts list them: illustrations
@@ -195,6 +226,131 @@ EXAMPLE
 ${EXAMPLE}`;
 }
 
+/** What one scene call writes: a template diagram, a grid page, or (no plan for it) anything. */
+export type SceneKind = { template: TemplateManifest } | { grid: string } | { free: true };
+
+/** The planned kind of a scene, from its outline line. */
+export function sceneKindOf(line: string | undefined): SceneKind {
+  const tpl = line ? findTemplate(/\btemplate=(\S+)/.exec(line)?.[1] ?? "") : undefined;
+  if (tpl) return { template: tpl };
+  const grid = line ? /\bgrid=(\S+)/.exec(line)?.[1] : undefined;
+  if (grid && findGridLayout(grid)) return { grid };
+  return { free: true };
+}
+
+/**
+ * The system prompt for one scene call: the core of the language, plus only
+ * what this scene's kind needs. A template scene gets no grid section and no
+ * other templates (its card and example come with the request); a grid page
+ * gets the page rules and only the page elements that fit its layout. A
+ * scene with no planned kind gets the whole language. Pictures are the ones
+ * matching the scene's words.
+ */
+export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[]): string {
+  if ("free" in kind) return systemPrompt(assets);
+  const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
+  const grid = "grid" in kind;
+  const flow = !grid && kind.template.name === "flow";
+  const gridOnly = new Set(GRID_ELEMENTS.map((e) => e.kind).filter((k) => !["icon", "asset", "chart", "formula"].includes(k)));
+  const kinds = COMPONENTS.filter((c) => c.kind !== "placeholder" && c.kind !== "footer" && !gridOnly.has(c.kind) && (flow || !["node", "edge"].includes(c.kind)))
+    .map((c) => `  ${(c.named === "required" ? `${c.kind}:<name>` : c.kind).padEnd(13)} ${c.summary}`)
+    .join("\n");
+  const sceneLine = grid ? `scene <id> "Title" grid=<layout> [mirror=true] [in=<transition>]` : `scene <id> "Title" template=${kind.template.name} [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]`;
+  const rules = [
+    "- One idea per sentence, at most 25 words. 2–6 sentences per scene.",
+    "- Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).",
+    "- Show an element before emphasizing or moving it.",
+    "- Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.",
+    "- Keep the scene line's template= or grid= exactly as planned.",
+    ...(grid
+      ? []
+      : flow
+        ? [`- Nodes are joined by edges: e1 = n1 -> n2 "label". Draw an edge after (or together with) its two nodes.`]
+        : [
+            "- Element ids that equal slot names fill those slots; other elements fill items in order.",
+            "- The template draws its own structure, each part appearing with its item (spokes, loop arrows, step numbers and the arrows between steps, card panels, the \"vs\", the timeline axis, leader lines, the arrows into or out of a result). Declare only the items and show them; declare an arrow yourself only to put a label on it.",
+            "- Page elements (stat, bullets, quote, …) never go in a template scene; use ELEMENT KINDS.",
+          ]),
+    "- Use only the pictures listed under PICTURES, exactly as written. For anything else use box \"Label\" or text.",
+    "- Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …",
+    "- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.",
+    "- Cue ids restart at 1 on every \"> \" line, and the actions under a line anchor only on that line's cues.",
+  ];
+  return `You write one scene of Narrascript: a line-based script language for narrated 2D explainer videos.
+Reply with Narrascript only — no prose, no markdown fences.
+
+STATEMENTS (one per line; the first word decides the type)
+${sceneLine}
+<id> = <kind>[:<name>] ["text"] [key=value]   declares an element (hidden until an action shows it)${flow ? `\n<id> = <a> -> <b> ["label"]          edge between two nodes` : ""}
+> Narration with {1}point cues and {2 span cues}.
+<anchor> <verb> <targets> [args] [then <verb> <targets> [args]]
+wait <seconds>
+
+HOW TIMING WORKS
+- Each "> " line is one spoken sentence. Its action lines come right under it, before the next "> " line.
+- {n} = the moment the next word is spoken. {n some words} = while those words are spoken.
+- Cue ids restart at 1 on every "> " line; each action uses a cue of the sentence just above it.
+- Anchors: a cue id, "start" (sentence start) or "end" (after the sentence).
+- Several action lines on one anchor run together; "then" runs the next verb after the previous.
+
+SHAPE OF A SCENE (each sentence, then its own actions)
+scene heat "How water rises" template=steps
+sun = icon:sun "Sunlight"
+sea = icon:waves "Warm sea"
+cloud = icon:cloud "Clouds"
+> The {1}sun warms the {2 surface of the sea}.
+1 pop sun
+2 pop sea
+> The warm water rises and {1}cools into clouds.
+1 pop cloud
+
+RULES
+${rules.join("\n")}
+
+QUALITY
+- Show, don't label: give each thing the picture that means it (icon:sun "Sunlight", icon:gavel "Law"), and a different picture for each thing in a scene. Never reuse one icon for unrelated ideas. Use box only for abstract ideas no listed picture fits.
+- Be factually correct. Use real, well-known figures; if unsure of a number, describe the trend in words instead of inventing data.
+- Never invent quotes or attributions. Quote only real, famous people with words they actually said; otherwise use callout or body.
+
+VERBS
+${verbs}
+ARGS: 0.8 duration · fit (= length of the span cue) · +0.2 delay · /0.15 stagger · until=<cue> · ease=in|out|inout|spring · color=accent|warn|good|cool|muted · write sync=true reveals words as spoken
+
+${grid ? gridPageSection(kind.grid) : `ELEMENT KINDS\n${kinds}`}
+
+PICTURES
+${pictureList(assets)}`;
+}
+
+/** What writing a grid page needs: the page rules, and the elements that fit some slot of its layout, with an example page. */
+function gridPageSection(code: string): string {
+  const layout = findGridLayout(code)!;
+  const rects = slotRects(layout, frameMode("title", false));
+  const fits = GRID_ELEMENTS.filter((e) => rects.some((r) => e.minW <= r.w && e.minH <= r.h));
+  return `PAGE RULES
+- 1 to 4 content elements fill the layout's slots in declaration order (left→right, top→bottom); that order is also the animation order.
+- Optional frame: title = title "…" (header), subtitle = text "…", foot = footer "source or note". No @placements.
+- Each element fills its whole slot; "draw" plays its built-in motion (counts up, bars grow, items enter in turn).
+- One element per slot; at least one primary or flex element; icon, logo, avatar and progress never in the largest slot or alone; max 1 callout, 1 icon, 2 charts; no element kind twice (except stat and charts).
+- Lists use ";" between items and "|" between the fields of an item.
+
+PAGE ELEMENTS that fit this layout (syntax · role · minimum slot · limits)
+${fits.map((e) => `  ${e.syntax.padEnd(46)} ${e.role.padEnd(7)} min ${e.minW}×${e.minH} · ${e.limits}`).join("\n")}
+
+EXAMPLE PAGE
+scene numbers "By the numbers" grid=L3-02
+title = title "Microscopes changed biology"
+chart = chart:bar data=2,40,300 labels=1700,1900,2000
+cells = stat "37T" "cells in a human body"
+tip = callout "Every living thing is made of cells."
+> Each century we found {1}far more kinds of cell.
+start write title
+1 draw chart
+> Your body alone has {1 thirty-seven trillion}.
+1 draw cells
+end draw tip`;
+}
+
 /**
  * Grid scenes (Template Rule Book v2): the frame, the 27 layouts with their
  * slot sizes, and the 34 elements with their minimum sizes and limits.
@@ -220,8 +376,14 @@ ${elements}`;
  * types, themes, the asset names), about a fifth of the full prompt.
  */
 export function outlineSystemPrompt(assets: AssetManifest[]): string {
-  const layouts = GRID_LAYOUTS.map((l) => `${l.code} ${l.name} (${l.slots.length})`).join(" · ");
-  const elements = [...new Set(GRID_ELEMENTS.map((e) => e.kind))].join(" ");
+  // Each layout with its slot sizes, and each page element with the smallest slot it needs:
+  // enough to plan a page whose content fits.
+  const mode = frameMode("title", false);
+  const layouts = GRID_LAYOUTS.map((l) => `  ${l.code} ${l.name}: ${slotRects(l, mode).map((r) => `${r.w}×${r.h}`).join(" · ")}`).join("\n");
+  const seen = new Set<string>();
+  const elements = GRID_ELEMENTS.filter((e) => !seen.has(e.kind) && seen.add(e.kind))
+    .map((e) => `${e.kind} ${e.minW}×${e.minH}`)
+    .join(" · ");
   return `You plan narrated 2D explainer videos written in Narrascript, a line-based script language.
 Reply with Narrascript lines only — no prose, no markdown fences.
 
@@ -239,8 +401,10 @@ ${styleSection()}
 SCENE SHAPES → TEMPLATES (diagrams). First decide the shape of what the scene explains, then take a template of that shape.
 ${shapeTable()}
 
-GRID LAYOUTS (editorial pages; number of content slots in brackets; elements: ${elements})
+GRID LAYOUTS (editorial pages: each slot's size; one element per slot)
 ${layouts}
+PAGE ELEMENTS (the smallest slot each needs): ${elements}
+Plan a page only when its content fits the slots: one element per slot, each slot at least its element's size, at least one chart, stat, body, bullets, quote, table or similar, and at most one icon.
 
 PICTURES: ${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons of everyday things (people, places, money, law, science, nature, weather, technology, transport, food, tools). The scene writer picks them; plan scenes around things that can be pictured.
 
@@ -316,7 +480,7 @@ End with ${arc.close.ask}.
 
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
-- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and which visuals it uses>"
+- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"
 No elements, narration or actions yet.`;
 }
 
@@ -382,6 +546,14 @@ function sceneLineId(line: string): string | undefined {
   return /^\s*scene\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line)?.[1];
 }
 
+/** How much a template holds, for planning: " [2–5 items + result]". */
+function capacity(t: TemplateManifest): string {
+  const slots = t.slots.filter((s) => s.required && s.name !== "title").map((s) => s.name);
+  const items = t.items ? `${t.items.min}–${t.items.max} items` : t.graph ? `up to ${t.graph.maxNodes} nodes` : "";
+  const parts = [items, ...slots.map((s) => `${s}`)].filter(Boolean);
+  return parts.length ? ` [${parts.join(" + ")}]` : "";
+}
+
 function itemsOf(t: TemplateManifest): string {
   return t.items ? ` items ${t.items.min}-${t.items.max}` : t.graph ? ` nodes ≤${t.graph.maxNodes} + edges` : "";
 }
@@ -396,8 +568,8 @@ export function shapeTable(): string {
     .map((shape) => {
       const tpls = templatesFor(shape);
       if (!tpls.length) return "";
-      if (tpls.length === 1) return `  ${shape.padEnd(12)} ${SHAPES[shape]} → template=${tpls[0]!.name} (not if ${tpls[0]!.guide.avoidWhen})`;
-      return [`  ${shape.padEnd(12)} ${SHAPES[shape]}:`, ...tpls.map((t) => `    → template=${t.name}: ${t.guide.useWhen} (not if ${t.guide.avoidWhen})`)].join("\n");
+      if (tpls.length === 1) return `  ${shape.padEnd(12)} ${SHAPES[shape]} → template=${tpls[0]!.name}${capacity(tpls[0]!)} (not if ${tpls[0]!.guide.avoidWhen})`;
+      return [`  ${shape.padEnd(12)} ${SHAPES[shape]}:`, ...tpls.map((t) => `    → template=${t.name}${capacity(t)}: ${t.guide.useWhen} (not if ${t.guide.avoidWhen})`)].join("\n");
     })
     .filter(Boolean)
     .join("\n");

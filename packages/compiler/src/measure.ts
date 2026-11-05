@@ -62,7 +62,8 @@ export function measure(el: ElementDecl, assets: AssetLibrary): Size {
     case "chart":
       return { w: 760, h: 440 };
     case "icon":
-      return { w: Math.max(200, label?.w ?? 0), h: 200 + labelH, grow: 2.2, ...(label && { label }) };
+      // The width is the picture's: a long label wraps within the cell instead of shrinking the picture.
+      return { w: 200, h: 200 + labelH, grow: 2.2, ...(label && { label }) };
     case "asset": {
       const aspect = (el.name && assets.resolve("asset", el.name)?.manifest.aspect) || 1;
       return { w: 440, h: Math.round(440 / aspect) + labelH, grow: 1.5, ...(label && { label }) };
