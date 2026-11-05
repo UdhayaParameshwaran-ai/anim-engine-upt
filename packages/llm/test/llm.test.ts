@@ -5,8 +5,11 @@ import { Director, type HistoryEntry } from "@anim/director";
 import { AssetLibrary, TEMPLATES } from "@anim/registry";
 import { describe, expect, it } from "vitest";
 import {
+  checkPlan,
   ClaudeCodeClient,
   clean,
+  narrationDrift,
+  parseBriefs,
   clientFromEnv,
   flatten,
   FallbackClient,
@@ -65,7 +68,8 @@ class ScriptedLlm implements LlmClient {
   }
 }
 
-const OUTLINE = '```\nvideo 1 "Plants"\ntheme paper\nscene need "Needs" template=steps\n# goal: what plants need\nscene leaf "Leaf" template=spotlight\n# goal: inside the leaf\n```';
+const OUTLINE =
+  '```\nvideo 1 "Plants"\ntheme paper\nscene need "Needs" template=steps\n# goal: what plants need\n# items: Light | Water\n> Plants need light and water.\n# next: where it happens\nscene leaf "Leaf" template=spotlight\n# goal: inside the leaf\n# items: Leaf\n> Look closely at the leaf.\n```';
 const NEED_OK = `scene need "Needs" template=steps
 sun = icon:sun "Light"
 water = icon:droplet "Water"
@@ -392,15 +396,29 @@ describe("generation fixes from the traced run", () => {
     await generate("plants", { client: llm });
     const [outline, scene] = llm.requests;
     expect(outline!.messages[0]!.content).toContain("PLANNING RULES");
-    // The shape table (how to choose a template) is the bulk of it; still well under half the full language.
-    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 2.2);
+    // The shape table and the brief format are the bulk of it; still about half the full language.
+    expect(outline!.messages[0]!.content.length).toBeLessThan(scene!.messages[0]!.content.length / 1.8);
   });
 
-  it("tells later scenes what earlier scenes already said", async () => {
-    const llm = new ScriptedLlm(plain);
-    await generate("plants", { client: { name: "seq", concurrency: 1, chat: (r) => llm.chat(r), stream: (r, d) => llm.stream(r, d) } });
+  it("gives every scene its planned narration, the same whatever finishes first", async () => {
+    const prompts = async (concurrency: number) => {
+      const llm = new ScriptedLlm(plain);
+      await generate("plants", { client: { name: "c", concurrency, chat: (r) => llm.chat(r), stream: (r, d) => llm.stream(r, d) } });
+      return llm.requests.slice(1).map((q) => q.messages.at(-1)!.content);
+    };
+    const one = await prompts(1);
+    expect(one).toEqual(await prompts(3));
+    const leaf = one.find((p) => p.includes('Write scene "leaf"'))!;
+    expect(leaf).toContain("THIS SCENE'S NARRATION (from the plan)");
+    expect(leaf).toContain("> Look closely at the leaf.\nShow these items, in this order: Leaf");
+    expect(leaf).not.toContain("Already narrated");
+  });
+
+  it("falls back to earlier scenes' narration when the plan has none", async () => {
+    const bare = 'video 1 "Plants"\nscene need "Needs" template=steps\nscene leaf "Leaf" template=spotlight';
+    const llm = new ScriptedLlm((last) => (last.startsWith("Plan") ? bare : last.includes('"need"') ? NEED_OK : LEAF_OK));
+    await generate("plants", { client: { name: "seq", concurrency: 1, chat: (r) => llm.chat(r), stream: (r, d) => llm.stream(r, d) }, replans: 0 });
     const second = llm.requests.find((q) => q.messages.at(-1)!.content.includes('Write scene "leaf"'))!;
-    expect(second.messages.at(-1)!.content).toContain("Already narrated in earlier scenes");
     expect(second.messages.at(-1)!.content).toContain("need: Plants need light and water.");
   });
 
@@ -520,14 +538,106 @@ describe("local fixes", () => {
 sun = icon:sun "Light"
 water = icon:droplet "Water"
 a1 = arrow sun->water
-> Plants need light and then they need water.
+> Plants need light and water.
 1 pop sun
 2 draw a1 then pop water`;
     const llm = new ScriptedLlm((last) => (last.startsWith("Plan a narrated") ? OUTLINE : last.includes('Write scene "need"') ? UNMARKED : last.includes('Write scene "leaf"') ? LEAF_OK : "x"));
     const r = await generate("plants", { client: llm });
     expect(r.ok).toBe(true);
     expect(r.repairs).toBe(0);
-    expect(r.script).toMatch(/> Plants need .*\{1\}.*\{2\}/);
+    expect(r.script).toMatch(/> Plants .*\{1\}.*\{2\}/);
+  });
+});
+
+describe("scene briefs", () => {
+  const PLAN = [
+    'video 1 "Plants"',
+    'scene inputs "Needs" template=converge',
+    "# shape: many-to-one · goal: three inputs make food",
+    "# items: Sunlight | Water | Carbon dioxide | Glucose",
+    "> A plant needs {1}three things.",
+    "> Together they become glucose.",
+    "# next: where it happens",
+    'scene leaf "Leaf" template=spotlight',
+    "# shape: focus · goal: the leaf",
+    "# items: Leaf | Stomata",
+    "> The leaf is the kitchen.",
+  ].join("\n");
+
+  it("reads what each scene shows and says from the outline", () => {
+    const [inputs, leaf] = parseBriefs(PLAN);
+    expect(inputs).toMatchObject({
+      id: "inputs",
+      template: "converge",
+      shape: "many-to-one",
+      goal: "three inputs make food",
+      items: ["Sunlight", "Water", "Carbon dioxide", "Glucose"],
+      narration: ["A plant needs three things.", "Together they become glucose."],
+      next: "where it happens",
+    });
+    expect(leaf).toMatchObject({ id: "leaf", items: ["Leaf", "Stomata"], narration: ["The leaf is the kitchen."] });
+  });
+
+  it("finds plan problems: no narration, too many items, things shown or said twice, a late title", () => {
+    expect(checkPlan(parseBriefs(PLAN), { min: 2, max: 4 })).toEqual([]);
+    const bad = [
+      'scene intro "Plants" template=title',
+      "# items: Plants | Water",
+      "> What plants need.",
+      'scene a "A" template=converge',
+      "# items: Sun | Water | Air | Soil | Heat | Wind | Rain | Glucose",
+      "> Plants need things.",
+      'scene b "B" template=steps',
+      "# items: Waters | Light",
+      "> Plants need things.",
+      'scene c "C" template=title',
+      'scene g "G" grid=L2-01',
+      "# items: Fact | Number | Quote",
+      "> Facts.",
+      'scene d "D" template=hub',
+      "# items: Center | Sun | Water",
+      "> Done.",
+    ].join("\n");
+    const problems = checkPlan(parseBriefs(bad), { min: 2, max: 5 });
+    expect(problems).toEqual([
+      "plan 2–5 scenes, not 6",
+      "scene a: 8 items, but template=converge holds at most 6; drop some or split the scene",
+      expect.stringMatching(/^scene c: no narration/),
+      "scene c: template=title is only for the first scene; give it the template of its shape",
+      "scene g: 3 items, but grid=L2-01 has 2 slot(s); pick a layout with more slots or show fewer things",
+      // The opening may preview "Water" and the last scene recall it; a and b may not share it.
+      '"Waters" is shown in both a and b; show it once',
+      '"Plants need things." is said in both a and b',
+    ]);
+  });
+
+  it("replans once when the plan has problems, and keeps the better plan", async () => {
+    const thin = 'video 1 "Plants"\nscene need "Needs" template=steps\nscene leaf "Leaf" template=spotlight';
+    const llm = new ScriptedLlm((last) => (last.startsWith("Plan") ? thin : last.startsWith("This plan has problems") ? OUTLINE : last.includes('"need"') ? NEED_OK : LEAF_OK));
+    const r = await generate("plants", { client: llm });
+    expect(r.trace.map((c) => [c.kind, c.attempt])).toEqual([
+      ["outline", undefined],
+      ["outline", 1],
+      ["scene", undefined],
+      ["scene", undefined],
+    ]);
+    expect(r.trace[1]!.prompt).toContain("- scene need: no narration");
+    expect(r.trace[1]!.verdict).toMatch(/^kept: 2 scenes/);
+    expect(llm.requests[2]!.messages.at(-1)!.content).toContain("> Plants need light and water.");
+  });
+
+  it("asks a scene that rewrote its planned narration to speak the plan's words", async () => {
+    const reworded = NEED_OK.replace("> Plants need {1}light and {2}water.", "> Every green thing on Earth depends on {1}sunshine and {2}rain.");
+    const llm = new ScriptedLlm((last) =>
+      last.startsWith("Plan") ? OUTLINE : last.startsWith("This scene is valid") ? NEED_OK : last.includes('"need"') ? reworded : LEAF_OK,
+    );
+    const r = await generate("plants", { client: llm });
+    const ask = llm.requests.find((q) => q.messages.at(-1)!.content.startsWith("This scene is valid"))!.messages.at(-1)!.content;
+    expect(ask).toContain("Q4 quality: the narration differs from the plan");
+    expect(ask).toContain("> Plants need light and water.");
+    expect(r.script).toContain("Plants need {1}light and {2}water.");
+    // Cue markers and punctuation don't count as changes.
+    expect(narrationDrift(parseBriefs(OUTLINE.replace(/```/g, ""))[0], NEED_OK)).toBeUndefined();
   });
 });
 

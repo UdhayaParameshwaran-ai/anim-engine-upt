@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3";
+  code: "Q1" | "Q2" | "Q3" | "Q4";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;

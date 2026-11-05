@@ -23,6 +23,7 @@ import {
   type Shape,
   type TemplateManifest,
 } from "@anim/registry";
+import { parseBriefs } from "./brief.js";
 
 /**
  * Picks the assets most relevant to a topic: words of the text matched
@@ -213,8 +214,20 @@ theme <look>
 motion <personality>
 scene <id> "Title" template=<template>      a diagram
 scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true to some)
-# shape: <shape> · goal: <one line>          one comment line under each scene line; grid pages use shape: page
+# shape: <shape> · goal: <one line>          under each scene line; grid pages use shape: page
+# items: <thing> | <thing> | …               what the scene shows, in order: short labels (1–4 words)
+> <sentence>                                 2–5 lines: what the narrator says in this scene, in order
+# next: <how the next scene follows on>      one line (not after the last scene)
 <id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
+
+EXAMPLE SCENE
+scene inputs "What a plant needs" template=converge
+# shape: many-to-one · goal: three inputs combine into the plant's food
+# items: Sunlight | Water | Carbon dioxide | Glucose
+> A plant needs three things to make its food.
+> Sunlight falls on the leaves, water rises from the roots, and carbon dioxide drifts in from the air.
+> Together they become glucose, the plant's fuel.
+# next: where in the leaf does this happen?
 
 ${styleSection()}
 
@@ -228,7 +241,9 @@ ASSETS AVAILABLE: ${assets.map((a) => `${a.kind}:${a.name}`).join(" ")}
 
 PLANNING RULES
 - Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
-- Every scene brings new items: never show the same things in two scenes (say it once, with the best-fitting template).
+- Write the whole narration here, as one story: each scene picks up where the previous one ended. Scenes are written from this plan alone, so what you write is what is said.
+- Narration: plain sentences (no {cues}, no markup), one idea each, at most 25 words; 2–5 per scene (about 6–15 seconds). Never say the same thing twice.
+- Items are what the scene shows, and its narration names them. Never list the same item in two scenes (show it once, with the best-fitting template); only the last scene may recall earlier ones. Item counts must fit the template.
 - Diagrams: label the scene's shape, then write the template shown after → for that shape (template=<template name>, never the shape name). Check its "not if".
 - Only the first scene uses template=title. End with a takeaway: a grid page (quote, bullets or a stat) or a diagram that ties the story together.
 - Grid pages (shape: page) are for numbers, quotes, bullet text, charts and tables, with at most one icon. Several pictures of equal weight → template=cards.
@@ -249,33 +264,52 @@ ${motions}
 Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS.filter((t) => t !== "auto").join("|")}`;
 }
 
-/** First pass: plan the scenes without writing narration. */
+/** First pass: plan the scenes and write the whole narration, without elements or actions. */
 export function outlinePrompt(topic: string, scenes: { min: number; max: number }): string {
   return `Plan a narrated explainer video about:
 ${topic}
 
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
-- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and which visuals it uses>"
-No elements, narration or actions yet.`;
+- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by:
+  "# shape: <shape> · goal: <what this scene explains>"
+  "# items: <what it shows> | …"
+  its narration, one "> " sentence per line
+  "# next: <how the next scene follows on>" (except after the last scene)
+No element declarations, cues or actions yet.`;
 }
 
 /**
- * Second pass: one complete scene, written against the whole outline and,
- * when earlier scenes are already written, what they say.
+ * Second pass: one complete scene from its brief in the outline. The plan
+ * already holds every scene's narration, so scenes need nothing from each
+ * other and can be written in parallel. `earlier` (narration of scenes
+ * already written) is only for outlines without narration.
  */
 export function scenePrompt(outline: string, sceneId: string, earlier = ""): string {
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
-  const line = outline.split("\n").find((l) => sceneLineId(l) === sceneId);
+  const brief = parseBriefs(outline).find((b) => b.id === sceneId);
+  const line = brief?.line;
   const tpl = line ? findTemplate(/\btemplate=(\S+)/.exec(line)?.[1] ?? "") : undefined;
   const grid = line ? gridCard(/\bgrid=(\S+)/.exec(line)?.[1] ?? "") : undefined;
   const card = tpl ? `\n\n${templateCard(tpl)}` : grid ? `\n\n${grid}` : "";
+  const planned = brief?.narration.length
+    ? `\n\nTHIS SCENE'S NARRATION (from the plan): speak these sentences word for word, in this order, one "> " line each. Only add {n} cues to them; don't reword, add or drop sentences.
+${brief.narration.map((s) => `> ${s}`).join("\n")}${brief.items.length ? `\nShow these items, in this order: ${brief.items.join(" | ")}` : ""}`
+    : "";
   return `Video outline:
-${outline}${said}${card}
+${outline}${said}${card}${planned}
 
 Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
 Cover only this scene's goal; other scenes cover the rest.
 Output only this scene, starting with its "scene" line.`;
+}
+
+/** Replan: the plan's problems (see checkPlan), for the planner to fix in one go. */
+export function replanPrompt(problems: string[]): string {
+  return `This plan has problems:
+${problems.map((p) => `- ${p}`).join("\n")}
+
+Fix them and reply with the whole corrected plan, in the same format.`;
 }
 
 /** The narration of written scenes, without cues: the context later scenes need. */
@@ -318,9 +352,6 @@ ${kind === "errors" ? "Errors" : "Problems"}:
 ${diagnostics}`;
 }
 
-function sceneLineId(line: string): string | undefined {
-  return /^\s*scene\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line)?.[1];
-}
 
 function itemsOf(t: TemplateManifest): string {
   return t.items ? ` items ${t.items.min}-${t.items.max}` : t.graph ? ` nodes ≤${t.graph.maxNodes} + edges` : "";

@@ -3,7 +3,8 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
+import { checkPlan, narrationDrift, parseBriefs, type SceneBrief } from "./brief.js";
+import { fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, replanPrompt, repairPrompt, retrieveAssets, scenePrompt, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
@@ -16,6 +17,8 @@ export interface GenerateOptions {
   maxRepairs?: number;
   /** Scenes written/repaired at once; default the client's limit, else 3. */
   concurrency?: number;
+  /** Outline replans when the plan has problems (see checkPlan); default 1, 0 turns it off. */
+  replans?: number;
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
   qualityRepairs?: boolean;
   /**
@@ -140,27 +143,48 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
   let scenes: string[];
   if ((opts.mode ?? "outline") === "outline") {
     // Planning only needs scene types and asset names, not the whole language.
-    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant));
-    const routed = routeOutline(tidyOutline(clean(planned.text)));
-    const outline = routed.text;
-    if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
-    const plan = split(outline);
+    const outlineSystem = outlineSystemPrompt(relevant);
+    const ask: ChatMessage = { role: "user", content: outlinePrompt(topic, range) };
+    const planned = await chat(ctx, [ask], { kind: "outline" }, undefined, outlineSystem);
+    let { outline, plan, briefs, problems, changes } = readPlan(planned.text, range);
     if (!plan.scenes.length) {
       note(ctx, planned.trace, { verdict: "no scenes; falling back to a single pass" });
       opts.onLog?.("outline had no scenes; falling back to a single pass");
       return run(topic, { ...opts, mode: "single" }, ctx);
     }
-    note(ctx, planned.trace, { verdict: `${plan.scenes.length} scenes: ${plan.scenes.map((s) => s.id).join(", ")}${routed.changes.length ? ` · routed ${routed.changes.join("; ")}` : ""}` });
+    const verdict = (p: typeof plan, routed: string[], left: string[]) =>
+      `${p.scenes.length} scenes: ${p.scenes.map((s) => s.id).join(", ")}${routed.length ? ` · routed ${routed.join("; ")}` : ""}${left.length ? ` · ${left.length} plan problem(s)` : ""}`;
+    note(ctx, planned.trace, { verdict: verdict(plan, changes, problems), ...(problems.length && { reason: problems.join("\n") }) });
+    // A plan problem fixed once here saves fixing it in every scene; the replan is kept only if it is better.
+    if (problems.length && (opts.replans ?? 1) > 0) {
+      opts.onLog?.(`replanning:\n${problems.join("\n")}`);
+      const again = await chat(
+        ctx,
+        [ask, { role: "assistant", content: planned.text }, { role: "user", content: replanPrompt(problems) }],
+        { kind: "outline", attempt: 1, reason: problems.join("\n") },
+        undefined,
+        outlineSystem,
+      );
+      const better = readPlan(again.text, range);
+      if (better.plan.scenes.length && better.problems.length < problems.length) {
+        ({ outline, plan, briefs, problems, changes } = better);
+        note(ctx, again.trace, { verdict: `kept: ${verdict(plan, changes, problems)}` });
+      } else note(ctx, again.trace, { verdict: `rejected: ${better.problems.length} problem(s), was ${problems.length}` });
+    }
+    if (changes.length) opts.onLog?.(`routed by shape: ${changes.join("; ")}`);
     header = direct(ensureHeader(plan.header, topic));
     opts.onLog?.(`outline: ${plan.scenes.map((s) => s.id).join(", ")}`);
     const written: string[] = [];
+    const narrated = briefs.some((b) => b.narration.length);
     scenes = await pool(plan.scenes, opts.concurrency ?? opts.client.concurrency ?? 3, async (s, i) => {
-      // Earlier scenes that are already written (all of them when scenes run one at a time).
-      const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
+      // The plan carries every scene's narration, so a scene needs nothing from the others.
+      // An outline without narration falls back to what earlier scenes have said so far.
+      const earlier = narrated ? "" : narrationOf(written.slice(0, i).filter((x) => x !== undefined));
       const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier) };
       const reply = await chat(ctx, [first], { kind: "scene", scene: s.id });
       const text = sceneOnly(clean(reply.text), s.id);
-      const fixed = arrange(await repairLoop(ctx, header, text, [first], s.id, reply.trace));
+      const brief = briefs.find((b) => b.id === s.id);
+      const fixed = arrange(await repairLoop(ctx, header, text, [first], s.id, reply.trace, brief));
       written[i] = fixed;
       emit(fixed, i);
       return fixed;
@@ -211,7 +235,12 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
  * maxRepairs times. A scene without errors but with quality problems gets
  * one improvement pass, kept only if it stays error-free and gets better.
  */
-async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[], scene?: string, written?: CallTrace): Promise<string> {
+async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[], scene?: string, written?: CallTrace, brief?: SceneBrief): Promise<string> {
+  // Quality includes keeping to the plan: a scene that rewrites its planned narration breaks the story.
+  const issuesOf = (t: string) => {
+    const drift = narrationDrift(brief, t);
+    return drift ? [...qualityIssues(header, t), drift] : qualityIssues(header, t);
+  };
   const ask = async (current: string, report: string, kind: "errors" | "quality", attempt?: number) => {
     ctx.repairs++;
     const meta: CallMeta = { kind: kind === "errors" ? "repair" : "quality", reason: report, ...(scene && { scene }), ...(attempt && { attempt }) };
@@ -246,7 +275,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
     judge(last, errors, 0, "still has errors → auto-fix");
     return current;
   }
-  const issues = qualityIssues(header, current);
+  const issues = issuesOf(current);
   if (!qualityOn || !issues.length) {
     judge(last, errors, issues.length, "valid");
     return current;
@@ -256,7 +285,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
   ctx.opts.onLog?.(`improving scene:\n${report}`);
   const better = await ask(current, report, "quality");
   const after = checkScene(header, better.text);
-  const left = qualityIssues(header, better.text).length;
+  const left = issuesOf(better.text).length;
   if (after.errors || left >= issues.length) {
     judge(better.trace, after, left, after.errors ? "rejected: introduced errors" : "rejected: no better");
     ctx.opts.onLog?.("the improvement didn't help; keeping the previous version");
@@ -421,6 +450,13 @@ export function routeOutline(text: string): { text: string; changes: string[] } 
     scene = -1;
   });
   return { text: lines.join("\n"), changes };
+}
+
+/** An outline reply, tidied and routed, with its scene briefs and their problems. */
+function readPlan(reply: string, range: { min: number; max: number }) {
+  const routed = routeOutline(tidyOutline(clean(reply)));
+  const briefs = parseBriefs(routed.text);
+  return { outline: routed.text, plan: split(routed.text), briefs, problems: checkPlan(briefs, range), changes: routed.changes };
 }
 
 /** Strips markdown fences and any chatter before the script starts. */
