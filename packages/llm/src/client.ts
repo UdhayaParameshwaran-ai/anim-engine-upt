@@ -31,6 +31,12 @@ export interface ChatResult {
   provider: string;
   model: string;
   usage?: Usage;
+  /**
+   * Exactly what went over the wire, for inspection: the request as the
+   * provider received it (HTTP body without credentials, or the CLI's
+   * arguments and stdin) and the provider's raw final response.
+   */
+  wire?: { request: string; response: string };
 }
 
 export interface LlmClient {
@@ -150,14 +156,15 @@ export class OpenAICompatibleClient implements LlmClient {
   chat(req: ChatRequest): Promise<ChatResult> {
     return this.withRetries(async () => {
       const res = await this.post(req, false);
-      const body = (await res.json()) as {
+      const raw = await res.text();
+      const body = JSON.parse(raw) as {
         choices?: { message?: { content?: string } }[];
         model?: string;
         usage?: RawUsage;
       };
       const text = body.choices?.[0]?.message?.content;
       if (typeof text !== "string") throw new LlmError(`${this.opts.name}: response has no message content`);
-      return { text, provider: this.opts.name, model: body.model ?? this.opts.model, ...(body.usage && { usage: usage(body.usage) }) };
+      return { text, provider: this.opts.name, model: body.model ?? this.opts.model, ...(body.usage && { usage: usage(body.usage) }), wire: { request: this.wireRequest(req, false), response: raw } };
     });
   }
 
@@ -168,7 +175,9 @@ export class OpenAICompatibleClient implements LlmClient {
       let text = "";
       let model = this.opts.model;
       let use: Usage | undefined;
+      let last = "";
       for await (const event of sse(res.body)) {
+        if (event !== "[DONE]") last = event;
         if (event === "[DONE]") break;
         const chunk = JSON.parse(event) as {
           choices?: { delta?: { content?: string } }[];
@@ -187,28 +196,37 @@ export class OpenAICompatibleClient implements LlmClient {
         const u = chunk.usage ?? chunk.x_groq?.usage;
         if (u) use = usage(u);
       }
-      return { text, provider: this.opts.name, model, ...(use && { usage: use }) };
+      return { text, provider: this.opts.name, model, ...(use && { usage: use }), wire: { request: this.wireRequest(req, true), response: `(streamed; the text above is the concatenated deltas)\nlast event: ${last}` } };
     });
+  }
+
+  /** The JSON body this client posts for `req` (no credentials: they go in headers). */
+  private body(req: ChatRequest, stream: boolean): Record<string, unknown> {
+    // Reasoning models (gpt-5*, o1/o3/o4…) only accept the default temperature and use max_completion_tokens.
+    const reasoning = isReasoningModel(this.opts.model);
+    return {
+      model: this.opts.model,
+      messages: req.messages,
+      ...(!reasoning && { temperature: req.temperature ?? 0.4 }),
+      ...(req.maxTokens && { [reasoning ? "max_completion_tokens" : "max_tokens"]: req.maxTokens }),
+      stream,
+      // Without this most providers send no token counts while streaming.
+      ...(stream && { stream_options: { include_usage: true } }),
+    };
+  }
+
+  private wireRequest(req: ChatRequest, stream: boolean): string {
+    return `POST ${this.opts.baseUrl}/chat/completions\n\n${JSON.stringify(this.body(req, stream), null, 2)}`;
   }
 
   private async post(req: ChatRequest, stream: boolean): Promise<Response> {
     let res: Response;
-    // Reasoning models (gpt-5*, o1/o3/o4…) only accept the default temperature and use max_completion_tokens.
-    const reasoning = isReasoningModel(this.opts.model);
     const auth: Record<string, string> = this.opts.auth === "api-key" ? { "api-key": this.opts.apiKey } : { authorization: `Bearer ${this.opts.apiKey}` };
     try {
       res = await this.fetchFn(`${this.opts.baseUrl}/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json", ...auth, ...this.opts.headers },
-        body: JSON.stringify({
-          model: this.opts.model,
-          messages: req.messages,
-          ...(!reasoning && { temperature: req.temperature ?? 0.4 }),
-          ...(req.maxTokens && { [reasoning ? "max_completion_tokens" : "max_tokens"]: req.maxTokens }),
-          stream,
-          // Without this most providers send no token counts while streaming.
-          ...(stream && { stream_options: { include_usage: true } }),
-        }),
+        body: JSON.stringify(this.body(req, stream)),
         signal: AbortSignal.timeout(this.opts.timeoutMs ?? 180_000),
       });
     } catch (e) {

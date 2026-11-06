@@ -68,6 +68,10 @@ export interface CallTrace {
   /** Which system prompt was sent. */
   system: "outline" | "full" | "scene";
   systemChars: number;
+  /** The whole input: the system prompt and every message, in order (earlier turns resent by repairs included). */
+  request?: { system: string; messages: ChatMessage[] };
+  /** Exactly what the provider received and returned (see ChatResult.wire). */
+  wire?: { request: string; response: string };
   /** Messages sent before this call's new user message (conversation context). */
   history: number;
   /** This call's new user message. */
@@ -334,6 +338,7 @@ async function chat(
     systemChars: system.length,
     history: messages.length - 1,
     prompt: messages[messages.length - 1]!.content,
+    request: { system, messages: messages.map((m) => ({ ...m })) },
   };
   ctx.trace.push(trace);
   ctx.opts.onCall?.({ ...trace });
@@ -363,6 +368,7 @@ async function chat(
     usage,
     ...(!result.usage && { estimated: true }),
     reply: result.text,
+    ...(result.wire && { wire: result.wire }),
   });
   return { text: result.text, trace };
 }

@@ -113,7 +113,12 @@ describe("OpenAI-compatible client", () => {
     expect(headers.authorization).toBe("Bearer sk-test");
     expect(headers["X-Title"]).toBe("anim");
     expect(JSON.parse(String(seen!.init.body))).toMatchObject({ model: "some/model", temperature: 0.2, stream: false, messages: [{ role: "user", content: "hi" }] });
-    expect(r).toEqual({ text: "video 1", provider: "openrouter", model: "some/model", usage: { prompt: 12, completion: 3 } });
+    expect(r).toMatchObject({ text: "video 1", provider: "openrouter", model: "some/model", usage: { prompt: 12, completion: 3 } });
+    // What went over the wire, for the calls panel: the body as posted (no credentials) and the raw reply.
+    expect(r.wire!.request).toContain("POST https://openrouter.ai/api/v1/chat/completions");
+    expect(r.wire!.request).toContain('"model": "some/model"');
+    expect(r.wire!.request).not.toContain("sk-test");
+    expect(JSON.parse(r.wire!.response).usage).toEqual({ prompt_tokens: 12, completion_tokens: 3 });
   });
 
   it("streams server-sent events split across chunks", async () => {
@@ -595,7 +600,12 @@ describe("claude (subscription via the Claude Code CLI)", () => {
     const parts: string[] = [];
     const r = await client.stream({ messages: [{ role: "system", content: "SYS" }, { role: "user", content: "write" }] }, (d) => parts.push(d));
     expect(parts).toEqual(["scene ", "a"]);
-    expect(r).toEqual({ text: "scene a", provider: "claude", model: "claude-opus-5-5", usage: { prompt: 1010, completion: 5, cached: 900 } });
+    expect(r).toMatchObject({ text: "scene a", provider: "claude", model: "claude-opus-5-5", usage: { prompt: 1010, completion: 5, cached: 900 } });
+    // The CLI call as made (arguments, system prompt and stdin) and its raw result event.
+    expect(r.wire!.request).toMatch(/^claude -p --output-format stream-json/);
+    expect(r.wire!.request).toContain("=== --system-prompt ===");
+    expect(r.wire!.request).toContain("=== stdin ===");
+    expect(JSON.parse(r.wire!.response).type).toBe("result");
     expect(rec.args).toEqual(expect.arrayContaining(["-p", "--model", "claude-opus-5-5", "--tools", "", "--system-prompt", "SYS"]));
     expect(rec.input).toBe("write");
     expect(rec.env?.ANTHROPIC_API_KEY).toBeUndefined();

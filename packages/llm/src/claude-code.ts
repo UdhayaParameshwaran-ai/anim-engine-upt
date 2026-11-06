@@ -137,7 +137,9 @@ export class ClaudeCodeClient implements LlmClient {
           ...(cached && { cached }),
         };
         const model = Object.keys(result.modelUsage ?? {})[0] ?? this.opts.model;
-        resolve({ text: text || result.result || "", provider: "claude", model, usage });
+        // Exactly what the CLI got: its arguments (the system prompt among them) and stdin; and its final result event.
+        const request = `claude ${args.map((a, i) => (args[i - 1] === "--system-prompt" ? "<system prompt below>" : /\s/.test(a) || !a ? JSON.stringify(a) : a)).join(" ")}\n\n=== --system-prompt ===\n${args[args.indexOf("--system-prompt") + 1]}\n\n=== stdin ===\n${input}`;
+        resolve({ text: text || result.result || "", provider: "claude", model, usage, wire: { request, response: JSON.stringify(result, null, 2) } });
       });
       child.stdin.end(input, "utf8");
     });

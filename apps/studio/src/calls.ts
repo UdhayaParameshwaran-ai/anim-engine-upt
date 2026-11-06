@@ -19,6 +19,8 @@ export interface CallTrace {
   history: number;
   prompt: string;
   reply?: string;
+  request?: { system: string; messages: { role: string; content: string }[] };
+  wire?: { request: string; response: string };
   reason?: string;
   check?: { errors: number; warnings: number; quality: number };
   verdict?: string;
@@ -164,8 +166,16 @@ function detail(c: CallTrace): string {
     `<p class="facts">${facts.join(" · ")}</p>` +
     (c.error ? `<pre class="bad">${escape(c.error)}</pre>` : "") +
     (c.reason ? `<details open><summary>Why this call (sent to the model)</summary><pre>${escape(c.reason)}</pre></details>` : "") +
-    `<details><summary>Prompt (${tokens(Math.ceil(c.prompt.length / 4))} tok)</summary><pre>${escape(c.prompt)}</pre></details>` +
-    (c.reply !== undefined ? `<details open><summary>Reply</summary><pre>${escape(c.reply)}</pre></details>` : "") +
+    // The whole input, in the order the model reads it.
+    (c.request
+      ? `<details class="input"><summary>Full input: system prompt + ${c.request.messages.length} message${c.request.messages.length === 1 ? "" : "s"} (${tokens(Math.ceil((c.request.system.length + c.request.messages.reduce((n, m) => n + m.content.length, 0)) / 4))} tok)</summary>` +
+        `<details><summary>system (${tokens(Math.ceil(c.request.system.length / 4))} tok)</summary><pre>${escape(c.request.system)}</pre></details>` +
+        c.request.messages.map((m, i) => `<details${i === c.request!.messages.length - 1 ? " open" : ""}><summary>${escape(m.role)} ${i + 1} (${tokens(Math.ceil(m.content.length / 4))} tok)${i === c.request!.messages.length - 1 ? " · this call's new message" : " · resent"}</summary><pre>${escape(m.content)}</pre></details>`).join("") +
+        `</details>`
+      : `<details><summary>Prompt (${tokens(Math.ceil(c.prompt.length / 4))} tok)</summary><pre>${escape(c.prompt)}</pre></details>`) +
+    (c.wire ? `<details><summary>Exactly what the provider received</summary><pre>${escape(c.wire.request)}</pre></details>` : "") +
+    (c.reply !== undefined ? `<details open><summary>Reply (raw model output)</summary><pre>${escape(c.reply)}</pre></details>` : "") +
+    (c.wire ? `<details><summary>Provider's raw response</summary><pre>${escape(c.wire.response)}</pre></details>` : "") +
     `</td></tr>`
   );
 }
