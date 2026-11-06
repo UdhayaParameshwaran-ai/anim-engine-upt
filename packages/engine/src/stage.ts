@@ -67,6 +67,8 @@ export class Stage {
   private readonly evaluator: ReturnType<typeof createEvaluator>;
   private readonly tints = new Map<string, Tween[]>();
   private readonly revealBy = new Map<string, string>();
+  /** `send` tweens per connector: while one runs, its packet travels along the connector. */
+  private readonly sends = new Map<string, Tween[]>();
   /** When each element has finished appearing (pictures start to float from then on). */
   private readonly shownAt = new Map<string, number>();
   /** How far pictures float while on screen (px), from the motion personality. */
@@ -97,6 +99,7 @@ export class Stage {
       if (tw.prop === "opacity" && tw.to === 1 && !this.shownAt.has(tw.target)) this.shownAt.set(tw.target, tw.t1);
       if (tw.prop === "tint") (this.tints.get(tw.target) ?? this.tints.set(tw.target, []).get(tw.target)!).push(tw);
       if (tw.prop === "reveal" && tw.meta?.by && !this.revealBy.has(tw.target)) this.revealBy.set(tw.target, String(tw.meta.by));
+      if (tw.prop === "reveal" && tw.meta?.send) (this.sends.get(tw.target) ?? this.sends.set(tw.target, []).get(tw.target)!).push(tw);
     }
 
     this.root = doc.createElement("div");
@@ -134,7 +137,7 @@ export class Stage {
       html.style.cssText = SCENE_HTML_BASE;
       const instances = new Map<string, Instance>();
       // Panels and axes at the back, then connectors (behind what they connect), then elements, then badges.
-      const depth = (e: (typeof sceneIr.elements)[number]) => (e.kind === "panel" || e.kind === "rule" ? 0 : e.link ? 1 : e.kind === "badge" ? 3 : 2);
+      const depth = (e: (typeof sceneIr.elements)[number]) => (e.kind === "panel" || e.kind === "rule" || e.kind === "zone" || e.kind === "chevron" ? 0 : e.link ? 1 : e.kind === "badge" ? 3 : 2);
       const ordered = [...sceneIr.elements].sort((a, b) => depth(a) - depth(b));
       for (const el of ordered) {
         const inst = build(doc, el, this.theme, `${this.markId}-${res.id}-${el.id}`);
@@ -366,6 +369,17 @@ export class Stage {
     const tint = num(p.tint, 0);
     const c = color(this.theme, this.tintMeta(target).color);
     for (const n of nodes) {
+      const bar = n.querySelector?.("[data-bar]");
+      if (bar) {
+        // A line of code: a bar behind it marks the highlight; `write` types its characters.
+        bar.setAttribute("opacity", String(round(tint * 0.32, 3)));
+        bar.setAttribute("fill", c);
+        const chars = [...n.querySelectorAll("tspan")].filter((t) => t.textContent !== " ");
+        const shown = Math.floor(chars.length * num(p.reveal, 1) + 1e-9);
+        chars.forEach((t, i) => ((t as SVGElement).style.opacity = i < shown ? "1" : "0"));
+        css(n as SVGElement, this.baseStyle.get(n) ?? "", [["opacity", String(round(num(p.opacity, 1), 4))]]);
+        continue;
+      }
       if (n.tagName.toLowerCase() === "tspan") {
         // Characters: only recolor, so the write-reveal keeps control of their opacity.
         n.setAttribute("fill", tint > 0.01 ? `color-mix(in srgb, ${c} ${Math.round(tint * 100)}%, ${this.theme.fg})` : this.theme.fg);
@@ -388,10 +402,16 @@ export class Stage {
     const a = this.currentBox(view, c.from, state);
     const b = this.currentBox(view, c.to, state);
     if (!a || !b) return;
+    const row = inst.el.params.route === "row";
     const [ax, ay] = [a.x + a.w / 2, a.y + a.h / 2];
     const [bx, by] = [b.x + b.w / 2, b.y + b.h / 2];
-    const start = clipToBox(ax, ay, bx, by, a, 12);
-    const end = clipToBox(bx, by, ax, ay, b, inst.connector!.head ? 16 : 12);
+    // A sequence message runs level between two lifelines, at its own row.
+    const rowY = inst.el.box.y + inst.el.box.h / 2;
+    const dir = Number(inst.el.params.dir ?? 1);
+    // Leader lines (quiet, no head) reach right up to what they join.
+    const lead = !c.head && inst.el.params.tone === 'muted' ? 2 : 12;
+    const start: [number, number] = row ? [inst.el.box.x + (dir > 0 ? 8 : inst.el.box.w - 8), rowY] : clipToBox(ax, ay, bx, by, a, lead);
+    const end: [number, number] = row ? [inst.el.box.x + (dir > 0 ? inst.el.box.w - 10 : 10), rowY] : clipToBox(bx, by, ax, ay, b, inst.connector!.head ? 16 : lead);
     const arc = inst.el.params.curve === "arc";
     const mx = (start[0] + end[0]) / 2;
     const my = (start[1] + end[1]) / 2;
@@ -415,11 +435,32 @@ export class Stage {
       c.head.style.opacity = String(round(clamp01((draw - 0.85) / 0.15), 3));
     }
     if (c.label) {
-      // Clear the line by half the label's extent along the line's normal (estimated glyph width).
+      // Clear the line by half the label's extent along the line's normal (estimated glyph width); a message's label sits above it.
       const halfW = ((c.label.textContent ?? "").length * 0.55 * 26) / 2;
       const off = 10 + Math.abs(nx) * halfW + Math.abs(ny) * 13;
-      c.label.setAttribute("x", String(round(ctrl[0] + nx * off)));
-      c.label.setAttribute("y", String(round(ctrl[1] + ny * off + 8)));
+      // On an arc the label sits just outside the curve's apex (halfway between the chord and the control point).
+      const apex: [number, number] = arc ? [(mx + ctrl[0]) / 2, (my + ctrl[1]) / 2] : ctrl;
+      const side = arc ? Math.sign(bend) || 1 : 1;
+      c.label.setAttribute("x", String(round(row ? (start[0] + end[0]) / 2 : apex[0] + nx * off * side)));
+      c.label.setAttribute("y", String(round(row ? rowY - 16 : apex[1] + ny * off * side + 8)));
+      if (row) c.label.setAttribute("fill", this.theme.fg);
+    }
+    if (c.token) {
+      // The packet of a running `send`: at the tween's progress along the line (or the arc).
+      const sending = (this.sends.get(`${view.res.id}/${inst.el.id}`) ?? []).find((tw) => tw.t0 <= this.time && this.time < tw.t1);
+      if (sending) {
+        const p = num(props.reveal, 0);
+        const k = sending.meta?.back ? 1 - p : p;
+        const at = (t: number): [number, number] =>
+          arc
+            ? [(1 - t) ** 2 * start[0] + 2 * (1 - t) * t * ctrl[0] + t * t * end[0], (1 - t) ** 2 * start[1] + 2 * (1 - t) * t * ctrl[1] + t * t * end[1]]
+            : [start[0] + (end[0] - start[0]) * t, start[1] + (end[1] - start[1]) * t];
+        const [tx, ty] = at(k);
+        c.token.setAttribute("cx", String(round(tx)));
+        c.token.setAttribute("cy", String(round(ty)));
+        c.token.setAttribute("fill", color(this.theme, "accent"));
+        c.token.setAttribute("opacity", "1");
+      } else c.token.setAttribute("opacity", "0");
     }
   }
 
@@ -430,7 +471,13 @@ export class Stage {
     const s = num(p.scale, 1);
     const w = inst.el.box.w * s;
     const h = inst.el.box.h * s;
-    return { x: num(p.x, inst.el.box.x + inst.el.box.w / 2) - w / 2, y: num(p.y, inst.el.box.y + inst.el.box.h / 2) - h / 2, w, h };
+    const cx = num(p.x, inst.el.box.x + inst.el.box.w / 2);
+    const cy = num(p.y, inst.el.box.y + inst.el.box.h / 2);
+    if (inst.el.params.dot) {
+      const r = Math.min(26, inst.el.box.w * 0.18) * s;
+      return { x: cx - r, y: cy - h * 0.12 - r, w: 2 * r, h: 2 * r };
+    }
+    return { x: cx - w / 2, y: cy - h / 2, w, h };
   }
 
   private tintMeta(target: string): { color: string; style: string } {

@@ -132,6 +132,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
   const topic = url.searchParams.get("topic")?.trim() ?? "";
   const provider = url.searchParams.get("provider") ?? "auto";
   const model = url.searchParams.get("model")?.trim() || undefined;
+  const domain = url.searchParams.get("domain") === "tech" ? "tech" : undefined;
   const tts = ttsOf(url);
   let mode = url.searchParams.get("mode") === "single" ? "single" : "outline";
 
@@ -170,6 +171,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     const result = await llm.generate(topic || "replay", {
       client,
       mode,
+      ...(domain && { domain }),
       ...(director && { director }),
       onLog: (m: string) => send("log", m),
       onCall: (call: unknown) => send("call", call),

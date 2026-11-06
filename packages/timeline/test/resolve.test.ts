@@ -241,3 +241,17 @@ describe("template motion", () => {
     expect(ev.valueAt("s/p.2", "opacity", second.t0 + 0.01)).toBe(1);
   });
 });
+
+describe("send", () => {
+  const SRC = 'video 1\nscene s "Call" template=exchange\na = icon:globe "Browser"\nb = icon:server "Server"\nm1 = arrow a->b "GET /"\n> The {1}browser and {2}server.\n1 pop a\n2 pop b\n> It {1}sends a request {2}and again.\n1 send m1\n2 send m1\n';
+
+  it("draws a connector that isn't shown yet while its packet travels, and only moves the packet when it is", async () => {
+    const { tl } = await build(SRC);
+    const draws = tl.tracks.filter((t) => t.target === "s/m1" && t.prop === "draw");
+    expect(draws).toHaveLength(1);
+    const sends = tl.tracks.filter((t) => t.target === "s/m1" && t.prop === "reveal" && t.meta?.send);
+    expect(sends).toHaveLength(2);
+    expect(draws[0]!.t0).toBe(sends[0]!.t0);
+    expect(sends[1]!.meta).toMatchObject({ send: true, back: false });
+  });
+});

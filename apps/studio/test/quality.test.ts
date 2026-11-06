@@ -61,17 +61,17 @@ describe("fit-based variants", () => {
   });
 
   it("replace a named variant that crowds its content, and say so", () => {
-    const script = templateScript(steps, "column", 6);
+    const script = CROWDED("row");
     expect(unfit(script, "exact").length).toBeGreaterThan(0);
     const r = compile(script);
     const switched = r.diagnostics.find((d) => d.code === "NAR416");
-    expect(switched?.message).toMatch(/variant `column` does not fit/);
+    expect(switched?.message).toMatch(/variant `row` does not fit/);
     expect(switched?.fixed).toMatch(/^variant=/);
     expect(r.diagnostics.filter((d) => UNFIT.has(d.code))).toEqual([]);
   });
 
   it("replace the template default silently when it crowds the content", () => {
-    const script = templateScript(steps, "column", 6).replace(" variant=column", "");
+    const script = CROWDED();
     const r = compile(script);
     expect(r.diagnostics.filter((d) => UNFIT.has(d.code) || d.code === "NAR416")).toEqual([]);
   });
@@ -86,9 +86,23 @@ describe("fit-based variants", () => {
   });
 
   it("variants: exact keeps the named variant even when it crowds", () => {
-    expect(unfit(templateScript(steps, "column", 6), "exact").length).toBeGreaterThan(0);
+    expect(unfit(CROWDED("row"), "exact").length).toBeGreaterThan(0);
   });
 });
+
+/** Six steps with very long box labels: too much text for one row. */
+const CROWDED = (variant?: string) => {
+  const label = "Collect every input and check that each one is valid before anything else runs";
+  const ids = [1, 2, 3, 4, 5, 6];
+  const lines = [
+    "video 1",
+    `scene s template=steps${variant ? ` variant=${variant}` : ""}`,
+    ...ids.map((i) => `i${i} = box "${label}"`),
+    `> ${ids.map((i) => `{${i}}i${i}`).join(" ")}.`,
+    ...ids.map((i) => `${i} fade i${i}`),
+  ];
+  return `${lines.join("\n")}\n`;
+};
 
 describe("template quality", () => {
   it("every variant lays out cleanly for every item count its card promises (typical labels)", () => {

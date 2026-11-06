@@ -340,3 +340,64 @@ describe("scene openings", () => {
     for (const id of ["a", "b", "c", "d", "e"]) expect(pic("center")).toBeGreaterThanOrEqual(pic(id) - 2);
   });
 });
+
+describe("software & tech templates", () => {
+  const scene = (src: string) => {
+    const r = compile(src);
+    expect(report(r.diagnostics)).toBe("");
+    return r.ir!.scenes[0]!;
+  };
+  const el = (s: ReturnType<typeof scene>, id: string) => s.elements.find((e) => e.id === id)!;
+
+  it("exchange: participants in a row, each message its own level row, in declared order", () => {
+    const s = scene('video 1\nscene s "Login" template=exchange\nu = icon:user "User"\napp = icon:server "App"\nauth = icon:shield "Auth"\nm1 = arrow u->app "log in"\nm2 = arrow app->auth "check"\nm3 = arrow auth->app "ok"\n> {1}A user logs in.\n1 pop u,app,auth\n> The app {1}asks auth, {2}which says ok.\n1 send m1 then send m2\n2 send m3\n');
+    const [m1, m2, m3] = ["m1", "m2", "m3"].map((id) => el(s, id));
+    expect(m1!.box.y).toBeLessThan(m2!.box.y);
+    expect(m2!.box.y).toBeLessThan(m3!.box.y);
+    expect(m1!.box.h).toBeLessThanOrEqual(4);
+    expect([m2!.params.dir, m3!.params.dir]).toEqual([1, -1]);
+    // A dashed lifeline under every participant.
+    expect(s.elements.filter((e) => e.kind === "rule" && e.params.style === "dashed")).toHaveLength(3);
+  });
+
+  it("architecture: a zone holds the elements declared after it and appears with the first of them", () => {
+    const s = scene('video 1\nscene s "App" template=architecture\nfront = zone "Client"\nweb = icon:globe "Browser"\nback = zone "Backend"\napi = icon:server "API"\ndb = icon:database "DB"\nl1 = arrow web->api\n> The {1}browser calls the {2}API, which reads the {3}database.\n1 pop web\n2 pop api then draw l1\n3 pop db\n');
+    const inside = (z: string, id: string) => {
+      const a = el(s, z).box;
+      const b = el(s, id).box;
+      return b.x >= a.x && b.y >= a.y && b.x + b.w <= a.x + a.w && b.y + b.h <= a.y + a.h;
+    };
+    expect(inside("front", "web")).toBe(true);
+    expect(inside("back", "api") && inside("back", "db")).toBe(true);
+    const shows = s.steps[0]!.beats[0]!.actions.flatMap((a) => a.calls.filter((c) => c.verb === "fade").map((c) => `${a.anchor}:${c.targets[0]}`));
+    expect(shows).toEqual(expect.arrayContaining(["1:front", "2:back"]));
+  });
+
+  it("stack: boxes become full bands, the first declared on top", () => {
+    const s = scene('video 1\nscene s "Layers" template=stack\na = box "App"\nb = box "TCP"\nc = box "IP"\n> {1}Three layers.\n1 fade a,b,c\n');
+    const [a, b, c] = ["a", "b", "c"].map((id) => el(s, id).box);
+    expect(a!.y).toBeLessThan(b!.y);
+    expect(b!.y).toBeLessThan(c!.y);
+    expect(a!.w).toBe(c!.w);
+    expect(a!.w).toBeGreaterThan(1500);
+  });
+
+  it("structure: an array gets indexes, a list arrows, a stack grows upward", () => {
+    const cells = (variant: string) => scene(`video 1\nscene s "DS" template=structure variant=${variant}\na = box "1"\nb = box "2"\nc = box "3"\n> {1}Values.\n1 fade a,b,c\n`);
+    expect(cells("array").elements.filter((e) => e.kind === "caption").map((e) => e.texts[0])).toEqual(["0", "1", "2"]);
+    expect(cells("list").elements.filter((e) => e.kind === "arrow" && e.params.auto).map((e) => `${e.link!.from}->${e.link!.to}`)).toEqual(["a->b", "b->c"]);
+    const st = cells("stack");
+    expect(el(st, "a").box.y).toBeGreaterThan(el(st, "c").box.y);
+    expect(st.elements.find((e) => e.kind === "caption")!.texts[0]).toBe("← top");
+  });
+
+  it("code: lines split on \\n are parts, written one by one without warnings", () => {
+    const src = 'video 1\nscene s "Code" template=code\ncode = code "a = 1\\nb = 2\\nprint(a + b)" lang=py\nn1 = label "Add them"\n> First {1}two values.\n1 write code.1 then write code.2\n> Then {1}print the sum.\n1 write code.3 then fade n1\n';
+    const s = scene(src);
+    expect(el(s, "code").parts).toEqual(["1", "2", "3"]);
+    expect(el(s, "code").texts[0]).toBe("a = 1\nb = 2\nprint(a + b)");
+    // The panel is wide; the note beside it.
+    expect(el(s, "code").box.w).toBeGreaterThan(900);
+    expect(el(s, "n1").box.x).toBeGreaterThan(el(s, "code").box.x + el(s, "code").box.w);
+  });
+});

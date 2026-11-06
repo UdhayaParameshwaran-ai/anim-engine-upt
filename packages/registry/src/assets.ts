@@ -113,7 +113,7 @@ export interface PartsInput {
  * component, numbered items (list/chart), or numbered `[bracketed]` words
  * in text. "any" means the count is only known at render time (formula).
  */
-export function partsOf(el: PartsInput, assets: AssetLibrary, components: readonly { kind: string; parts?: readonly string[] | "items" | "words" }[]): string[] | "any" {
+export function partsOf(el: PartsInput, assets: AssetLibrary, components: readonly { kind: string; parts?: readonly string[] | "items" | "words" | "lines" }[]): string[] | "any" {
   if (el.kind === "icon" || el.kind === "asset") {
     return el.name ? [...(assets.resolve(el.kind, el.name)?.manifest.parts ?? [])] : [];
   }
@@ -122,7 +122,9 @@ export function partsOf(el: PartsInput, assets: AssetLibrary, components: readon
   if (Array.isArray(p)) return [...p];
   const text = el.texts[0] ?? "";
   let n: number;
-  if (p === "items") {
+  if (p === "lines") {
+    n = text.split("\n").length;
+  } else if (p === "items") {
     if (el.kind === "chart") n = (el.attrs.data ?? "").split(",").filter(Boolean).length;
     else if (el.kind === "scorecard") n = Number(el.attrs.max ?? 5) || 5;
     else if (el.kind === "flowchart") n = flowNodes(text).length;

@@ -8,7 +8,7 @@ import { generate, type CallTrace } from "./generate.js";
 
 /**
  *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|azure|gemini|groq|claude[,..]] [--model=<id>]
- *            [--single] [--scenes=2-4] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
+ *            [--single] [--scenes=2-4] [--domain=tech] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -46,6 +46,7 @@ const result = await generate(topic, {
   client,
   ...(director && { director }),
   mode: args.includes("--single") ? "single" : "outline",
+  ...(value("domain") === "tech" && { domain: "tech" as const }),
   scenes: { min: min ?? 2, max: max ?? min ?? 4 },
   onScene: (_, i) => console.error(`  scene ${i + 1} ready`),
   onLog: (m) => verbose && console.error(`  ${m.replace(/\n/g, "\n    ")}`),

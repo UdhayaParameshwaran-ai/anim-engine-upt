@@ -20,6 +20,15 @@ export const SHAPES = {
   timeline: "events with a date or year each, in chronological order",
   focus: "the physical parts of one object, labelled on its picture (parts of the heart, a leaf, a cell)",
   graph: "branches, decisions or dependencies between nodes",
+  interaction: "messages passed between parties over time: a request and its response, a handshake, a login",
+  architecture: "a system's components and how they connect, grouped into tiers (client, servers, data)",
+  layers: "layers stacked on each other, each built on the one below (network layers, a software stack)",
+  structure: "a data structure and what happens to its values (array, linked list, stack, queue)",
+  code: "real code, a query, a config or terminal commands, walked through line by line",
+  hierarchy: "parents and their children: a file system, DNS, the DOM, an org chart, class inheritance",
+  states: "the states something can be in and the events that move it between them (a TCP connection, an order, a traffic light)",
+  branching: "a history that branches and merges (Git branches, merge vs rebase, versions)",
+  format: "the parts of one message or format laid side by side (a URL, a packet's header and payload, a JWT, an email address)",
 } as const;
 
 export type Shape = keyof typeof SHAPES;
@@ -86,6 +95,7 @@ right = asset:cell.animal "Animal cell"
       staircase: { when: "growth or progress: each step builds on the last", items: [3, 5] },
       grid: { when: "5–6 steps that do not fit one row", items: [4, 6] },
       arch: { when: "steps that rise to a peak in the middle and come back down", items: [3, 6] },
+      pipeline: { when: "stages that data or work flows through, joined as one pipeline (CI/CD, ETL, a compiler)", items: [3, 6] },
     },
     example: `scene stages "From seed to tree" template=steps
 title = title "From seed to tree"
@@ -263,5 +273,229 @@ o1 = icon:cube "Glucose"
 > {1}Light and water enter the leaf {2}and come out as glucose.
 1 pop i1,i2 /0.2 then fade process
 2 pop o1`,
+  },
+
+  // ------------------------------------------------- software & tech concepts
+
+  exchange: {
+    shape: "interaction",
+    useWhen: "a sequence diagram: 2–5 parties exchange messages in order: a request and its response, a handshake, a login, a lookup",
+    avoidWhen: "the parties and their links matter, not the order of messages → architecture; one thing passes through stages → steps",
+    variants: {
+      lanes: { when: "2–5 parties with up to 8 messages, labels like GET /users or 200 OK", items: [2, 5] },
+      compact: { when: "2–3 parties and up to 4 messages, with bigger pictures", items: [2, 3] },
+    },
+    example: `scene request "Loading a page" template=exchange
+browser = icon:globe "Browser"
+server = icon:server "Web server"
+db = icon:database "Database"
+m1 = arrow browser->server "GET /home"
+m2 = arrow server->db "SELECT posts"
+m3 = arrow db->server "rows"
+m4 = arrow server->browser "200 OK"
+> The {1}browser asks the {2}server for the page.
+1 pop browser
+2 pop server then send m1
+> The server {1}asks the database and {2}gets the rows back.
+1 pop db then send m2
+2 send m3
+> Then it {1}sends the finished page to the browser.
+1 send m4`,
+  },
+  architecture: {
+    shape: "architecture",
+    useWhen: "a system's components and their connections, grouped into tiers or zones (client, edge, services, data)",
+    avoidWhen: "the order of messages is the point → exchange; layers built on each other → stack",
+    variants: {
+      tiers: { when: "zones as columns, left to right (client → servers → data); 2–4 zones, up to 10 components", items: [2, 14] },
+      layers: { when: "zones as rows, top to bottom (users above, infrastructure below)", items: [2, 12] },
+    },
+    example: `scene system "A web app" template=architecture
+client = zone "Client"
+browser = icon:globe "Browser"
+backend = zone "Backend"
+api = icon:server "API server"
+cache = icon:zap "Cache"
+data = zone "Data"
+db = icon:database "Database"
+l1 = arrow browser->api "HTTPS"
+l2 = arrow api->cache
+l3 = arrow api->db "SQL"
+> Users reach the app from a {1}browser.
+1 pop browser
+> Requests go to the {1}API server, {2}which checks a cache first.
+1 pop api then draw l1
+2 pop cache then draw l2
+> Anything missing comes from the {1}database.
+1 pop db then draw l3
+end send l1`,
+  },
+  stack: {
+    shape: "layers",
+    useWhen: "2–7 layers stacked on each other, each built on or using the one below (network layers, a software stack, abstraction levels)",
+    avoidWhen: "the layers happen one after another in time → steps; the parts are equal and unordered → cards",
+    variants: {
+      bands: { when: "full-width bands, top layer first; box items with a short label each", items: [2, 7] },
+      centered: { when: "a narrower stack in the middle, 2–5 layers", items: [2, 5] },
+    },
+    example: `scene layers "The web stack" template=stack
+app = box "Your app"
+http = box "HTTP"
+tcp = box "TCP"
+ip = box "IP"
+> Your {1}app talks HTTP, which {2}rides on TCP.
+1 fade app then fade http
+2 fade tcp
+> And TCP is carried by {1}IP across the internet.
+1 fade ip`,
+  },
+  structure: {
+    shape: "structure",
+    useWhen: "a data structure made of 2–8 values (array, linked list, stack, queue) and what happens to them: adding, removing, finding, sorting",
+    avoidWhen: "a hierarchy of parent and children → flow; parts of an idea → hub",
+    variants: {
+      array: { when: "values in a row with their indexes; pointers above cells (binary search, sorting)", items: [2, 8] },
+      list: { when: "a linked list: each node points to the next", items: [2, 6] },
+      stack: { when: "a stack: values piled bottom to top, push and pop at the top", items: [2, 6] },
+      queue: { when: "a queue: values in line, joining at the back and leaving from the front", items: [2, 7] },
+    },
+    example: `scene search "Binary search" template=structure variant=array
+c1 = box "3"
+c2 = box "8"
+c3 = box "15"
+c4 = box "23"
+c5 = box "42"
+mid = label "mid" @above:c3
+> A {1}sorted array lets us search fast.
+1 pop c1,c2,c3,c4,c5 /0.1
+> We look at the {1}middle value first.
+1 fade mid then highlight c3
+> 42 is bigger, so we {1}move right.
+1 move mid @above:c5`,
+  },
+  tree: {
+    shape: "hierarchy",
+    useWhen: "parents and their children, 3–12 nodes: folders, DNS, the DOM, an org chart, class inheritance",
+    avoidWhen: "the order of stages matters → steps; a decision with branches → flow; a central idea with aspects → hub",
+    variants: {
+      down: { when: "root at the top, children below; up to 4 levels", items: [3, 12] },
+      right: { when: "root at the left, children to the right: long labels (paths, names)", items: [3, 10] },
+    },
+    example: `scene files "A project's folders" template=tree
+root = icon:folder "project"
+src = icon:folder "src"
+docs = icon:folder "docs"
+app = icon:file "app.js"
+util = icon:file "utils.js"
+readme = icon:file-text "README.md"
+l1 = line root->src
+l2 = line root->docs
+l3 = line src->app
+l4 = line src->util
+l5 = line docs->readme
+> A {1}project folder holds {2}source code and {3}docs.
+1 pop root
+2 pop src then draw l1
+3 pop docs then draw l2
+> The {1}source folder has two files, and {2}docs has a readme.
+1 pop app,util then draw l3,l4
+2 pop readme then draw l5`,
+  },
+  states: {
+    shape: "states",
+    useWhen: "2–8 states and the events that move something between them: a connection, an order, a login session, a traffic light",
+    avoidWhen: "one-way stages that never return → steps; a yes/no decision → flow",
+    variants: {
+      across: { when: "states left to right; transitions back curve above", items: [2, 6] },
+      down: { when: "states top to bottom: many states or long names", items: [3, 8] },
+    },
+    example: `scene order "An order's life" template=states
+placed = node "Placed"
+paid = node "Paid"
+shipped = node "Shipped"
+done = node "Delivered"
+t1 = arrow placed->paid "pay"
+t2 = arrow paid->shipped "ship"
+t3 = arrow shipped->done "deliver"
+t4 = arrow paid->placed "refund"
+> An order starts {1}placed, and {2}paying moves it on.
+1 pop placed
+2 pop paid then draw t1
+> Then it is {1}shipped and {2}delivered.
+1 pop shipped then draw t2
+2 pop done then draw t3
+> A {1}refund sends it back to placed.
+1 draw t4 then highlight placed`,
+  },
+  gitgraph: {
+    shape: "branching",
+    useWhen: "commits on 1–3 branches that split and merge: Git branches, merge vs rebase, release lines",
+    avoidWhen: "a history without branches → timeline; plain ordered steps → steps",
+    variants: {
+      lanes: { when: "each branch a lane, time left to right; up to 3 lanes and 10 commits", items: [2, 14] },
+    },
+    example: `scene branch "A feature branch" template=gitgraph
+main = zone "main"
+c1 = circle "init"
+c2 = circle "login"
+c3 = circle "merge"
+feature = zone "feature"
+f1 = circle "form"
+f2 = circle "tests"
+l1 = line c1->c2
+l2 = line c2->f1
+l3 = line f1->f2
+l4 = line f2->c3
+l5 = line c2->c3
+> The {1}main branch has two commits.
+1 pop c1,c2 then draw l1
+> A {1}feature branch adds a form and tests.
+1 pop f1,f2 then draw l2,l3
+> Then it is {1}merged back into main.
+1 pop c3 then draw l4,l5`,
+  },
+  anatomy: {
+    shape: "format",
+    useWhen: "the 2–7 parts of one message or format: a URL, an HTTP request, a packet's header and payload, a JWT, an email address",
+    avoidWhen: "layers built on each other → stack; parts of a physical object → spotlight",
+    variants: {
+      bar: { when: "parts side by side on one bar, each named by a label @below:<part>; short parts", items: [2, 6] },
+      stacked: { when: "parts as rows (a header above a body, nested fields); long parts", items: [2, 7] },
+    },
+    example: `scene url "Parts of a URL" template=anatomy
+p1 = box "https://"
+p2 = box "shop.example.com"
+p3 = box "/products"
+p4 = box "?id=42"
+n1 = label "protocol" @below:p1
+n2 = label "domain" @below:p2
+n3 = label "path" @below:p3
+n4 = label "query" @below:p4
+> A URL starts with the {1}protocol and the {2}domain.
+1 fade p1 then fade n1
+2 fade p2 then fade n2
+> Then comes the {1}path and the {2}query.
+1 fade p3 then fade n3
+2 fade p4 then fade n4`,
+  },
+  code: {
+    shape: "code",
+    useWhen: "real code, a query, a config file or terminal commands, walked through line by line (up to 14 lines)",
+    avoidWhen: "the idea matters, not the syntax → a diagram template",
+    variants: {
+      notes: { when: "the code on the left, 1–4 short notes stacked beside it", items: [0, 4] },
+      stacked: { when: "wide code on top, notes in a row below", items: [0, 3] },
+      split: { when: "code next to its output: the item is a terminal or a second code panel", items: [1, 1] },
+    },
+    example: `scene fetch "Calling an API" template=code
+code = code "const res = await fetch(url);\\nconst data = await res.json();\\nshow(data.items);" lang=js
+n1 = label "Ask the server"
+n2 = label "Read the JSON reply"
+> First we {1}ask the server for data.
+1 write code.1 then fade n1
+> Then we {1}read its JSON reply.
+1 write code.2 then fade n2
+> And {1}show the items on screen.
+1 write code.3 then highlight code.3`,
   },
 };

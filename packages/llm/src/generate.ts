@@ -3,7 +3,7 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
+import { type Domain, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
@@ -16,6 +16,8 @@ export interface GenerateOptions {
   maxRepairs?: number;
   /** Scenes written/repaired at once; default the client's limit, else 3. */
   concurrency?: number;
+  /** A subject area whose templates planning prefers (see DOMAINS). */
+  domain?: Domain;
   /** How the video opens and ends (names from OPENINGS and CLOSINGS); by default the topic picks. */
   arc?: { open?: string; close?: string };
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
@@ -145,7 +147,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     // Planning only needs scene types and asset names, not the whole language.
     const arc = storyArc(topic, opts.arc);
     opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
-    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range, arc) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant));
+    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range, arc) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
     const outline = routed.text;
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);

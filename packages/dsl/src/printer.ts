@@ -126,7 +126,7 @@ function num(n: number): string {
 }
 
 function quote(s: string): string {
-  return `"${s.replace(/[\\"]/g, (c) => "\\" + c)}"`;
+  return `"${s.replace(/[\\"]/g, (c) => "\\" + c).replace(/\n/g, "\\n")}"`;
 }
 
 /** Bare value if it has no whitespace or quotes, otherwise quoted. */

@@ -48,6 +48,7 @@ export const VERBS: readonly VerbManifest[] = [
   { name: "dim", version: 1, category: "emphasis", summary: "fade to 30% to push back", defaultDuration: 0.4, mustFinish: false, targets: "required", supportsFit: false, params: {} },
   { name: "move", version: 1, category: "transform", summary: "move to a slot or next to an element", defaultDuration: 0.7, mustFinish: false, targets: "required", supportsFit: true, params: { ease: { ...EASE, default: "inout" } } },
   { name: "scale", version: 1, category: "transform", summary: "scale by a factor", defaultDuration: 0.5, mustFinish: false, targets: "required", supportsFit: true, params: { by: { type: "number", min: 0.1, max: 5, default: 1.2 } } },
+  { name: "send", version: 1, category: "relation", summary: "a packet travels along a connector (drawing it if it isn't shown yet); back=true goes the other way", defaultDuration: 0.9, mustFinish: false, targets: "required", supportsFit: true, params: { back: { type: "bool", default: false } } },
   { name: "focus", version: 1, category: "camera", summary: "zoom the camera to an element, or `reset`", defaultDuration: 0.9, mustFinish: false, targets: "required", supportsFit: true, params: { ease: { ...EASE, default: "inout" } } },
 ];
 
@@ -173,10 +174,12 @@ export interface TemplateManifest {
 const VISUAL = ["icon", "asset", "shape", "box", "circle", "card", "chart", "formula"] as const;
 const TEXTUAL = ["title", "text", "label", "list"] as const;
 
+const TECH = ["code", "terminal"] as const;
+
 const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
   { name: "compare", version: 1, summary: "two things side by side", slots: [{ name: "left", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "right", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], variants: ["side", "stacked", "diagonal", "asymmetric"] },
-  { name: "steps", version: 1, summary: "ordered sequence left to right", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 }, variants: ["row", "zigzag", "column", "staircase", "grid"] },
+  { name: "steps", version: 1, summary: "ordered sequence left to right", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 }, variants: ["row", "zigzag", "column", "staircase", "grid", "pipeline"] },
   { name: "cycle", version: 1, summary: "items on a loop with arrows", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 3, max: 6 }, variants: ["ring", "arc"] },
   { name: "flow", version: 1, summary: "flowchart / graph of nodes and edges", slots: [], graph: { maxNodes: 12 }, variants: ["auto", "down", "across"] },
   { name: "timeline", version: 1, summary: "events along a horizontal line", slots: [], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 7 }, variants: ["alternate", "line", "vertical"] },
@@ -187,6 +190,16 @@ const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "converge", version: 1, summary: "several inputs flow into one result (the template draws the arrows)", slots: [{ name: "result", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 5 }, variants: ["left", "top", "around"] },
   { name: "diverge", version: 1, summary: "one source produces several outputs (the template draws the arrows)", slots: [{ name: "source", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 5 }, variants: ["right", "bottom", "around"] },
   { name: "process", version: 1, summary: "inputs go through a process and come out as outputs: declare inputs, then process, then outputs (the template draws the arrows)", slots: [{ name: "process", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 8 }, variants: ["across", "down", "equation"] },
+  // Software & tech concepts.
+  { name: "exchange", version: 1, summary: "a sequence diagram: participants side by side with lifelines; arrows between them are messages, in time order top to bottom", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 5 }, variants: ["lanes", "compact"] },
+  { name: "architecture", version: 1, summary: "components grouped into zones (tiers), joined by the arrows you declare", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL, "zone"], min: 2, max: 14 }, variants: ["tiers", "layers"] },
+  { name: "stack", version: 1, summary: "layers stacked on each other, top layer declared first", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 7 }, variants: ["bands", "centered"] },
+  { name: "structure", version: 1, summary: "a data structure made of value cells (array, linked list, stack, queue); pointers are labels placed @above:<cell>", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: ["box", "text", "label", "circle", "icon"], min: 2, max: 8 }, variants: ["array", "list", "stack", "queue"] },
+  { name: "tree", version: 1, summary: "a hierarchy: the lines you declare join each parent to its children", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 12 }, variants: ["down", "right"] },
+  { name: "states", version: 1, summary: "a state machine: states joined by the transitions you declare", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL, "node"], min: 2, max: 8 }, variants: ["across", "down"] },
+  { name: "gitgraph", version: 1, summary: "commits on branch lanes: a zone starts a lane, the lines you declare join each commit to the next", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL, "zone"], min: 2, max: 14 }, variants: ["lanes"] },
+  { name: "anatomy", version: 1, summary: "the parts of a message or format side by side; labels placed @below:<part> name them", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: ["box", "text", "label"], min: 2, max: 7 }, variants: ["bar", "stacked"] },
+  { name: "code", version: 1, summary: "a code or terminal panel with notes beside it", slots: [{ name: "code", accepts: [...TECH], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...TEXTUAL, "icon", "box", ...TECH], min: 0, max: 4 }, variants: ["notes", "stacked", "split"] },
 ];
 
 /** Component (element kind) manifest: `icon`, `text`, `arrow`, `chart`, ... */
@@ -203,7 +216,7 @@ export interface ComponentManifest {
   link: boolean;
   params: Record<string, ParamSpec>;
   /** Named sub-parts addressable as `id.part`; "items" means numbered (list.1). */
-  parts?: readonly string[] | "items" | "words";
+  parts?: readonly string[] | "items" | "words" | "lines";
   drawable: boolean;
 }
 
@@ -223,6 +236,9 @@ export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "icon", version: 1, layer: "svg", summary: "icon from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "asset", version: 1, layer: "svg", summary: "illustration from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "placeholder", version: 1, layer: "svg", summary: "labeled box standing in for a missing asset", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
+  { kind: "code", version: 1, layer: "svg", summary: 'code panel; lines split on \\n: code "const a = 1;\\nreturn a" lang=js', named: "none", texts: { min: 1, max: 1 }, link: false, params: { lang: { type: "string", default: "" } }, parts: "lines", drawable: true },
+  { kind: "terminal", version: 1, layer: "svg", summary: 'terminal; lines starting "$ " are commands, the rest output: terminal "$ git status\\nOn branch main"', named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, parts: "lines", drawable: true },
+  { kind: "zone", version: 1, layer: "svg", summary: "named group of components (architecture): the elements declared after it belong to it", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "chart", version: 1, layer: "svg", summary: "chart:bar|line|pie data=3,5,8 labels=A,B,C", named: "required", texts: { min: 0, max: 1 }, link: false, params: { data: { type: "string" }, data2: { type: "string" }, labels: { type: "string" } }, parts: "items", drawable: true },
   // Grid elements (Template Rule Book v2). Lists use `;`, fields within an item use `|`.
   ...widgets([

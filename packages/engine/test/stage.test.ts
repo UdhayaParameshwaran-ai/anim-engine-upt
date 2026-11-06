@@ -366,3 +366,37 @@ describe("life between cues", () => {
     expect(dots).toEqual([THEMES.paper!.accent, THEMES.paper!.good, THEMES.paper!.warn]);
   });
 });
+
+describe("tech elements", () => {
+  async function stageOf(src: string): Promise<{ stage: Stage; tl: ResolvedTimeline }> {
+    const ir = compile(src).ir!;
+    const speech = await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) });
+    const tl = resolve(ir, speech);
+    return { stage: new Stage(container, ir, tl, { autoFit: false }), tl };
+  }
+
+  it("moves a packet along a connector while it is sent, and hides it afterwards", async () => {
+    const { stage, tl } = await stageOf('video 1\nscene s "Call" template=exchange\na = icon:globe "Browser"\nb = icon:server "Server"\nm1 = arrow a->b "GET /"\n> The {1}browser asks the {2}server.\n1 pop a,b\n2 send m1\n');
+    const send = tl.tracks.find((t) => t.target === "s/m1" && t.meta?.send)!;
+    const token = node(stage, "s", "m1").querySelector("circle")!;
+    stage.render((send.t0 + send.t1) / 2);
+    expect(token.getAttribute("opacity")).toBe("1");
+    const mid = Number(token.getAttribute("cx"));
+    stage.render(send.t0 + (send.t1 - send.t0) * 0.9);
+    expect(Number(token.getAttribute("cx"))).toBeGreaterThan(mid);
+    stage.render(send.t1 + 0.5);
+    expect(token.getAttribute("opacity")).toBe("0");
+  });
+
+  it("draws code as a dark panel whose lines type in and can be highlighted", async () => {
+    const { stage, tl } = await stageOf('video 1\nscene s "Code" template=code\ncode = code "const a = 1;\\nreturn a;" lang=js\n> First {1}a constant, {2 then we return it}.\n1 write code.1\n2 highlight code.2 fit\n');
+    const lines = node(stage, "s", "code").querySelectorAll("[data-part]");
+    expect(lines).toHaveLength(2);
+    const hl = tl.tracks.find((t) => t.target === "s/code.2" && t.prop === "tint")!;
+    stage.render(hl.t0 + 0.3);
+    expect(Number(lines[1]!.querySelector("[data-bar]")!.getAttribute("opacity"))).toBeGreaterThan(0.2);
+    // "const" is a keyword: colored differently from the variable name.
+    const spans = [...lines[0]!.querySelectorAll("tspan")];
+    expect(spans[0]!.getAttribute("fill")).not.toBe(spans[6]!.getAttribute("fill"));
+  });
+});

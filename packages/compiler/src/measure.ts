@@ -70,6 +70,14 @@ export function measure(el: ElementDecl, assets: AssetLibrary): Size {
     }
     case "placeholder":
       return { w: 280, h: 180 };
+    case "code":
+    case "terminal": {
+      const lines = text.split("\n");
+      const longest = Math.max(1, ...lines.map((l) => l.length));
+      return { w: Math.max(560, Math.round(longest * 0.6 * 28 + 120)), h: Math.round(lines.length * 28 * 1.6 + 100) };
+    }
+    case "zone":
+      return { w: 400, h: 300 };
     default: {
       // Grid elements outside a grid scene: a little above their minimum slot size.
       const g = gridElementOf(el.kind, el.name);

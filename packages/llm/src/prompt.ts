@@ -226,6 +226,9 @@ EXAMPLE
 ${EXAMPLE}`;
 }
 
+/** Templates whose links are declared by the script (messages, connections) rather than drawn by the template. */
+const LINKED = new Set(["exchange", "architecture", "tree", "states", "gitgraph"]);
+
 /** What one scene call writes: a template diagram, a grid page, or (no plan for it) anything. */
 export type SceneKind = { template: TemplateManifest } | { grid: string } | { free: true };
 
@@ -266,15 +269,27 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[]): str
       ? []
       : flow
         ? [`- Nodes are joined by edges: e1 = n1 -> n2 "label". Draw an edge after (or together with) its two nodes.`]
-        : [
+        : LINKED.has(kind.template.name)
+          ? [
+              "- Element ids that equal slot names fill those slots; other elements fill items in order.",
+              kind.template.name === "exchange"
+                ? '- The parties are the items. Every message is an arrow you declare between two parties, in time order: m1 = arrow browser->server "GET /". Show a message with send (a packet travels along it): 1 send m1. The template draws the lifelines.'
+                : kind.template.name === "tree" ? '- Every node is an item; join each parent to its child with a line you declare: l1 = line root->src. The template places the levels.' : kind.template.name === "states" ? '- Every state is a node: s1 = node "Idle". Every transition is an arrow you declare with the event as its label: t1 = arrow s1->s2 "connect". An arrow back to an earlier state curves by itself.' : kind.template.name === "gitgraph" ? '- A zone starts a branch lane: main = zone "main"; the commits declared after it (c1 = circle "init") are on it. Join each commit to the next with a line you declare (l1 = line c1->c2), including the line where a branch splits off or merges back.' : '- A zone ("zone \\"Client\\"") starts a group: the elements declared after it belong to it until the next zone; it appears with its first member. Declare the links: l1 = arrow web->api "HTTPS"; draw them, or send a packet along one: 1 send l1.',
+              "- Page elements (stat, bullets, quote, …) never go in a template scene; use ELEMENT KINDS.",
+            ]
+          : [
             "- Element ids that equal slot names fill those slots; other elements fill items in order.",
             "- The template draws its own structure, each part appearing with its item (spokes, loop arrows, step numbers and the arrows between steps, card panels, the \"vs\", the timeline axis, leader lines, the arrows into or out of a result). Declare only the items and show them; declare an arrow yourself only to put a label on it.",
             "- Page elements (stat, bullets, quote, …) never go in a template scene; use ELEMENT KINDS.",
           ]),
+    ...(!grid && kind.template.name === "code" ? ['- Code and terminal text is one quoted string with \\n between lines: code "a = 1\\nprint(a)" lang=py. Keep the real indentation of the code: spaces right after \\n ("def f(x):\\n    return x"). Lines are parts: write code.2 types line 2, highlight code.2 marks it.'] : []),
+    ...(!grid && kind.template.name === "anatomy" ? ['- Every part is a box with its exact text: p1 = box "https://". Name each part with a label placed under it: n1 = label "protocol" @below:p1 (variant=stacked: @right-of:p1). Show a part and its name together.'] : []),
+    ...(!grid && kind.template.name === "structure" ? ["- Each value is a box: c1 = box \"42\". Every box is a value cell, so never make a box or icon for an operation (push, pop, insert) or a target: show an operation by popping in, hiding or moving cells, and name a target with a label @above:<cell>. A pointer is a label placed above a cell: p = label \"i\" @above:c1; move it with: move p @above:c3."] : []),
     "- Use only the pictures listed under PICTURES, exactly as written. For anything else use box \"Label\" or text.",
     "- Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …",
     "- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.",
     "- Cue ids restart at 1 on every \"> \" line, and the actions under a line anchor only on that line's cues.",
+    "- Every action number under a sentence needs its {n} marker in that sentence: \"1 pop a\" needs {1} in the line above.",
   ];
   return `You write one scene of Narrascript: a line-based script language for narrated 2D explainer videos.
 Reply with Narrascript only — no prose, no markdown fences.
@@ -375,7 +390,7 @@ ${elements}`;
  * System prompt for the outline pass: only what planning needs (scene
  * types, themes, the asset names), about a fifth of the full prompt.
  */
-export function outlineSystemPrompt(assets: AssetManifest[]): string {
+export function outlineSystemPrompt(assets: AssetManifest[], domain?: Domain): string {
   // Each layout with its slot sizes, and each page element with the smallest slot it needs:
   // enough to plan a page whose content fits.
   const mode = frameMode("title", false);
@@ -399,7 +414,7 @@ scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true 
 ${styleSection()}
 
 SCENE SHAPES → TEMPLATES (diagrams). First decide the shape of what the scene explains, then take a template of that shape.
-${shapeTable()}
+${shapeTable(domain)}
 
 GRID LAYOUTS (editorial pages: each slot's size; one element per slot)
 ${layouts}
@@ -408,7 +423,7 @@ Plan a page only when its content fits the slots: one element per slot, each slo
 
 PICTURES: ${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons of everyday things (people, places, money, law, science, nature, weather, technology, transport, food, tools). The scene writer picks them; plan scenes around things that can be pictured.
 
-PLANNING RULES
+${domain ? `${DOMAINS[domain].plan}\n\n` : ""}PLANNING RULES
 - Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
 - Every scene brings new items: never show the same things in two scenes (say it once, with the best-fitting template).
 - Diagrams: label the scene's shape, then write the template shown after → for that shape (template=<template name>, never the shape name). Check its "not if".
@@ -546,6 +561,20 @@ function sceneLineId(line: string): string | undefined {
   return /^\s*scene\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line)?.[1];
 }
 
+/** A subject area with templates of its own: planning prefers them and picks a depth. */
+export type Domain = "tech";
+
+export const DOMAINS: Record<Domain, { label: string; shapes: Shape[]; plan: string }> = {
+  tech: {
+    label: "Software & tech concepts",
+    shapes: ["interaction", "architecture", "layers", "structure", "code", "hierarchy", "states", "branching", "format"],
+    plan: `DOMAIN: software & tech concepts
+- Prefer the tech templates where they fit: exchange (messages between parties: a request, a handshake, a login), architecture (a system's components in zones), stack (layers built on each other), structure (array, linked list, stack, queue and what happens to them), code (real code, a query or terminal commands), tree (folders, DNS, the DOM), states (a state machine), gitgraph (Git branches and merges), anatomy (the parts of a URL, a request, a packet), steps variant=pipeline (CI/CD, ETL). Use the general templates for the rest: compare for A vs B, steps for a procedure, cards for kinds or tools, timeline for history, flow for decisions, a grid page for numbers.
+- Pick the depth from the topic and audience and write it at the end of every goal: "· depth: simple" for beginners (everyday words, short labels, at most 4 messages or 6 lines of code) or "· depth: dense" for developers (real protocol, command and API names; real code up to 14 lines; more parts).
+- Show the mechanism: what travels where, what is stored where, what each line does. Avoid scenes that only list words.`,
+  },
+};
+
 /** How much a template holds, for planning: " [2–5 items + result]". */
 function capacity(t: TemplateManifest): string {
   const slots = t.slots.filter((s) => s.required && s.name !== "title").map((s) => s.name);
@@ -563,8 +592,9 @@ function itemsOf(t: TemplateManifest): string {
  * template is one line (the shape says when); with several, each template
  * says when it is the one. "not if" points to the neighbouring shape.
  */
-export function shapeTable(): string {
-  return (Object.keys(SHAPES) as Shape[])
+export function shapeTable(domain?: Domain): string {
+  const first = domain ? DOMAINS[domain].shapes : [];
+  return [...first, ...(Object.keys(SHAPES) as Shape[]).filter((s) => !first.includes(s))]
     .map((shape) => {
       const tpls = templatesFor(shape);
       if (!tpls.length) return "";

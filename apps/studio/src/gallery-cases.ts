@@ -72,6 +72,7 @@ function itemCount(t: TemplateManifest, density: Density): number {
  */
 export function templateScript(t: TemplateManifest, variant: string, size: Density | number, long = false): string {
   if (t.name === "flow") return flowScript(variant, size, long);
+  if (TECH_TEMPLATES.has(t.name)) return techScript(t, variant, typeof size === "number" ? size : itemCount(t, size), long);
   const label = (l: string) => (long ? `${l} ${LONG}` : l);
   const decl: string[] = [];
   const show: string[] = [];
@@ -116,6 +117,135 @@ export function templateScript(t: TemplateManifest, variant: string, size: Densi
     show.push(...arrows.map((a) => a.split(" ")[0]!));
   }
   return scene(`template=${t.name} variant=${variant}`, decl, show);
+}
+
+const TECH_TEMPLATES = new Set(["exchange", "architecture", "stack", "structure", "code", "tree", "states", "gitgraph", "anatomy"]);
+
+/** Example scenes for the software & tech templates: a real topic each, n items. */
+function techScript(t: TemplateManifest, variant: string, n: number, long: boolean): string {
+  const label = (l: string) => (long ? `${l} ${LONG}` : l);
+  const decl: string[] = [];
+  const show: string[] = [];
+  const attrs = `template=${t.name} variant=${variant}`;
+  if (t.name === "exchange") {
+    const parts: [string, string][] = [["icon:globe", "Browser"], ["icon:server", "Web server"], ["icon:database", "Database"], ["icon:shield", "Auth service"], ["icon:zap", "Cache"]];
+    const ids = parts.slice(0, n).map((_, i) => `p${i + 1}`);
+    ids.forEach((id, i) => decl.push(`${id} = ${parts[i]![0]} "${label(parts[i]![1])}"`));
+    // Requests down the chain, then the replies back up it.
+    const msgs: string[] = [];
+    for (let i = 0; i + 1 < ids.length; i++) msgs.push(`m${msgs.length + 1} = arrow ${ids[i]}->${ids[i + 1]} "${["GET /home", "SELECT posts", "check token", "lookup"][i]}"`);
+    for (let i = ids.length - 1; i > 0 && msgs.length < 8; i--) msgs.push(`m${msgs.length + 1} = arrow ${ids[i]}->${ids[i - 1]} "${["200 OK", "rows", "valid", "hit"][(ids.length - 1 - i) % 4]}"`);
+    decl.push(...msgs);
+    show.push(...ids, ...msgs.map((m) => m.split(" ")[0]!));
+    return techScene(attrs, decl, show);
+  }
+  if (t.name === "architecture") {
+    const zones = n >= 9 ? 4 : n >= 6 ? 3 : n >= 4 ? 2 : 1;
+    const comps: [string, string][] = [["icon:globe", "Browser"], ["icon:smartphone", "Mobile app"], ["icon:cloud", "CDN"], ["icon:split", "Load balancer"], ["icon:server", "API"], ["icon:zap", "Cache"], ["icon:database", "Postgres"], ["icon:hard-drive", "Object store"], ["icon:activity", "Metrics"], ["icon:mail", "Queue"]];
+    const zoneNames = ["Client", "Edge", "Services", "Data"];
+    const count = Math.max(1, n - zones);
+    const per = Math.ceil(count / zones);
+    let c = 0;
+    const ids: string[] = [];
+    for (let z = 0; z < zones; z++) {
+      decl.push(`z${z + 1} = zone "${zoneNames[z]}"`);
+      for (let k = 0; k < per && c < count; k++, c++) {
+        decl.push(`c${c + 1} = ${comps[c]![0]} "${label(comps[c]![1])}"`);
+        ids.push(`c${c + 1}`);
+      }
+    }
+    const links = ids.slice(1).map((id, i) => `l${i + 1} = arrow ${ids[i]}->${id}`);
+    decl.push(...links);
+    show.push(...ids, ...links.map((l) => l.split(" ")[0]!));
+    return techScene(attrs, decl, show);
+  }
+  if (t.name === "tree") {
+    // A balanced tree: root, then children in turn, n nodes.
+    const names = ["project", "src", "docs", "tests", "app.js", "utils.js", "README.md", "guide.md", "app.test.js", "index.js", "api.js", "notes.md"];
+    const icons = ["folder", "folder", "folder", "folder", "file", "file", "file-text", "file-text", "file", "file", "file", "file-text"];
+    const parentOf = [-1, 0, 0, 0, 1, 1, 2, 2, 3, 1, 1, 2];
+    for (let i = 0; i < n; i++) {
+      decl.push(`t${i + 1} = icon:${icons[i]} "${label(names[i]!)}"`);
+      show.push(`t${i + 1}`);
+    }
+    for (let i = 1; i < n; i++) {
+      decl.push(`e${i} = line t${parentOf[i]! + 1}->t${i + 1}`);
+      show.push(`e${i}`);
+    }
+    return techScene(attrs, decl, show);
+  }
+  if (t.name === "states") {
+    const states = ["Idle", "Connecting", "Connected", "Sending", "Closing", "Closed", "Error", "Retry"];
+    states.slice(0, n).forEach((st, i) => (decl.push(`s${i + 1} = node "${label(st)}"`), show.push(`s${i + 1}`)));
+    for (let i = 1; i < n; i++) (decl.push(`t${i} = arrow s${i}->s${i + 1} "${["dial", "accept", "write", "close", "done", "fail", "wait"][i - 1]}"`), show.push(`t${i}`));
+    if (n >= 3) (decl.push(`back = arrow s${n}->s1 "reset"`), show.push("back"));
+    return techScene(attrs, decl, show);
+  }
+  if (t.name === "gitgraph") {
+    // main and feature lanes; commits alternate, the last on main merges the feature.
+    const lanes = n >= 8 ? 3 : 2;
+    const commits = Math.max(2, n - lanes);
+    const laneNames = ["main", "feature", "hotfix"];
+    const per = Math.ceil(commits / lanes);
+    let c = 0;
+    const byLane: string[][] = [];
+    for (let l = 0; l < lanes; l++) {
+      decl.push(`b${l + 1} = zone "${laneNames[l]}"`);
+      byLane.push([]);
+      for (let k = 0; k < per && c < commits; k++, c++) {
+        decl.push(`c${c + 1} = circle "${label(["init", "login", "form", "tests", "fix", "merge", "docs", "ship", "tag", "bump"][c]!)}"`);
+        byLane[l]!.push(`c${c + 1}`);
+        show.push(`c${c + 1}`);
+      }
+    }
+    const links: string[] = [];
+    byLane.forEach((lane, l) => {
+      lane.slice(1).forEach((id, k) => links.push(`${lane[k]}->${id}`));
+      if (l > 0 && lane.length && byLane[0]!.length) links.push(`${byLane[0]![0]}->${lane[0]}`);
+    });
+    links.forEach((ln, i) => (decl.push(`g${i + 1} = line ${ln}`), show.push(`g${i + 1}`)));
+    return techScene(attrs, decl, show);
+  }
+  if (t.name === "anatomy") {
+    const parts = ["https://", "shop.example.com", ":443", "/products", "?id=42", "#reviews", "&sort=new"];
+    const names = ["protocol", "domain", "port", "path", "query", "fragment", "param"];
+    parts.slice(0, n).forEach((pt, i) => {
+      decl.push(`p${i + 1} = box "${long ? `${pt}/more/path` : pt}"`, `n${i + 1} = label "${names[i]}" @${variant === "stacked" ? "right-of" : "below"}:p${i + 1}`);
+      show.push(`p${i + 1}`, `n${i + 1}`);
+    });
+    return techScene(attrs, decl, show);
+  }
+  if (t.name === "stack") {
+    const layers = ["Your app", "HTTP", "TLS", "TCP", "IP", "Ethernet", "Physical"];
+    layers.slice(0, n).forEach((l, i) => (decl.push(`s${i + 1} = box "${label(l)}"`), show.push(`s${i + 1}`)));
+    return techScene(attrs, decl, show);
+  }
+  if (t.name === "structure") {
+    const values = ["3", "8", "15", "23", "42", "57", "64", "91"];
+    values.slice(0, n).forEach((v, i) => (decl.push(`c${i + 1} = box "${long ? `${v}000` : v}"`), show.push(`c${i + 1}`)));
+    if (variant === "array" && n >= 2) (decl.push(`ptr = label "mid" @above:c${Math.ceil(n / 2)}`), show.push("ptr"));
+    return techScene(attrs, decl, show);
+  }
+  // code: the panel, then notes (or its output in a terminal for split).
+  decl.push(`code = code "const res = await fetch(url);\\nif (!res.ok) throw new Error(res.status);\\nconst data = await res.json();\\nshow(data.items);" lang=js`);
+  show.push("code");
+  if (variant === "split") {
+    decl.push(`out = terminal "$ node app.js\\nLoaded 24 items\\nDone in 180 ms"`);
+    show.push("out");
+  } else {
+    const notes = ["Ask the server", "Stop on an error", "Read the JSON", "Show the items"];
+    notes.slice(0, n).forEach((l, i) => (decl.push(`n${i + 1} = label "${label(l)}"`), show.push(`n${i + 1}`)));
+  }
+  return techScene(attrs, decl, show);
+}
+
+/** Like scene(), but connectors are sent (a packet travels) instead of faded in. */
+function techScene(attrs: string, decl: string[], show: string[]): string {
+  const links = new Set(decl.filter((d) => /=\s*arrow\s/.test(d)).map((d) => d.split(" ")[0]!));
+  const lines = new Set(decl.filter((d) => /=\s*line\s/.test(d)).map((d) => d.split(" ")[0]!));
+  const words = show.map((id, i) => `{${i + 1}}${id}`).join(" then ");
+  const actions = show.map((id, i) => `${i + 1} ${links.has(id) ? "send" : lines.has(id) ? "draw" : "fade"} ${id}`);
+  return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> First ${words}.\n${actions.join("\n")}\n`;
 }
 
 /** Appended to every label for the long-label stress setting (about 35 characters in all). */

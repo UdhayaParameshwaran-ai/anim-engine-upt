@@ -38,7 +38,8 @@ export interface LayoutContext {
  */
 export interface Decor {
   id: string;
-  kind: "line" | "arrow" | "panel" | "badge" | "rule" | "kicker";
+  /** show: an element the scene declared (a zone) appears with the first element it belongs to, unless the script shows it. */
+  kind: "line" | "arrow" | "panel" | "badge" | "rule" | "kicker" | "caption" | "show" | "chevron";
   link?: { from: string; to: string };
   text?: string;
   follows: string[];
@@ -239,7 +240,7 @@ class SceneLayouter {
   private result(): SceneLayout {
     const self = this;
     if (this.scene.attrs.mirror === "true") this.mirror();
-    for (const e of this.els) if (LINK_KINDS.has(e.kind) && e.link) this.connector(e);
+    for (const e of this.els) if (LINK_KINDS.has(e.kind) && e.link && this.params.get(e.id)?.route !== "row") this.connector(e);
     for (const d of this.decor) if (d.link) this.connector({ id: d.id, link: d.link });
     return {
       boxes: this.boxes,
@@ -474,6 +475,105 @@ class SceneLayouter {
     };
 
     switch (tpl.name) {
+      case "exchange": {
+        // A lifeline down from each participant; it appears with its participant.
+        const seq = this.seq;
+        if (!seq) return;
+        for (const e of items) {
+          const pic = picture(e);
+          const b = this.boxes.get(e.id)!;
+          const x = pic.x + pic.w / 2;
+          this.addDecor("rule", [e], { box: { x: x - 3, y: b.y + b.h + 10, w: 6, h: Math.max(20, seq.bottom - (b.y + b.h + 10)) }, params: { style: "dashed" } });
+          this.from(e, 0, -1);
+        }
+        return;
+      }
+      case "architecture": {
+        // A zone appears with its first member unless the script shows it; members rise into it.
+        for (const g of this.zones ?? []) {
+          if (g.zone && g.members[0]) this.decor.push({ id: g.zone.id, kind: "show", follows: [g.members[0].id] });
+          for (const e of g.members) this.from(e, 0, 1);
+        }
+        items.filter((e) => e.kind === "zone").forEach((z, i) => this.note(z, { hue: i }));
+        return;
+      }
+      case "stack": {
+        items.forEach((e) => {
+          if (e.kind !== "box") this.addDecor("panel", [e], { box: this.cells.get(e.id)! });
+          this.from(e, 0, 1);
+        });
+        return;
+      }
+      case "structure": {
+        const cells = items.map((e) => this.cells.get(e.id)!);
+        if (variant === "array") {
+          // Indexes under the cells.
+          items.forEach((e, i) => this.addDecor("caption", [e], { box: { x: cells[i]!.x, y: cells[i]!.y + cells[i]!.h + 8, w: cells[i]!.w, h: 40 }, text: String(i) }));
+        }
+        if (variant === "list") {
+          items.slice(1).forEach((e, i) => this.addDecor("arrow", [items[i]!, e], { link: [items[i]!, e] }));
+          const last = cells.at(-1);
+          if (last && items.at(-1)) this.addDecor("caption", [items.at(-1)!], { box: { x: last.x + last.w + 12, y: last.y + last.h / 2 - 20, w: 120, h: 40 }, text: "→ null", params: { align: "left" } });
+        }
+        if (variant === "queue" && items.length > 1) {
+          const [first, last] = [cells[0]!, cells.at(-1)!];
+          this.addDecor("caption", [items[0]!], { box: { x: first.x, y: first.y + first.h + 8, w: first.w, h: 40 }, text: "front" });
+          this.addDecor("caption", [items.at(-1)!], { box: { x: last.x, y: last.y + last.h + 8, w: last.w, h: 40 }, text: "back" });
+        }
+        if (variant === "stack" && items.length) {
+          const top = cells.at(-1)!;
+          this.addDecor("caption", [items.at(-1)!], { box: { x: top.x + top.w + 16, y: top.y + top.h / 2 - 20, w: 140, h: 40 }, text: "← top", params: { align: "left" } });
+        }
+        items.forEach((e) => this.from(e, 0, variant === "stack" ? -1 : 1));
+        return;
+      }
+      case "code": {
+        for (const e of items) this.from(e, 1, 0);
+        return;
+      }
+      case "tree": {
+        for (const e of items) this.from(e, variant === "right" ? -1 : 0, variant === "right" ? 0 : -1);
+        return;
+      }
+      case "states": {
+        // A transition that goes back against the reading direction curves, so it doesn't run over the others.
+        const down = variant === "down";
+        for (const e of this.els) {
+          if (!LINK_KINDS.has(e.kind) || !e.link) continue;
+          const a = this.boxes.get(e.link.from);
+          const b = this.boxes.get(e.link.to);
+          if (!a || !b) continue;
+          const back = down ? b.y < a.y - 4 : b.x < a.x - 4;
+          const level = down ? Math.abs(a.x - b.x) < 4 : Math.abs(a.y - b.y) < 4;
+          if (back || (level && this.linked(e.link.from, e.link.to) && this.els.some((o) => o !== e && o.link?.from === e.link!.to && o.link?.to === e.link!.from))) {
+            this.params.set(e.id, { ...this.params.get(e.id), curve: "arc", bend: back ? 0.32 : 0.18 });
+          }
+        }
+        for (const e of items) this.note(e, { round: 1 });
+        return;
+      }
+      case "gitgraph": {
+        // A commit takes its lane's color (set after the per-item colors above).
+        for (const [id, lane] of this.laneOf ?? []) this.note(this.byId.get(id)!, { hue: lane });
+        items.filter((e) => e.kind === "zone").forEach((z, i) => this.note(z, { hue: i }));
+        for (const e of items) if (e.kind !== "zone") this.from(e, -1, 0);
+        // A line takes the color of the lane it leads into.
+        for (const e of this.els) if (e.kind === "line" && e.link && this.laneOf?.has(e.link.to)) this.note(e, { hue: this.laneOf.get(e.link.to)! });
+        // A lane appears with its first commit unless the script shows it.
+        let lane: ElementDecl | undefined;
+        for (const e of items) {
+          if (e.kind === "zone") lane = e;
+          else if (lane) {
+            this.decor.push({ id: lane.id, kind: "show", follows: [e.id] });
+            lane = undefined;
+          }
+        }
+        return;
+      }
+      case "anatomy": {
+        items.forEach((e) => this.from(e, 0, variant === "stacked" ? 1 : -1));
+        return;
+      }
       case "hub": {
         const mid = slot("center");
         for (const e of items) {
@@ -523,7 +623,16 @@ class SceneLayouter {
       }
       case "steps": {
         const down = variant === "column";
-        items.forEach((e, i) => {
+        if (variant !== "pipeline") items.forEach((e, i) => {
+          const band = this.params.get(e.id)?.band !== undefined;
+          if (band) {
+            // A band: its number just left of it, centred on it.
+            const bb = this.boxes.get(e.id)!;
+            const d = 60;
+            this.addDecor("badge", [e], { box: { x: bb.x - d - 16, y: bb.y + bb.h / 2 - d / 2, w: d, h: d }, text: String(i + 1) });
+            this.from(e, 0, 1);
+            return;
+          }
           const b = picture(e);
           const pictured = b !== this.boxes.get(e.id);
           const d = Math.round(Math.min(84, Math.max(56, b.w * 0.24)));
@@ -532,7 +641,12 @@ class SceneLayouter {
           this.addDecor("badge", [e], { box: { x: b.x + b.w * inset - d / 2, y: b.y + b.h * inset - d / 2, w: d, h: d }, text: String(i + 1) });
           this.from(e, down ? 0 : -1, down ? 1 : 0);
         });
-        if (variant !== "grid" && !this.linkedAmong(items)) items.slice(1).forEach((e, i) => this.addDecor("arrow", [items[i]!, e], { link: [items[i]!, e] }));
+        if (variant === "pipeline") {
+          items.forEach((e, i) => this.addDecor("chevron", [e], { box: this.chevrons?.get(e.id) ?? this.cells.get(e.id)!, params: { hue: i, first: i === 0 ? 1 : 0 } }));
+          return;
+        }
+        const banded = items.some((e) => this.params.get(e.id)?.band !== undefined);
+        if (variant !== "grid" && !banded && !this.linkedAmong(items)) items.slice(1).forEach((e, i) => this.addDecor("arrow", [items[i]!, e], { link: [items[i]!, e] }));
         return;
       }
       case "cards": {
@@ -695,8 +809,22 @@ class SceneLayouter {
         const e = this.scene.attrs.emphasis;
         const big = e === "right" || e === "last" ? 1 : 0;
         let cells: Box[];
-        if (variant === "stacked") cells = colCells(content, 2, this.gap);
-        else if (variant === "diagonal") {
+        if (variant === "stacked") {
+          cells = colCells({ x: content.x + content.w * 0.12, y: content.y, w: content.w * 0.76, h: content.h * (items.length ? 0.78 : 1) }, 2, this.gap);
+          const band = (el: ElementDecl | undefined, cell: Box) => {
+            if (!el) return;
+            this.cells.set(el.id, cell);
+            const inner = { x: cell.x + 40, y: cell.y + cell.h * 0.12, w: cell.w - 80, h: cell.h * 0.76 };
+            if (el.kind === "icon" || el.kind === "asset") {
+              this.boxes.set(el.id, round(inner));
+              this.scales.set(el.id, 1);
+              this.note(el, { band: 1 });
+            } else this.put(el, inner, 0.9);
+          };
+          band(left, cells[0]!);
+          band(right, cells[1]!);
+          return this.layout("row", items, { ...content, y: content.y + content.h * 0.8, h: content.h * 0.2 });
+        } else if (variant === "diagonal") {
           const w = content.w * 0.56;
           const h = content.h * 0.6;
           cells = [{ x: content.x, y: content.y, w, h }, { x: content.x + content.w - w, y: content.y + content.h - h, w, h }];
@@ -709,8 +837,37 @@ class SceneLayouter {
         return this.layout("row", items, { ...content, y: content.y + content.h * 0.8, h: content.h * 0.2 });
       }
       case "steps": {
-        if (variant === "column") return this.layout("col", items, content);
+        if (variant === "column") {
+          // A column of steps reads as bands: each picture at the left with its label beside it.
+          const n = items.length;
+          const gapY = this.gap * 1.2;
+          const h = Math.min(130, (content.h - gapY * (n - 1)) / n);
+          const w = Math.min(content.w * 0.62, 1000);
+          const cells = colCells({ x: content.x + (content.w - w) / 2, y: content.y + (content.h - (n * h + gapY * (n - 1))) / 2, w, h: n * h + gapY * (n - 1) }, n, gapY);
+          items.forEach((e, i) => {
+            if (e.kind === "icon" || e.kind === "asset") {
+              this.boxes.set(e.id, round(cells[i]!));
+              this.cells.set(e.id, cells[i]!);
+              this.scales.set(e.id, 1);
+              this.note(e, { band: 1 });
+            } else this.put(e, cells[i]!);
+          });
+          return;
+        }
         if (variant === "grid") return this.layout("grid", items, content);
+        if (variant === "pipeline") {
+          const n = items.length;
+          const h = Math.min(content.h * 0.62, 440);
+          const cells = rowCells({ x: content.x, y: content.y + (content.h - h) / 2, w: content.w, h }, n, 0);
+          this.chevrons = new Map();
+          // Each stage sits inside its chevron, a little right of centre (the notch eats the left side).
+          items.forEach((e, i) => {
+            const c = cells[i]!;
+            this.chevrons!.set(e.id, c);
+            this.put(e, { x: c.x + c.w * (i === 0 ? 0.08 : 0.18), y: c.y + h * 0.08, w: c.w * 0.7, h: h * 0.84 }, 1);
+          });
+          return;
+        }
         const cells = rowCells(content, items.length, this.gap, this.weights(items));
         if (variant === "zigzag") {
           const h = content.h * 0.62;
@@ -830,17 +987,304 @@ class SceneLayouter {
         }
         // Three bands with wide gaps between them for the arrows (a 16:9 frame has little height to spare going down).
         const down = variant === "down";
-        const parts = down ? colCells(content, 3, this.gap * 2.4, [1, 1.5, 1]) : rowCells(content, 5, this.gap, [1, 0.35, 1.25, 0.35, 1]);
+        const parts = down ? colCells(content, 3, this.gap * 1.3, [1, 1.15, 1]) : rowCells(content, 5, this.gap, [1, 0.35, 1.25, 0.35, 1]);
         const [first, mid, last] = down ? [parts[0]!, parts[1]!, parts[2]!] : [parts[0]!, parts[2]!, parts[4]!];
-        const side = (list: ElementDecl[], cell: Box) => list.forEach((e, i) => this.put(e, (down ? rowCells : colCells)(cell, list.length, this.gap)[i]!));
+        const side = (list: ElementDecl[], cell: Box) => list.forEach((e, i) => this.put(e, (down ? rowCells : colCells)(cell, list.length, this.gap)[i]!, down ? 1 : this.fill));
         side(inputs, first);
-        if (proc) this.put(proc, mid, 0.9);
+        if (proc) this.put(proc, mid, down ? 1 : 0.9);
         side(outputs, last);
         return;
       }
+      case "exchange":
+        return this.sequence(items, content, variant);
+      case "architecture":
+        return this.architecture(items, content, variant);
+      case "stack":
+        return this.stack(items, content, variant);
+      case "structure":
+        return this.structure(items, content, variant);
+      case "code":
+        return this.codeScene(slot("code"), items, content, variant);
+      case "tree":
+        return this.tree(items, content, variant);
+      case "states":
+        return this.flow(items, content, variant === "down" ? "down" : "across");
+      case "gitgraph":
+        return this.gitgraph(items, content);
+      case "anatomy":
+        return this.anatomy(items, content, variant);
       default:
         return this.layout("row", items, content);
     }
+  }
+
+  // ------------------------------------------------ software & tech layouts
+
+  /** Center x of an element's picture (its box less the label band). */
+  private midX(e: ElementDecl): number {
+    const b = this.boxes.get(e.id)!;
+    return b.x + b.w / 2;
+  }
+
+  /**
+   * Sequence: the participants side by side at the top, each with a lifeline
+   * down the scene; every arrow between two of them is a message, one row
+   * each, in declaration order (time runs downward).
+   */
+  private sequence(parts: ElementDecl[], content: Box, variant: string): void {
+    const compact = variant === "compact";
+    const n = Math.max(1, parts.length);
+    const ids = new Set(parts.map((e) => e.id));
+    const msgs = this.els.filter((e) => LINK_KINDS.has(e.kind) && e.link && ids.has(e.link.from) && ids.has(e.link.to) && e.link.from !== e.link.to);
+    const headH = Math.round(content.h * (compact ? 0.42 : msgs.length > 5 ? 0.27 : 0.33));
+    const cols = rowCells({ ...content, h: headH }, n, this.gap * 2);
+    parts.forEach((e, i) => this.put(e, cols[i]!, 0.92));
+    const top = content.y + headH + Math.round(this.gap * 0.8);
+    const bottom = content.y + content.h;
+    const rows = colCells({ x: content.x, y: top, w: content.w, h: bottom - top }, Math.max(1, msgs.length), 0);
+    msgs.forEach((m, i) => {
+      const a = this.byId.get(m.link!.from)!;
+      const b = this.byId.get(m.link!.to)!;
+      const [xa, xb] = [this.midX(a), this.midX(b)];
+      const y = Math.round(rows[i]!.y + rows[i]!.h / 2);
+      this.boxes.set(m.id, round({ x: Math.min(xa, xb), y: y - 2, w: Math.max(1, Math.abs(xb - xa)), h: 4 }));
+      this.params.set(m.id, { ...this.params.get(m.id), route: "row", dir: xb >= xa ? 1 : -1 });
+    });
+    this.seq = { top, bottom };
+  }
+  private seq?: { top: number; bottom: number };
+
+  /**
+   * Architecture: a zone element starts a group and every element after it
+   * belongs to that group, until the next zone. Zones are columns (tiers) or
+   * rows (layers); a zone's box is its whole cell, its members sit inside.
+   */
+  private architecture(items: ElementDecl[], content: Box, variant: string): void {
+    const groups: { zone?: ElementDecl; members: ElementDecl[] }[] = [];
+    for (const e of items) {
+      if (e.kind === "zone") groups.push({ zone: e, members: [] });
+      else (groups.at(-1) ?? groups[groups.push({ members: [] }) - 1]!).members.push(e);
+    }
+    if (!groups.length) return;
+    const rows = variant === "layers";
+    const weights = groups.map((g) => Math.max(1, Math.min(3, g.members.length)) + (rows ? 0 : 0.5));
+    const cells = rows ? colCells(content, groups.length, this.gap * 0.8, weights.map(() => 1)) : rowCells(content, groups.length, this.gap * 0.8, weights);
+    groups.forEach((g, i) => {
+      const cell = cells[i]!;
+      const band = Math.round(Math.min(64, cell.h * 0.14));
+      if (g.zone) {
+        this.boxes.set(g.zone.id, round(cell));
+        this.cells.set(g.zone.id, cell);
+      }
+      // Members inside the zone, below its name; a column stacks them, a row lines them up.
+      const inner = { x: cell.x + 24, y: cell.y + (g.zone ? band : 0) + 12, w: cell.w - 48, h: cell.h - (g.zone ? band : 0) - 24 };
+      const spots = rows ? rowCells(inner, Math.max(1, g.members.length), this.gap) : colCells(inner, Math.max(1, g.members.length), this.gap * 0.6);
+      g.members.forEach((e, j) => this.put(e, spots[j]!, 0.9));
+    });
+    this.zones = groups;
+  }
+  private zones?: { zone?: ElementDecl; members: ElementDecl[] }[];
+
+  /** Stack: layers as bands, the first declared on top. A box fills its band; anything else sits on a band panel. */
+  private stack(items: ElementDecl[], content: Box, variant: string): void {
+    const n = Math.max(1, items.length);
+    const w = variant === "centered" ? Math.round(content.w * 0.62) : content.w;
+    const area = { x: content.x + (content.w - w) / 2, y: content.y, w, h: Math.min(content.h, n * 170 + (n - 1) * 14) };
+    area.y = content.y + (content.h - area.h) / 2;
+    const bands = colCells(area, n, 14);
+    items.forEach((e, i) => {
+      const band = bands[i]!;
+      this.cells.set(e.id, band);
+      if (e.kind === "box") {
+        this.boxes.set(e.id, round(band));
+        this.scales.set(e.id, 1);
+      } else if (e.kind === "icon" || e.kind === "asset") {
+        // A picture layer reads as a band: its picture at the left, its label beside it.
+        this.boxes.set(e.id, round(band));
+        this.scales.set(e.id, 1);
+        this.note(e, { band: 1 });
+      } else this.put(e, band, 0.86);
+    });
+  }
+
+  /** Children of each item, from the links declared between items (parent -> child). */
+  private childrenOf(items: ElementDecl[]): Map<string, string[]> {
+    const ids = new Set(items.map((e) => e.id));
+    const kids = new Map(items.map((e) => [e.id, [] as string[]]));
+    for (const e of this.els) {
+      if (!LINK_KINDS.has(e.kind) || !e.link || !ids.has(e.link.from) || !ids.has(e.link.to) || e.link.from === e.link.to) continue;
+      if (![...kids.values()].some((k) => k.includes(e.link!.to))) kids.get(e.link.from)!.push(e.link.to);
+    }
+    return kids;
+  }
+
+  /**
+   * Tree: a tidy layout. Leaves are spread evenly in reading order, each
+   * parent is centred over its children, every level a row (down) or a
+   * column (right). Items no link reaches are roots.
+   */
+  private tree(items: ElementDecl[], content: Box, variant: string): void {
+    const kids = this.childrenOf(items);
+    const hasParent = new Set([...kids.values()].flat());
+    const roots = items.filter((e) => !hasParent.has(e.id)).map((e) => e.id);
+    const depth = new Map<string, number>();
+    const slot = new Map<string, number>();
+    let leaves = 0;
+    const place = (id: string, d: number): number => {
+      depth.set(id, d);
+      const ch = kids.get(id) ?? [];
+      if (!ch.length) {
+        slot.set(id, leaves++);
+        return slot.get(id)!;
+      }
+      const xs = ch.map((c) => place(c, d + 1));
+      slot.set(id, (xs[0]! + xs.at(-1)!) / 2);
+      return slot.get(id)!;
+    };
+    for (const r of roots) place(r, 0);
+    const levels = Math.max(1, ...[...depth.values()].map((d) => d + 1));
+    const right = variant === "right";
+    const across = Math.max(1, leaves);
+    const gapLevel = right ? Math.max(60, (content.w - levels * 280) / Math.max(1, levels - 1)) : Math.max(40, (content.h - levels * 200) / Math.max(1, levels - 1));
+    const along = right ? content.h / across : content.w / across;
+    const level = right ? Math.min(320, (content.w - gapLevel * (levels - 1)) / levels) : Math.min(220, (content.h - gapLevel * (levels - 1)) / levels);
+    const total = levels * level + (levels - 1) * gapLevel;
+    for (const e of items) {
+      const d = depth.get(e.id) ?? 0;
+      const s = slot.get(e.id) ?? 0;
+      const cell = right
+        ? { x: content.x + (content.w - total) / 2 + d * (level + gapLevel), y: content.y + s * along, w: level, h: along }
+        : { x: content.x + s * along, y: content.y + (content.h - total) / 2 + d * (level + gapLevel), w: along, h: level };
+      this.put(e, cell, 0.9);
+    }
+    this.treeKids = kids;
+  }
+  private treeKids?: Map<string, string[]>;
+  private chevrons?: Map<string, Box>;
+  /** Gitgraph: the lane index of each commit (its color). */
+  private laneOf?: Map<string, number>;
+
+  /**
+   * Git graph: a zone starts a branch lane (a row); commits declared after it
+   * are on it. A commit's column is its distance from the first commit along
+   * the declared links, so a merge comes after both of its parents.
+   */
+  private gitgraph(items: ElementDecl[], content: Box): void {
+    const lanes: { zone?: ElementDecl; commits: ElementDecl[] }[] = [];
+    for (const e of items) {
+      if (e.kind === "zone") lanes.push({ zone: e, commits: [] });
+      else (lanes.at(-1) ?? lanes[lanes.push({ commits: [] }) - 1]!).commits.push(e);
+    }
+    const commits = lanes.flatMap((l) => l.commits);
+    const ids = new Set(commits.map((e) => e.id));
+    const links = this.els.filter((e) => LINK_KINDS.has(e.kind) && e.link && ids.has(e.link.from) && ids.has(e.link.to)).map((e) => e.link!);
+    const col = new Map(commits.map((e) => [e.id, 0]));
+    for (let pass = 0; pass < commits.length; pass++) for (const l of links) col.set(l.to, Math.max(col.get(l.to)!, col.get(l.from)! + 1));
+    const cols = Math.max(1, ...[...col.values()].map((c) => c + 1));
+    const labelW = 220;
+    const rows = colCells({ ...content, x: content.x + labelW, w: content.w - labelW }, Math.max(1, lanes.length), this.gap * 0.4);
+    const step = (content.w - labelW) / cols;
+    lanes.forEach((lane, i) => {
+      const row = rows[i]!;
+      if (lane.zone) {
+        this.boxes.set(lane.zone.id, round({ x: content.x, y: row.y, w: content.w, h: row.h }));
+        this.note(lane.zone, { lane: 1, hue: i });
+      }
+      for (const c of lane.commits) {
+        this.cellAt(c, { x: content.x + labelW + col.get(c.id)! * step + step * 0.15, y: row.y + row.h * 0.12, w: step * 0.7, h: row.h * 0.76 });
+        this.note(c, { dot: 1 });
+        (this.laneOf ??= new Map()).set(c.id, i);
+      }
+    });
+  }
+
+  /** Anatomy: the parts side by side as one bar (widths follow their text), or as rows. */
+  private anatomy(items: ElementDecl[], content: Box, variant: string): void {
+    if (variant === "stacked") {
+      const n = items.length;
+      const h = Math.min(150, (content.h * 0.86) / n);
+      const w = Math.min(content.w * 0.7, 1300);
+      const cells = colCells({ x: content.x + (content.w - w) / 2 - content.w * 0.08, y: content.y + (content.h - n * h) / 2, w, h: n * h }, n, 0);
+      items.forEach((e, i) => this.cellAt(e, cells[i]!));
+      return;
+    }
+    const weights = items.map((e) => Math.max(4, Math.min(26, (e.texts[0] ?? "").length)) + 4);
+    const h = Math.min(170, content.h * 0.3);
+    const cells = rowCells({ x: content.x, y: content.y + content.h * 0.32 - h / 2, w: content.w, h }, items.length, 0, weights);
+    items.forEach((e, i) => this.cellAt(e, cells[i]!));
+  }
+
+  /** Data structure cells: one size for all, so values read as one structure. */
+  private structure(items: ElementDecl[], content: Box, variant: string): void {
+    const n = Math.max(1, items.length);
+    const vertical = variant === "stack";
+    if (vertical) {
+      const h = Math.min(130, (content.h * 0.9) / n);
+      const w = Math.min(520, content.w * 0.4);
+      const x = content.x + (content.w - w) / 2;
+      const y0 = content.y + (content.h - n * h) / 2;
+      // The first declared is at the bottom: a stack grows upward.
+      items.forEach((e, i) => this.cellAt(e, { x, y: y0 + (n - 1 - i) * h, w, h: h - 8 }));
+      return;
+    }
+    const link = variant === "list";
+    const gapX = link ? Math.min(110, content.w * 0.06) : variant === "queue" ? 18 : 0;
+    const s = Math.min(260, (content.w - gapX * (n - 1)) / n, content.h * 0.45);
+    const total = n * s + (n - 1) * gapX;
+    const x0 = content.x + (content.w - total) / 2;
+    const y = content.y + (content.h - s) / 2;
+    items.forEach((e, i) => this.cellAt(e, { x: x0 + i * (s + gapX), y, w: s, h: link ? s * 0.72 : s }));
+  }
+
+  private cellAt(e: ElementDecl, box: Box): void {
+    this.cells.set(e.id, box);
+    if (e.kind === "box" || e.kind === "circle") {
+      this.boxes.set(e.id, round(box));
+      this.scales.set(e.id, 1);
+    } else this.put(e, box, 0.86);
+  }
+
+  /** Code: the panel takes most of the width; notes, or its output, beside or below it. */
+  private codeScene(code: ElementDecl | undefined, items: ElementDecl[], content: Box, variant: string): void {
+    const lines = Math.max(1, (code?.texts[0] ?? "").split("\n").length);
+    const fit = (cell: Box) => {
+      // The panel is as wide as its cell; as tall as its lines need (capped by the cell).
+      const h = Math.min(cell.h, Math.max(220, lines * 72 + 110));
+      return { x: cell.x, y: cell.y + (cell.h - h) / 2, w: cell.w, h };
+    };
+    if (variant === "stacked") {
+      const [top, bottom] = colCells(content, 2, this.gap, items.length ? [2.2, 1] : [1, 0.001]);
+      if (code) this.boxes.set(code.id, round(fit(top!)));
+      const spots = rowCells(bottom!, Math.max(1, items.length), this.gap);
+      items.forEach((e, i) => this.noteCell(e, spots[i]!));
+      return;
+    }
+    const split = variant === "split";
+    const [left, right] = rowCells(content, 2, this.gap * 1.2, split ? [1, 1] : items.length ? [1.7, 1] : [1, 0.001]);
+    const panel = fit(left!);
+    if (code) this.boxes.set(code.id, round(panel));
+    // Notes line up with the panel, not spread over the whole frame.
+    const span = { ...right!, y: panel.y, h: Math.max(panel.h, Math.min(right!.h, items.length * 130)) };
+    span.y = Math.max(right!.y, panel.y + panel.h / 2 - span.h / 2);
+    const spots = colCells(span, Math.max(1, items.length), this.gap * 0.6);
+    items.forEach((e, i) => this.noteCell(e, split ? fit(right!) : spots[i]!));
+  }
+
+  /** A note beside code: text left-aligned in its cell; a code or terminal panel fills it. */
+  private noteCell(e: ElementDecl, cell: Box): void {
+    this.cells.set(e.id, cell);
+    if (e.kind === "code" || e.kind === "terminal") {
+      this.boxes.set(e.id, round(cell));
+      return;
+    }
+    if (["label", "text"].includes(e.kind)) {
+      // A note: left-aligned, large, up to two lines, centred in its cell.
+      const h = Math.min(cell.h, 120);
+      this.boxes.set(e.id, round({ x: cell.x, y: cell.y + (cell.h - h) / 2, w: cell.w, h }));
+      this.note(e, { size: 40, align: "left" });
+      return;
+    }
+    this.put(e, cell, 0.9);
   }
 
 /**
@@ -1064,8 +1508,11 @@ class SceneLayouter {
         const ref = this.boxes.get(place.ref);
         if (!ref) continue;
         const size = this.sizes.get(e.id)!;
-        const f = place.relation === "inside" ? fit(size, ref.w * 0.6, ref.h * 0.6) : fit(size, this.safe.w / 3, this.safe.h / 3);
-        this.boxes.set(e.id, this.clamp(relative(ref, f, place.relation)));
+        // Stacked rows (anatomy) touch each other: a name above or below a row would sit on its neighbour, so it goes beside it.
+        const stacked = this.scene.attrs.template === "anatomy" && this.chosen === "stacked" && (place.relation === "below" || place.relation === "above");
+        const relation = stacked ? "right-of" : place.relation;
+        const f = relation === "inside" ? fit(size, ref.w * 0.6, ref.h * 0.6) : fit(size, this.safe.w / 3, this.safe.h / 3);
+        this.boxes.set(e.id, this.clamp(relative(ref, f, relation)));
         pending.splice(pending.indexOf(e), 1);
       }
     }
@@ -1135,7 +1582,8 @@ class SceneLayouter {
   }
 
   private checkOverlaps(): void {
-    const solid = this.els.filter((e) => !LINK_KINDS.has(e.kind) && e.place?.kind !== "relative" && this.boxes.has(e.id));
+    // Zones contain their members, so they never overlap them.
+    const solid = this.els.filter((e) => !LINK_KINDS.has(e.kind) && e.kind !== "zone" && e.place?.kind !== "relative" && this.boxes.has(e.id));
     for (let i = 0; i < solid.length; i++)
       for (let j = i + 1; j < solid.length; j++) {
         const a = this.boxes.get(solid[i]!.id)!;

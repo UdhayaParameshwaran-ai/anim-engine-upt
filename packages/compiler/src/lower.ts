@@ -233,6 +233,16 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
   );
 
   for (const d of layout.decor) {
+    // A declared element shown with another one (a zone with its first member), unless the script shows it itself.
+    if (d.kind === "show") {
+      const m = first.get(d.follows[0]!);
+      const beat = m && scene.steps[m.step]?.beats[m.beat];
+      if (!m || !beat || first.has(d.id)) continue;
+      const fade = findVerb("fade")!;
+      beat.actions.push({ anchor: m.anchor, line: m.line, calls: [{ verb: "fade", verbVersion: fade.version, targets: [d.id], duration: round2(fade.defaultDuration * motion.durScale), delay: round2(Math.max(0, m.offset - 0.1)), stagger: 0, params: { ease: "out" } }] });
+      first.set(d.id, m);
+      continue;
+    }
     const moments = d.follows.map((id) => first.get(id));
     if (moments.some((m) => !m)) continue;
     // A decoration that belongs to no element (a scene heading) is there from the start.
@@ -253,7 +263,7 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
       line: at.line,
     });
     // Lines are drawn, numbers pop, panels fade in with their item.
-    const verb = findVerb(d.kind === "badge" ? "pop" : d.kind === "panel" || d.kind === "kicker" ? "fade" : "draw")!;
+    const verb = findVerb(d.kind === "badge" ? "pop" : d.kind === "panel" || d.kind === "kicker" || d.kind === "caption" || d.kind === "chevron" ? "fade" : "draw")!;
     const params: Record<string, string | number | boolean> = {};
     for (const [k, spec] of Object.entries(verb.params)) if (spec.default !== undefined) params[k] = spec.default;
     delete params.until;
@@ -267,7 +277,7 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
           targets: [d.id],
           duration: round2((d.kind === "badge" || d.kind === "panel" ? verb.defaultDuration : 0.6) * motion.durScale),
           // A scene heading is on screen as the scene appears, before the narrator starts.
-          delay: d.kind === "kicker" ? -5 : round2(at.offset + (d.kind === "panel" ? 0 : 0.12)),
+          delay: d.kind === "kicker" ? -5 : round2(at.offset + (d.kind === "panel" || d.kind === "chevron" ? 0 : 0.12)),
           stagger: 0,
           params,
         },

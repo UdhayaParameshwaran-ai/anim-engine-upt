@@ -26,7 +26,7 @@ export interface Instance {
   /** Grid elements: plays the element's signature motion for draw progress k (0..1). */
   motion?: (k: number) => void;
   /** Connectors are re-routed every frame between their endpoints. */
-  connector?: { from: string; to: string; path: SVGPathElement; head?: SVGPathElement; label?: SVGTextElement };
+  connector?: { from: string; to: string; path: SVGPathElement; head?: SVGPathElement; label?: SVGTextElement; token?: SVGCircleElement };
 }
 
 const CHAR_W = 0.55;
@@ -52,25 +52,84 @@ export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${
     case "label": {
       const left = el.params.align === "left";
       // Grid headers: left-aligned, sized to their band.
-      const font = left ? Math.min(FONT[el.kind]!, h * 0.85) : FONT[el.kind]!;
+      // A layout may ask for a size (notes beside code); grid headers are sized to their band.
+      const base = el.params.size !== undefined ? Number(el.params.size) : FONT[el.kind]!;
+      const font = left ? Math.min(base, Math.max(h * 0.85, el.params.size !== undefined ? base : 0)) : base;
       g.append(text(doc, inst, el.texts[0] ?? "", font, w, h, theme, { heading: el.kind === "title", parts: true, align: left ? "left" : "center", ...(el.params.tone === "muted" && { fill: theme.muted }) }));
       break;
     }
     case "list":
       g.append(list(doc, inst, el.texts[0] ?? "", w, h, theme));
       break;
+    case "code":
+    case "terminal":
+      codePanel(doc, inst, g, el, theme);
+      break;
+    case "zone": {
+      const c = el.params.hue !== undefined ? itemColor(theme, Number(el.params.hue)) : theme.muted;
+      if (el.params.lane) {
+        // A branch lane: its name at the left, a thick line in its color along the row.
+        const y = -h * 0.12;
+        g.append(stroke(inst, svg(doc, "path", { d: `M${round(-w / 2 + 230)} ${round(y)}H${round(w / 2 - 10)}`, stroke: c, "stroke-width": 8, "stroke-opacity": 0.35 })));
+        const t = text(doc, inst, el.texts[0] ?? "", 34, 200, 60, theme, { align: "left", fill: c });
+        t.setAttribute("transform", `translate(${round(-w / 2 + 100)} ${round(y)})`);
+        t.setAttribute("font-family", theme.mono);
+        t.setAttribute("font-weight", "700");
+        g.append(t);
+        break;
+      }
+      // A group boundary: a dashed outline on a faint tint, its name at the top left.
+      g.append(svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(theme.radius + 8, 28), fill: `color-mix(in srgb, ${c} 7%, ${theme.bg})`, stroke: c, "stroke-opacity": 0.55, "stroke-width": 2, "stroke-dasharray": "10 8" }));
+      const t = text(doc, inst, (el.texts[0] ?? "").toUpperCase(), 26, w - 48, 40, theme, { align: "left", fill: c });
+      t.setAttribute("transform", `translate(${round(24)} ${round(-h / 2 + 34)})`);
+      t.setAttribute("font-weight", "700");
+      t.setAttribute("letter-spacing", "0.08em");
+      g.append(t);
+      break;
+    }
+    case "chevron": {
+      // A pipeline stage: an arrow-shaped band; the first has a flat left edge.
+      const c = itemColor(theme, Number(el.params.hue ?? 0));
+      const n = Math.min(h * 0.3, w * 0.22);
+      const x0 = -w / 2;
+      const x1 = w / 2;
+      const d = el.params.first ? `M${x0} ${-h / 2}H${x1 - n}L${x1} 0L${x1 - n} ${h / 2}H${x0}Z` : `M${x0} ${-h / 2}H${x1 - n}L${x1} 0L${x1 - n} ${h / 2}H${x0}L${x0 + n} 0Z`;
+      g.append(svg(doc, "path", { d, fill: `color-mix(in srgb, ${c} 16%, ${theme.bg})`, stroke: c, "stroke-width": 2.5, "stroke-linejoin": "round" }));
+      break;
+    }
+    case "caption": {
+      const left = el.params.align === "left";
+      g.append(text(doc, inst, el.texts[0] ?? "", 26, w, h, theme, { fill: theme.muted, ...(left && { align: "left" }) }));
+      for (const t of g.querySelectorAll("text")) t.setAttribute("font-family", theme.mono);
+      break;
+    }
     case "box":
     case "node":
     case "placeholder": {
-      const r = svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(theme.radius + (el.kind === "node" ? 4 : 0), h / 2), "data-fill": "surface" });
+      const hue = el.params.hue !== undefined && (el.kind === "box" || el.params.round) ? itemColor(theme, Number(el.params.hue)) : undefined;
+      const r = svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: el.params.round ? h / 2 : Math.min(theme.radius + (el.kind === "node" ? 4 : 0), h / 2), "data-fill": hue ? `color-mix(in srgb, ${hue} 14%, ${theme.bg})` : "surface", ...(hue && { "data-solid": "", stroke: hue }) });
       shadow(g, theme);
       if (el.kind === "placeholder") r.setAttribute("stroke-dasharray", "10 8");
       g.append(stroke(inst, r));
       const label = el.texts[0];
-      if (label) g.append(text(doc, inst, label, FONT[el.kind]!, w - 32, h - 20, theme, { inner: true }));
+      const size = el.kind === "box" ? Math.max(FONT.box!, Math.min(52, h * 0.34)) : FONT[el.kind]!;
+      if (label) g.append(text(doc, inst, label, size, w - 32, h - 20, theme, { inner: true }));
       break;
     }
     case "circle": {
+      if (el.params.dot) {
+        // A commit: a dot in its lane's color, its label under it.
+        const c = itemColor(theme, Number(el.params.hue ?? 0));
+        const r = Math.min(26, w * 0.18);
+        g.append(stroke(inst, svg(doc, "circle", { cx: 0, cy: -h * 0.12, r, "data-fill": c, "data-solid": "", stroke: theme.bg, "stroke-width": 5 })));
+        if (el.texts[0]) {
+          const t = text(doc, inst, el.texts[0], 28, w, h * 0.4, theme, { inner: true });
+          t.setAttribute("transform", `translate(0 ${round(-h * 0.12 + r + 34)})`);
+          t.setAttribute("font-family", theme.mono);
+          g.append(t);
+        }
+        break;
+      }
       const r = Math.min(w, h) / 2;
       g.append(stroke(inst, svg(doc, "circle", { cx: 0, cy: 0, r, "data-fill": "surface" })));
       shadow(g, theme);
@@ -114,9 +173,9 @@ export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${
       break;
     }
     case "rule": {
-      // An axis along the longer side of its box.
+      // An axis along the longer side of its box (dashed: a sequence lifeline).
       const across = w >= h;
-      g.append(stroke(inst, svg(doc, "path", { d: across ? `M${-w / 2} 0H${w / 2}` : `M0 ${-h / 2}V${h / 2}`, stroke: theme.muted, "stroke-width": theme.stroke })));
+      g.append(stroke(inst, svg(doc, "path", { d: across ? `M${-w / 2} 0H${w / 2}` : `M0 ${-h / 2}V${h / 2}`, stroke: theme.muted, "stroke-width": theme.stroke, ...(el.params.style === "dashed" && { "stroke-dasharray": "10 10", "stroke-opacity": 0.6 }) })));
       break;
     }
     case "arrow":
@@ -262,12 +321,15 @@ function art(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme
   // The layout says how tall the label band is and how big its text (they scale with the picture).
   // An icon in a big slot (grid pages) stays an icon: capped, with its label right under it.
   const roomy = el.params.labelH === undefined && el.box.h > 420;
-  const labelH = label ? Number(el.params.labelH ?? (roomy ? 72 : 56)) : 0;
-  const labelFont = Number(el.params.labelFont ?? (roomy ? 40 : FONT[kind]!));
-  const size = Math.max(10, Math.min(el.box.w, el.box.h - labelH, kind === "icon" && !el.params.sized ? 300 : Infinity));
+  // A band (a stack layer): the picture at the left, the label large beside it.
+  const band = el.params.band !== undefined;
+  const labelH = label && !band ? Number(el.params.labelH ?? (roomy ? 72 : 56)) : 0;
+  const labelFont = band ? Math.max(30, Math.min(46, el.box.h * 0.36)) : Number(el.params.labelFont ?? (roomy ? 40 : FONT[kind]!));
+  const size = band ? Math.max(10, el.box.h * (kind === "asset" ? 0.86 : 0.62)) : Math.max(10, Math.min(el.box.w, el.box.h - labelH, kind === "icon" && !el.params.sized ? 300 : Infinity));
   const top = -(size + labelH) / 2;
   const k = size / grid;
-  const holder = svg(doc, "g", { transform: `translate(${round(-size / 2)} ${round(top)}) scale(${round(k, 4)})`, "stroke-width": round(theme.stroke / k, 3) });
+  const left = band ? -el.box.w / 2 + 28 : -size / 2;
+  const holder = svg(doc, "g", { transform: `translate(${round(left)} ${round(top)}) scale(${round(k, 4)})`, "stroke-width": round(theme.stroke / k, 3) });
   // A template item takes its color from the look's palette; other icons keep the ink color.
   const hue = el.params.hue !== undefined ? itemColor(theme, Number(el.params.hue)) : undefined;
   if (kind === "icon" && markup) {
@@ -280,11 +342,93 @@ function art(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme
   g.append(holder);
   for (const shape of holder.querySelectorAll("path,rect,circle,ellipse,line,polyline,polygon")) stroke(inst, shape as SVGElement);
   for (const p of holder.querySelectorAll("[data-part]")) addPart(inst, p.getAttribute("data-part")!, p);
-  if (label) {
+  if (label && band) {
+    const x = left + size + 28;
+    const t = text(doc, inst, label, labelFont, el.box.w / 2 - x - 24, el.box.h, theme, { align: "left" });
+    t.setAttribute("transform", `translate(${round(x + (el.box.w / 2 - x - 24) / 2)} 0)`);
+    g.append(t);
+  } else if (label) {
     const t = text(doc, inst, label, labelFont, Number(el.params.labelW ?? Math.max(el.box.w, size * 1.15)), labelH, theme, {});
     t.setAttribute("transform", `translate(0 ${round(top + size + labelH / 2)})`);
     g.append(t);
   }
+}
+
+/** Fixed colors of code panels: the same dark editor in every look, so code always reads as code. */
+const CODE = { bg: "#0f1623", bar: "#1a2333", text: "#e6edf3", muted: "#7d8590", keyword: "#ff7b72", string: "#a5d6ff", number: "#79c0ff", comment: "#8b949e", fn: "#d2a8ff", prompt: "#7ee787", output: "#b1bac4" };
+const KEYWORDS = new Set(
+  "const let var function return if else for while do switch case break continue new class extends import export from default async await try catch finally throw typeof instanceof in of yield def lambda pass elif not and or is None True False self print select from where join on group by order having insert into values update set delete create table index primary key foreign references as limit offset distinct null true false public private static void int string bool fn let mut impl struct enum match use mod pub get post put patch".split(" "),
+);
+
+/** Splits one line of code into colored tokens (strings, comments, numbers, keywords, calls, the rest). */
+function tokens(line: string, terminal: boolean): { text: string; color: string }[] {
+  if (terminal) {
+    if (line.startsWith("$ ")) return [{ text: "$ ", color: CODE.prompt }, { text: line.slice(2), color: CODE.text }];
+    return [{ text: line, color: CODE.output }];
+  }
+  const out: { text: string; color: string }[] = [];
+  const re = /(\/\/.*$|#.*$|--.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()|([A-Za-z_][A-Za-z0-9_]*)|(\s+|.)/g;
+  for (const m of line.matchAll(re)) {
+    const [t, comment, str, num, call, word] = m;
+    const color = comment ? CODE.comment : str ? CODE.string : num ? CODE.number : call ? CODE.fn : word && KEYWORDS.has(word.toLowerCase()) ? CODE.keyword : CODE.text;
+    out.push({ text: t, color });
+  }
+  return out;
+}
+
+/**
+ * A code or terminal panel: a dark editor with a title bar, line numbers
+ * (code) or a prompt (terminal). Each line is a part (`code.3`) with a
+ * highlight bar behind it; characters reveal in order for `write`.
+ */
+function codePanel(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {
+  const { w, h } = el.box;
+  const terminal = el.kind === "terminal";
+  const lines = (el.texts[0] ?? "").split("\n");
+  const barH = 44;
+  const padX = terminal ? 28 : 72;
+  const longest = Math.max(8, ...lines.map((l) => l.length));
+  const font = Math.max(14, Math.min(40, (h - barH - 36) / (lines.length * 1.55), (w - padX - 28) / (longest * 0.6)));
+  const lh = font * 1.55;
+  const radius = Math.min(theme.radius + 6, 18);
+  g.append(svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: radius, fill: CODE.bg, stroke: "none" }));
+  g.append(svg(doc, "path", { d: `M${round(-w / 2)} ${round(-h / 2 + barH)}V${round(-h / 2 + radius)}a${radius} ${radius} 0 0 1 ${radius} ${-radius}H${round(w / 2 - radius)}a${radius} ${radius} 0 0 1 ${radius} ${radius}V${round(-h / 2 + barH)}Z`, fill: CODE.bar, stroke: "none" }));
+  ["#ff5f57", "#febc2e", "#28c840"].forEach((c, i) => g.append(svg(doc, "circle", { cx: round(-w / 2 + 26 + i * 22), cy: round(-h / 2 + barH / 2), r: 6.5, fill: c, stroke: "none" })));
+  const tag = terminal ? "terminal" : String(el.params.lang ?? "") || "code";
+  const tagText = svg(doc, "text", { x: round(w / 2 - 20), y: round(-h / 2 + barH / 2 + 6), "text-anchor": "end", "font-size": 18, "font-family": theme.mono, fill: CODE.muted, stroke: "none" });
+  tagText.textContent = tag;
+  g.append(tagText);
+  const top = -h / 2 + barH + 18;
+  lines.forEach((line, i) => {
+    const y = top + i * lh;
+    const part = svg<SVGGElement>(doc, "g", { "data-part": String(i + 1) });
+    const bar = svg(doc, "rect", { x: round(-w / 2 + 6), y: round(y), width: round(w - 12), height: round(lh), rx: 6, fill: theme.accent, stroke: "none", opacity: 0, "data-bar": "" });
+    part.append(bar);
+    if (!terminal) {
+      const num = svg(doc, "text", { x: round(-w / 2 + padX - 22), y: round(y + lh * 0.7), "text-anchor": "end", "font-size": round(font * 0.8), "font-family": theme.mono, fill: CODE.muted, stroke: "none" });
+      num.textContent = String(i + 1);
+      part.append(num);
+    }
+    const t = svg(doc, "text", { x: round(-w / 2 + padX), y: round(y + lh * 0.7), "font-size": round(font), "font-family": theme.mono, stroke: "none", "xml:space": "preserve" });
+    t.setAttribute("style", "white-space: pre");
+    const chars: Element[] = [];
+    for (const tok of tokens(line, terminal)) {
+      for (const ch of tok.text) {
+        const c = svg(doc, "tspan", { fill: tok.color });
+        c.textContent = ch;
+        t.append(c);
+        if (ch !== " ") {
+          inst.chars.push(c);
+          chars.push(c);
+        }
+      }
+    }
+    part.append(t);
+    inst.lines.push(chars);
+    addPart(inst, String(i + 1), part);
+    g.append(part);
+  });
+  shadow(g, theme);
 }
 
 /**
@@ -328,15 +472,21 @@ function iconArt(doc: Document, holder: SVGElement, markup: string, theme: Theme
 function connector(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {
   // Lines a template draws by itself (spokes, leader lines) stay quiet.
   const quiet = el.params.tone === "muted";
-  const path = stroke(inst, svg(doc, "path", { d: "M0 0", ...(el.params.style === "dashed" && { "stroke-dasharray": "12 10" }), ...(quiet && { stroke: theme.muted, "stroke-opacity": 0.7 }) })) as SVGPathElement;
+  // A line with a color index (a git branch) is drawn thick in that color.
+  const hued = el.kind === "line" && el.params.hue !== undefined ? itemColor(theme, Number(el.params.hue)) : undefined;
+  const path = stroke(inst, svg(doc, "path", { d: "M0 0", ...(el.params.style === "dashed" && { "stroke-dasharray": "12 10" }), ...(quiet && { stroke: theme.muted, "stroke-opacity": 0.7 }), ...(hued && { stroke: hued, "stroke-width": 6 }) })) as SVGPathElement;
   g.append(path);
   const c: NonNullable<Instance["connector"]> = { from: el.link!.from, to: el.link!.to, path };
   if (el.kind !== "line") {
     c.head = svg(doc, "path", { d: "M0 0", fill: quiet ? theme.muted : theme.fg, stroke: "none" }) as SVGPathElement;
     g.append(c.head);
   }
+  // The packet a `send` moves along the connector (hidden until then).
+  c.token = svg(doc, "circle", { r: 12, cx: 0, cy: 0, fill: theme.accent, stroke: theme.bg, "stroke-width": 4, opacity: 0 }) as SVGCircleElement;
+  g.append(c.token);
   if (el.texts[0]) {
-    c.label = svg(doc, "text", { "text-anchor": "middle", "font-size": FONT.edge!, "font-family": theme.font, fill: theme.muted, stroke: "none", "paint-order": "stroke" }) as SVGTextElement;
+    const row = el.params.route === "row";
+    c.label = svg(doc, "text", { "text-anchor": "middle", "font-size": row ? 30 : FONT.edge!, "font-family": row ? theme.mono : theme.font, fill: theme.muted, stroke: "none", "paint-order": "stroke" }) as SVGTextElement;
     c.label.textContent = el.texts[0];
     inst.innerText.push(c.label);
     g.append(c.label);

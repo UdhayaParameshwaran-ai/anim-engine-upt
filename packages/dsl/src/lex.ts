@@ -62,7 +62,8 @@ function readQuoted(line: string, open: number): { value: string; next: number; 
   while (i < line.length) {
     const c = line[i]!;
     if (c === "\\" && i + 1 < line.length) {
-      value += line[i + 1];
+      // \n is a line break (code and terminal elements); any other escaped character is itself.
+      value += line[i + 1] === "n" ? "\n" : line[i + 1];
       i += 2;
     } else if (c === '"') {
       return { value, next: i + 1, closed: true };

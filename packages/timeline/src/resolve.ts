@@ -42,7 +42,7 @@ export interface ResolveOptions {
 const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, fade: 0.5, slide: 0.6, wipe: 0.6, iris: 0.7, zoom: 0.6, blur: 0.7, rise: 0.6 };
 /** Exit length (s) under any personality but standard, whatever the transition. */
 const EXIT = 0.6;
-const ENTER = new Set(["fade", "pop", "draw", "write"]);
+const ENTER = new Set(["fade", "pop", "draw", "write", "send"]);
 
 /**
  * Resolves anchors to absolute, frame-quantized time and expands every

@@ -276,6 +276,7 @@ function startGeneration(): void {
     provider: provider.value,
     ...(!$<HTMLLabelElement>("model-row").hidden && modelSel.value && { model: modelSel.value }),
     mode: $<HTMLSelectElement>("mode").value,
+    domain: $<HTMLSelectElement>("domain").value,
     style: $<HTMLSelectElement>("style").value,
     example: replayExample.value,
     ...Object.fromEntries(style()),

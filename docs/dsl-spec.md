@@ -85,6 +85,7 @@ The first token decides the statement type.
 | emphasis | `highlight` `pulse` `dim` | `highlight style=glow\|marker\|underline`, supports `fit` |
 | transform | `move` `scale` | `move @slot`, `scale by=1.2` |
 | camera | `focus` | `focus <id>` or `focus reset` |
+| relation | `send` | `send <connector>`: a packet travels along the connector (drawing it first if it isn't shown yet); `back=true` sends it the other way. Sending along a connector again only moves the packet. |
 
 The registry (`packages/registry`) is the source of truth for verbs, their parameters and defaults.
 
@@ -218,6 +219,31 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 - `mirror=true` flips the scene left↔right; it works on grid pages too, so the 27 rule-book layouts have 54 arrangements.
 
 Bad values are fixed to the closest one or dropped (NAR218). Variants added through the authoring pipeline (`pnpm variant`, see the README) appear in this list once approved (`steps` also has `arch`); a draft variant is refused with NAR218.
+
+## 6c-tech. Software & tech templates
+
+A domain pack for explaining software and technology. With `generate(topic, { domain: "tech" })` (CLI `--domain=tech`, or the Studio's **Software & tech** menu), planning lists these shapes first, prefers their templates, and labels each scene's goal `· depth: simple` (beginners) or `· depth: dense` (developers). They are available in every video.
+
+| Template | Shape | Shows | Variants |
+|---|---|---|---|
+| `exchange` | interaction | a sequence diagram: 2–5 parties (the items) side by side with dashed lifelines; every arrow declared between two of them is a message, one row each, in declaration order | `lanes`, `compact` |
+| `architecture` | architecture | components grouped into zones: `z = zone "Client"` starts a group and the elements declared after it belong to it; the links are arrows you declare | `tiers` (zones as columns), `layers` (zones as rows) |
+| `stack` | layers | 2–7 layers, the first declared on top; a `box` fills its band | `bands`, `centered` |
+| `structure` | structure | 2–8 value cells (`box "42"`) in one size; pointers are labels placed `@above:<cell>` and moved with `move p @above:c3` | `array` (with indexes), `list` (arrows between nodes, `→ null`), `stack` (grows upward, `← top`), `queue` (`front` / `back`) |
+| `code` | code | a `code` or `terminal` panel (slot `code`), with up to 4 notes beside it, or its output | `notes`, `stacked`, `split` |
+| `tree` | hierarchy | 3–12 nodes; the lines you declare join each parent to its child (`l1 = line root->src`); leaves spread evenly, parents centred over their children | `down`, `right` |
+| `states` | states | a state machine: states are `node`s, transitions are arrows you declare with the event as label; an arrow back to an earlier state curves above the others | `across`, `down` |
+| `gitgraph` | branching | `b = zone "main"` starts a branch lane, the commits (`circle "init"`) declared after it are on it; the lines you declare join commits and take their lane's colour; a commit's column follows the links, so a merge comes after both parents | `lanes` |
+| `anatomy` | format | the parts of a URL, request, packet or token as one bar (widths follow their text) or as rows; name each part with `label "…" @below:<part>` (`@right-of` for rows) | `bar`, `stacked` |
+
+`steps variant=pipeline` draws the stages as joined chevrons (CI/CD, ETL, a compiler) without arrows. `steps variant=column` draws each step as a band, its picture at the left with a large label beside it, and its number next to it.
+
+**Elements**
+- `code "line 1\nline 2" lang=js|py|sql|bash|json|…`: a dark editor panel with line numbers and simple syntax colours. `\n` inside a quoted string is a line break. Each line is a part: `write code.2` types line 2, and `highlight code.2` puts a bar behind it.
+- `terminal "$ git status\nOn branch main"`: lines starting with `$ ` are commands; the others are output.
+- `zone "Name"`: a dashed group boundary in an `architecture` scene. It appears with its first member unless the script shows it.
+
+Code and terminal panels are dark on every look, so code always reads as code.
 
 ## 6d. Composition by intent
 

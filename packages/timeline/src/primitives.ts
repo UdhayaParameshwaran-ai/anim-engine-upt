@@ -153,6 +153,21 @@ export const PRIMITIVES: Record<string, Primitive> = {
 
   hide: (c) => [{ prop: "opacity", t0: c.t0, t1: end(c), to: 0, ease: progressEase(c, "in") }],
 
+  /**
+   * A packet travels along a connector. A connector not shown yet is drawn
+   * as the packet goes; `reveal` carries the packet's progress (the engine
+   * draws the packet while a send tween is running).
+   */
+  send: (c) => {
+    const meta = { send: true, back: c.params.back === true };
+    // Already on screen (or still being drawn by an earlier send): only the packet moves.
+    const shown = num(c.cur("opacity"), 0) > 0.5;
+    const out: TweenSpec[] = [{ prop: "opacity", t0: c.t0, t1: c.t0, to: 1, ease: "linear" }];
+    if (!shown) out.push({ prop: "draw", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "inout" });
+    out.push({ prop: "reveal", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "inout", meta });
+    return out;
+  },
+
   highlight: (c) => {
     const meta = { color: String(c.params.color ?? "accent"), style: String(c.params.style ?? "glow") };
     const fadeIn = Math.min(0.25, c.dur / 3);

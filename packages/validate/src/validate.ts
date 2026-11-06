@@ -281,7 +281,8 @@ class Validator {
     // sentence (a connector, which needs both its ends on screen, after the last).
     const beats = scene.steps.flatMap((s) => s.beats);
     for (const el of sceneOwn) {
-      if (shown.has(el.id)) continue;
+      // A zone appears with its first member (the layout shows it).
+      if (shown.has(el.id) || el.kind === "zone") continue; // zones and lanes appear with their first member
       const link = LINK_KINDS.has(el.kind);
       const beat = link ? beats.at(-1) : beats[0];
       this.warn(
@@ -664,7 +665,7 @@ class Validator {
     const order = (a: Action): number => {
       if (a.anchor === "start") return -1;
       if (a.anchor === "end") return Infinity;
-      return (beat as SpeechBeat).cues.find((c) => c.id === a.anchor)?.start ?? Infinity;
+      return beat.type === "speech" ? (beat.cues.find((c) => c.id === a.anchor)?.start ?? Infinity) : Infinity;
     };
     const actions = [...beat.actions].sort((a, b) => order(a) - order(b));
     for (const action of actions) {
@@ -685,8 +686,23 @@ class Validator {
 
   private visit(v: VerbManifest, id: string, call: VerbCall, action: Action, beat: Beat, visible: Set<string>, shown: Set<string>, declared: Map<string, ElementDecl>, chainEnters: Set<string>): void {
     if (!declared.has(id)) return;
+    if (v.name === "send") {
+      // A packet travels along a connector, drawing it first if it isn't shown yet; sending again is fine.
+      const el = declared.get(id)!;
+      if (!el.link) {
+        this.warn(C.BadReference, `\`send\` moves a packet along a connector; \`${id}\` is not one`, call.span);
+        return;
+      }
+      const missing = [el.link.from, el.link.to].filter((e) => !visible.has(e) && !chainEnters.has(e));
+      if (missing.length) this.warn(C.DanglingConnector, `\`${id}\` appears before \`${missing.join("`, `")}\``, call.span);
+      visible.add(id);
+      shown.add(id);
+      return;
+    }
     if (ENTER.has(v.name)) {
-      if (visible.has(id)) this.warn(C.AlreadyVisible, `\`${id}\` is already visible`, call.span);
+      // Entering a part (`write code.2`) of a shown element is how parts appear one by one.
+      const part = call.targets.some((t) => t.startsWith(`${id}.`));
+      if (visible.has(id) && !part) this.warn(C.AlreadyVisible, `\`${id}\` is already visible`, call.span);
       const el = declared.get(id)!;
       if (el.link) {
         const missing = [el.link.from, el.link.to].filter((e) => !visible.has(e) && !chainEnters.has(e));
