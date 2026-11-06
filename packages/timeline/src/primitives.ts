@@ -159,13 +159,77 @@ export const PRIMITIVES: Record<string, Primitive> = {
    * draws the packet while a send tween is running).
    */
   send: (c) => {
-    const meta = { send: true, back: c.params.back === true };
+    const fail = c.params.fail === true;
+    const meta = { send: true, back: c.params.back === true, fail };
     // Already on screen (or still being drawn by an earlier send): only the packet moves.
     const shown = num(c.cur("opacity"), 0) > 0.5;
     const out: TweenSpec[] = [{ prop: "opacity", t0: c.t0, t1: c.t0, to: 1, ease: "linear" }];
     if (!shown) out.push({ prop: "draw", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "inout" });
-    out.push({ prop: "reveal", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "inout", meta });
+    const wait = Math.min(Number(c.params.wait ?? 0) || 0, c.dur * 0.6);
+    if (fail) {
+      // It gets partway and stops (red), and stays there a moment.
+      const run = c.t0 + c.dur * 0.65;
+      out.push({ prop: "reveal", t0: c.t0, t1: run, from: 0, to: 0.55, ease: "in", meta }, { prop: "reveal", t0: run, t1: end(c), from: 0.55, to: 0.55, ease: "linear", meta });
+    } else if (wait > 0) {
+      // It stops halfway (the server is busy) and then goes on.
+      const leg = (c.dur - wait) / 2;
+      out.push(
+        { prop: "reveal", t0: c.t0, t1: c.t0 + leg, from: 0, to: 0.5, ease: "out", meta },
+        { prop: "reveal", t0: c.t0 + leg, t1: c.t0 + leg + wait, from: 0.5, to: 0.5, ease: "linear", meta },
+        { prop: "reveal", t0: c.t0 + leg + wait, t1: end(c), from: 0.5, to: 1, ease: "in", meta },
+      );
+    } else out.push({ prop: "reveal", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "inout", meta });
     return out;
+  },
+
+  /** Several packets in a row along a connector: steady traffic. */
+  stream: (c) => {
+    const n = Math.max(2, Math.min(8, Math.round(Number(c.params.count ?? 3))));
+    const meta = { send: true, back: c.params.back === true, fail: false };
+    const shown = num(c.cur("opacity"), 0) > 0.5;
+    const out: TweenSpec[] = [{ prop: "opacity", t0: c.t0, t1: c.t0, to: 1, ease: "linear" }];
+    if (!shown) out.push({ prop: "draw", t0: c.t0, t1: c.t0 + Math.min(0.5, c.dur / n), from: 0, to: 1, ease: "inout" });
+    const leg = c.dur / n;
+    for (let i = 0; i < n; i++) out.push({ prop: "reveal", t0: c.t0 + i * leg, t1: c.t0 + (i + 1) * leg, from: 0, to: 1, ease: "linear", meta });
+    return out;
+  },
+
+  /** The current-position ring: tint on (the resolver releases the previous one). */
+  visit: (c) => [{ prop: "tint", t0: c.t0, t1: c.t0 + Math.min(0.3, c.dur / 2), to: 1, ease: "out", meta: { color: "accent", style: "glow" } }],
+
+  /** A status tint that stays. */
+  mark: (c) => {
+    const as = String(c.params.as ?? "ok");
+    const color = as === "fail" ? "warn" : as === "visited" ? "muted" : "good";
+    return [{ prop: "tint", t0: c.t0, t1: c.t0 + Math.min(0.3, c.dur / 2), to: 1, ease: "out", meta: { color, style: "glow" } }];
+  },
+
+  shake: (c) => {
+    if (!c.el || c.el.link) return [];
+    const x = num(c.cur("x"), 0);
+    const a = 14 * (c.canvas.width / 1920);
+    const seg = c.dur / 6;
+    const dx = [a, -a, a * 0.7, -a * 0.7, a * 0.35, 0];
+    return dx.map((d, i): TweenSpec => ({ prop: "x", t0: c.t0 + i * seg, t1: c.t0 + (i + 1) * seg, to: x + d, ease: "inout" }));
+  },
+
+  drop: (c) => {
+    const e = c.params.ease !== undefined ? ease(c, "spring") : motionOf(c).pop.ease;
+    const y = num(c.cur("y"), 0);
+    const k = c.canvas.width / 1920;
+    return [
+      { prop: "opacity", t0: c.t0, t1: c.t0 + c.dur * 0.4, from: 0, to: 1, ease: "out" },
+      { prop: "y", t0: c.t0, t1: end(c), from: y - 140 * k, to: y, ease: e },
+    ];
+  },
+
+  lift: (c) => {
+    const y = num(c.cur("y"), 0);
+    const k = c.canvas.width / 1920;
+    return [
+      { prop: "y", t0: c.t0, t1: end(c), to: y - 140 * k, ease: "in" },
+      { prop: "opacity", t0: c.t0 + c.dur * 0.3, t1: end(c), to: 0, ease: "in" },
+    ];
   },
 
   highlight: (c) => {
@@ -210,9 +274,9 @@ export const PRIMITIVES: Record<string, Primitive> = {
 };
 
 /** Camera framing for `focus <id>`: the element plus context, canvas aspect, clamped to the canvas. */
-export function focusBox(target: { x: number; y: number; w: number; h: number }, canvas: { width: number; height: number }): Box {
+export function focusBox(target: { x: number; y: number; w: number; h: number }, canvas: { width: number; height: number }, factor = 1.8): Box {
   const aspect = canvas.width / canvas.height;
-  let w = Math.max(target.w * 1.8, target.h * 1.8 * aspect, canvas.width / 4);
+  let w = Math.max(target.w * factor, target.h * factor * aspect, canvas.width / 4);
   w = Math.min(w, canvas.width);
   const h = w / aspect;
   const cx = target.x + target.w / 2;

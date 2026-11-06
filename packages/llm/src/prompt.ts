@@ -229,6 +229,22 @@ ${EXAMPLE}`;
 /** Templates whose links are declared by the script (messages, connections) rather than drawn by the template. */
 const LINKED = new Set(["exchange", "architecture", "tree", "states", "gitgraph"]);
 
+/**
+ * Story motions a template's scene should use to show what happens, not only what exists. One line per
+ * template, sent only with that template's scene call.
+ */
+const STORY: Record<string, string> = {
+  exchange: "- Let the messages tell the story, not only appear: send m1 fail=true (the packet is lost halfway), send m1 wait=1 (the server is busy, then it goes on), stream m1 (steady traffic), shake <party> (a rejection or error), mark <party> as=fail|ok.",
+  architecture: "- Show traffic, not only boxes: send l1 along a link, stream l1 for steady load, mark <component> as=fail when it goes down, frame a,b,c to bring a group closer (focus reset pulls out).",
+  states: "- Move through the machine: visit s1, then visit s2 when the event happens (one ring of \"current state\" travels), send t1 along the transition, mark s3 as=fail|ok on an end state.",
+  tree: "- Walk the tree: visit root, then visit its child, and mark each finished node as=visited (a search or traversal); mark the found node as=ok.",
+  structure: "- Operate on the cells: drop c4 to push onto a stack, lift c4 to pop, swap c1,c2 to sort, visit c3 to move a search to a cell, mark c3 as=ok when found.",
+  stack: "- Move data through the layers: send a packet along an arrow between layers, mark a layer as=fail where it breaks, drop a new layer onto the stack.",
+  flow: "- Follow the path: visit n1, visit n2, … along the route the data takes; mark the end node as=ok|fail.",
+  steps: "- Let something travel through the stages: visit step1, then step2 … so the viewer follows one item, and mark the stage that fails as=fail.",
+  gitgraph: "- Build the history in order: draw each commit after the previous one, visit the current commit, and mark the merge commit as=ok.",
+};
+
 /** What one scene call writes: a template diagram, a grid page, or (no plan for it) anything. */
 export type SceneKind = { template: TemplateManifest } | { grid: string } | { free: true };
 
@@ -285,6 +301,7 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[]): str
     ...(!grid && kind.template.name === "code" ? ['- Code and terminal text is one quoted string with \\n between lines: code "a = 1\\nprint(a)" lang=py. Keep the real indentation of the code: spaces right after \\n ("def f(x):\\n    return x"). Lines are parts: write code.2 types line 2, highlight code.2 marks it.'] : []),
     ...(!grid && kind.template.name === "anatomy" ? ['- Every part is a box with its exact text: p1 = box "https://". Name each part with a label placed under it: n1 = label "protocol" @below:p1 (variant=stacked: @right-of:p1). Show a part and its name together.'] : []),
     ...(!grid && kind.template.name === "structure" ? ["- Each value is a box: c1 = box \"42\". Every box is a value cell, so never make a box or icon for an operation (push, pop, insert) or a target: show an operation by popping in, hiding or moving cells, and name a target with a label @above:<cell>. A pointer is a label placed above a cell: p = label \"i\" @above:c1; move it with: move p @above:c3."] : []),
+    ...(!grid && STORY[kind.template.name] ? [STORY[kind.template.name]!] : []),
     "- Use only the pictures listed under PICTURES, exactly as written. For anything else use box \"Label\" or text.",
     "- Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …",
     "- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.",

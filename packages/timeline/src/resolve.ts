@@ -42,7 +42,7 @@ export interface ResolveOptions {
 const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, fade: 0.5, slide: 0.6, wipe: 0.6, iris: 0.7, zoom: 0.6, blur: 0.7, rise: 0.6 };
 /** Exit length (s) under any personality but standard, whatever the transition. */
 const EXIT = 0.6;
-const ENTER = new Set(["fade", "pop", "draw", "write", "send"]);
+const ENTER = new Set(["fade", "pop", "draw", "write", "send", "stream", "drop"]);
 
 /**
  * Resolves anchors to absolute, frame-quantized time and expands every
@@ -86,6 +86,8 @@ class Resolver {
   private readonly minDuration: number;
   private readonly minEmphasis: number;
   private readonly transitions: Record<string, number>;
+  /** The element each scene's "you are here" ring is on (see `visit`). */
+  private readonly visiting = new Map<string, string>();
 
   private readonly tracks: Tween[] = [];
   private readonly byKey = new Map<string, Tween[]>();
@@ -343,6 +345,45 @@ class Resolver {
         this.add(target, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: box, ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
         continue;
       }
+      if (s.verb === "frame") {
+        // The camera frames the group: the union of the elements' boxes plus context.
+        const boxes = s.targets.map((id) => this.currentBox(scene, elements.get(id), s.t0)).filter((b) => b.w > 0);
+        if (!boxes.length) continue;
+        const x0 = Math.min(...boxes.map((b) => b.x));
+        const y0 = Math.min(...boxes.map((b) => b.y));
+        const x1 = Math.max(...boxes.map((b) => b.x + b.w));
+        const y1 = Math.max(...boxes.map((b) => b.y + b.h));
+        const camEase = String(s.params.ease ?? "inout");
+        this.add(`${scene.id}/camera`, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.3), ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
+        continue;
+      }
+      if (s.verb === "swap" && s.targets.length >= 2) {
+        // Two elements trade places along arcs (one over, one under).
+        const [a, b] = [s.targets[0]!, s.targets[1]!];
+        const [ea, eb] = [elements.get(a), elements.get(b)];
+        if (!ea || !eb) continue;
+        const [A, B] = [this.currentBox(scene, ea, s.t0), this.currentBox(scene, eb, s.t0)];
+        const mid = s.t0 + s.dur / 2;
+        const bump = 0.4 * Math.max(A.h, B.h, 120);
+        for (const [id, from, to, dir] of [[a, A, B, -1], [b, B, A, 1]] as const) {
+          const target = `${scene.id}/${id}`;
+          if (!this.initial[target]) this.initial[target] = { opacity: 1, scale: 1, tint: 0, draw: 1, reveal: 1 };
+          const [fy, tx, ty] = [from.y + from.h / 2, to.x + to.w / 2, to.y + to.h / 2];
+          this.add(target, { prop: "x", t0: s.t0, t1: s.t0 + s.dur, to: tx, ease: "inout" }, s);
+          this.add(target, { prop: "y", t0: s.t0, t1: mid, to: (fy + ty) / 2 + dir * bump, ease: "out" }, s);
+          this.add(target, { prop: "y", t0: mid, t1: s.t0 + s.dur, to: ty, ease: "in" }, s);
+        }
+        continue;
+      }
+      if (s.verb === "visit" || s.verb === "mark") {
+        // One ring of "you are here": a visit releases the previous one (unless it was marked since).
+        const id = s.targets[0]!.split(".")[0]!;
+        const cur = this.visiting.get(scene.id);
+        if (s.verb === "visit") {
+          if (cur && cur !== id) this.add(`${scene.id}/${cur}`, { prop: "tint", t0: s.t0, t1: s.t0 + 0.3, to: 0, ease: "out", meta: { color: "accent", style: "glow" } }, s);
+          this.visiting.set(scene.id, id);
+        } else if (cur === id) this.visiting.delete(scene.id);
+      }
       const targets = s.verb === "clear" || s.targets.includes("*") ? [...visible] : s.targets;
       targets.forEach((id, k) => {
         const t0 = this.q(s.t0 + k * s.stagger);
@@ -377,7 +418,7 @@ class Resolver {
         }) ?? [];
         for (const spec of specs) this.add(target, spec, s);
         if (!isPart && ENTER.has(verb)) visible.add(base);
-        if (!isPart && verb === "hide") visible.delete(base);
+        if (!isPart && (verb === "hide" || verb === "lift")) visible.delete(base);
       });
     }
   }

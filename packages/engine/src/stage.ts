@@ -458,7 +458,7 @@ export class Stage {
         const [tx, ty] = at(k);
         c.token.setAttribute("cx", String(round(tx)));
         c.token.setAttribute("cy", String(round(ty)));
-        c.token.setAttribute("fill", color(this.theme, "accent"));
+        c.token.setAttribute("fill", color(this.theme, sending.meta?.fail ? "warn" : "accent"));
         c.token.setAttribute("opacity", "1");
       } else c.token.setAttribute("opacity", "0");
     }

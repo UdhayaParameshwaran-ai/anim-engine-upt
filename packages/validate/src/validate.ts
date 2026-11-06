@@ -686,7 +686,7 @@ class Validator {
 
   private visit(v: VerbManifest, id: string, call: VerbCall, action: Action, beat: Beat, visible: Set<string>, shown: Set<string>, declared: Map<string, ElementDecl>, chainEnters: Set<string>): void {
     if (!declared.has(id)) return;
-    if (v.name === "send") {
+    if (v.name === "send" || v.name === "stream") {
       // A packet travels along a connector, drawing it first if it isn't shown yet; sending again is fine.
       const el = declared.get(id)!;
       if (!el.link) {
@@ -710,7 +710,7 @@ class Validator {
       }
       visible.add(id);
       shown.add(id);
-    } else if (v.name === "hide") {
+    } else if (v.name === "hide" || v.name === "lift") {
       if (!visible.has(id)) {
         this.warn(C.HideHidden, `\`${id}\` is not visible, so hiding it does nothing`, call.span, {
           desc: "removed the target",

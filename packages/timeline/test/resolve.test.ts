@@ -255,3 +255,59 @@ describe("send", () => {
     expect(sends[1]!.meta).toMatchObject({ send: true, back: false });
   });
 });
+
+describe("story motions", () => {
+  const HEAD = 'video 1\nscene s "Call" template=exchange\na = icon:globe "Browser"\nb = icon:server "Server"\nm1 = arrow a->b "GET /"\n> The {1}browser and {2}server.\n1 pop a\n2 pop b\n';
+
+  it("send fail=true stops the packet halfway; wait=<s> pauses it there and goes on", async () => {
+    const failed = await build(`${HEAD}> It {1}fails.\n1 send m1 fail=true\n`);
+    const legs = failed.tl.tracks.filter((t) => t.target === "s/m1" && t.prop === "reveal" && t.meta?.send);
+    expect(legs.every((t) => t.meta?.fail === true)).toBe(true);
+    expect(Math.max(...legs.map((t) => t.to as number))).toBeCloseTo(0.55);
+    const waited = await build(`${HEAD}> It {1}waits.\n1 send m1 wait=1\n`);
+    const ws = waited.tl.tracks.filter((t) => t.target === "s/m1" && t.prop === "reveal" && t.meta?.send);
+    expect(ws.map((t) => t.to)).toEqual([0.5, 0.5, 1]);
+  });
+
+  it("stream sends several packets in a row", async () => {
+    const { tl } = await build(`${HEAD}> Traffic {1}flows.\n1 stream m1 count=4\n`);
+    const legs = tl.tracks.filter((t) => t.target === "s/m1" && t.prop === "reveal" && t.meta?.send);
+    expect(legs).toHaveLength(4);
+    expect(legs.every((t) => t.from === 0 && t.to === 1)).toBe(true);
+  });
+
+  it("visit moves one ring from element to element; mark leaves a status tint that stays", async () => {
+    const { tl } = await build(`${HEAD}> {1}The search starts at the browser and then goes on to the {2}server for a good while, and ends {3}here.\n1 visit a\n2 visit b\n3 mark b as=fail\n`);
+    const ev = createEvaluator(tl);
+    const on = tl.tracks.find((t) => t.target === "s/a" && t.prop === "tint" && t.to === 1)!;
+    const off = tl.tracks.find((t) => t.target === "s/a" && t.prop === "tint" && t.to === 0)!;
+    expect(ev.valueAt("s/a", "tint", on.t1 + 0.01)).toBe(1);
+    expect(ev.valueAt("s/a", "tint", off.t1 + 0.01)).toBe(0);
+    const bad = tl.tracks.filter((t) => t.target === "s/b" && t.prop === "tint").pop()!;
+    expect(bad.meta).toMatchObject({ color: "warn" });
+    expect(ev.valueAt("s/b", "tint", tl.duration)).toBe(1);
+  });
+
+  it("swap trades two elements' places along arcs", async () => {
+    const { tl } = await build(`${HEAD}> {1}They swap.\n1 swap a,b\n`);
+    const ev = createEvaluator(tl);
+    const [ax, bx] = [ev.valueAt("s/a", "x", 0) as number, ev.valueAt("s/b", "x", 0) as number];
+    expect(ev.valueAt("s/a", "x", tl.duration)).toBeCloseTo(bx);
+    expect(ev.valueAt("s/b", "x", tl.duration)).toBeCloseTo(ax);
+  });
+
+  it("drop and lift enter from above and leave upward; shake returns to where it was", async () => {
+    const { tl } = await build(`${HEAD}> {1}Drop {2}shake {3}lift.\n1 shake a\n2 lift b\n`);
+    const ev = createEvaluator(tl);
+    const x0 = ev.valueAt("s/a", "x", tl.tracks.find((t) => t.verb === "shake")!.t0 - 0.01);
+    expect(ev.valueAt("s/a", "x", tl.duration)).toBeCloseTo(x0 as number);
+    expect(ev.valueAt("s/b", "opacity", tl.duration)).toBe(0);
+  });
+
+  it("frame points the camera at the group", async () => {
+    const { tl } = await build(`${HEAD}> {1}Look.\n1 frame a,b\n`);
+    const cam = tl.tracks.find((t) => t.target === "s/camera" && t.verb === "frame" && t.prop === "camera")!;
+    expect(cam).toBeTruthy();
+    expect((cam.to as { w: number }).w).toBeLessThanOrEqual(1920);
+  });
+});
