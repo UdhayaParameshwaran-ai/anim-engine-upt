@@ -360,3 +360,18 @@ describe("carried elements", () => {
     expect(ev.valueAt("a/client", "opacity", t0)).toBe(1);
   });
 });
+
+describe("camera for a diagram written as chapters", () => {
+  const decl = ["a", "b", "c", "d", "e"].map((x) => `${x} = icon:sun "${x}"`).join("\n");
+  it("follows the action from five things on when the scene has chapters, and frames at least half the width", async () => {
+    const { tl } = await build(`video 1\nscene s "Grow" template=cards\n${decl}\nstep one "One"\n> {1}First.\n1 pop a\nstep two "Two"\n> {1}Second.\n1 pop b\n`);
+    const frames = tl.tracks.filter((t) => t.target === "s/camera" && t.verb === "frame" && t.prop === "camera");
+    expect(frames.length).toBeGreaterThan(0);
+    expect(Math.min(...frames.map((t) => (t.to as { w: number }).w))).toBeGreaterThanOrEqual(960);
+  });
+
+  it("leaves a plain scene of five things alone", async () => {
+    const { tl } = await build(`video 1\nscene s "Plain" template=cards\n${decl}\n> {1}First.\n1 pop a\n`);
+    expect(tl.tracks.some((t) => t.verb === "frame")).toBe(false);
+  });
+});

@@ -292,7 +292,9 @@ class Resolver {
     if (!scene.template) return;
     const BACK = new Set(["panel", "rule", "zone", "chevron", "badge", "kicker", "caption"]);
     const els = new Map(scene.elements.map((e) => [e.id, e]));
-    if (scene.elements.filter((e) => !e.link && e.box.w > 0 && !BACK.has(e.kind)).length < 8) return;
+    // A scene written as chapters (several steps) is one diagram that grows: the camera follows it from 5 things on.
+    const chapters = scene.steps.filter((s) => s.id !== undefined).length > 1;
+    if (scene.elements.filter((e) => !e.link && e.box.w > 0 && !BACK.has(e.kind)).length < (chapters ? 5 : 8)) return;
     if (scene.steps.some((s) => s.focus) || scheduled.some((s) => s.verb === "focus" || s.verb === "frame")) return;
     const { width, height } = this.video.canvas;
     const added: Scheduled[] = [];
@@ -438,7 +440,7 @@ class Resolver {
         const x1 = Math.max(...boxes.map((b) => b.x + b.w));
         const y1 = Math.max(...boxes.map((b) => b.y + b.h));
         const camEase = String(s.params.ease ?? "inout");
-        this.add(`${scene.id}/camera`, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.3), ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
+        this.add(`${scene.id}/camera`, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.5, 0.5), ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
         continue;
       }
       if (s.verb === "swap" && s.targets.length >= 2) {

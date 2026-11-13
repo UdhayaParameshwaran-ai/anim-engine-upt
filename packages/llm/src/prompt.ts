@@ -245,6 +245,13 @@ const STORY: Record<string, string> = {
   gitgraph: "- Build the history in order: draw each commit after the previous one, visit the current commit, and mark the merge commit as=ok.",
 };
 
+/** Extra rules when the scene is the whole video: one diagram that grows, chapter by chapter. */
+const CANVAS_RULES = [
+  "- This one scene is the whole video: a single diagram that grows chapter by chapter on one stage, and a camera follows the action. Declare EVERY element of the whole diagram first, before the first step line (the layout is solved once, for all of it, so nothing jumps).",
+  '- Then one chapter per planned "# chapter:" line: a line  step <chapter-id> "Short title"  followed by that chapter\'s narration lines and actions. A chapter shows only its own part of the diagram (pop or draw the elements it adds); never hide or clear what earlier chapters showed, and never re-declare elements after a step line.',
+  "- Each chapter is 1–3 sentences and ends with something new on screen that the next chapter builds on.",
+];
+
 /** What one scene call writes: a template diagram, a grid page, or (no plan for it) anything. */
 export type SceneKind = { template: TemplateManifest } | { grid: string } | { free: true };
 
@@ -265,7 +272,7 @@ export function sceneKindOf(line: string | undefined): SceneKind {
  * scene with no planned kind gets the whole language. Pictures are the ones
  * matching the scene's words.
  */
-export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[]): string {
+export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas = false): string {
   if ("free" in kind) return systemPrompt(assets);
   const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const grid = "grid" in kind;
@@ -302,6 +309,7 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[]): str
     ...(!grid && kind.template.name === "anatomy" ? ['- Every part is a box with its exact text: p1 = box "https://". Name each part with a label placed under it: n1 = label "protocol" @below:p1 (variant=stacked: @right-of:p1). Show a part and its name together.'] : []),
     ...(!grid && kind.template.name === "structure" ? ["- Each value is a box: c1 = box \"42\". Every box is a value cell, so never make a box or icon for an operation (push, pop, insert) or a target: show an operation by popping in, hiding or moving cells, and name a target with a label @above:<cell>. A pointer is a label placed above a cell: p = label \"i\" @above:c1; move it with: move p @above:c3."] : []),
     ...(!grid && STORY[kind.template.name] ? [STORY[kind.template.name]!] : []),
+    ...(canvas ? CANVAS_RULES : []),
     "- Use only the pictures listed under PICTURES, exactly as written. For anything else use box \"Label\" or text.",
     "- Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …",
     "- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.",
@@ -558,7 +566,7 @@ No elements, narration or actions yet.`;
  * Second pass: one complete scene, written against the whole outline and,
  * when earlier scenes are already written, what they say.
  */
-export function scenePrompt(outline: string, sceneId: string, earlier = ""): string {
+export function scenePrompt(outline: string, sceneId: string, earlier = "", canvas = false): string {
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
   const plan = castPlan(outline);
   const here = plan.carry.get(sceneId) ?? [];
@@ -577,9 +585,33 @@ export function scenePrompt(outline: string, sceneId: string, earlier = ""): str
   return `Video outline:
 ${outline}${said}${card}${castBlock}${carried}
 
-Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
+${canvas
+    ? `Write scene "${sceneId}" in full: its scene line, ALL element declarations, then one step per "# chapter:" line with its narration lines (with cues) and actions.
+Output only this scene, starting with its "scene" line.`
+    : `Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
 Cover only this scene's goal; other scenes cover the rest.
-Output only this scene, starting with its "scene" line.`;
+Output only this scene, starting with its "scene" line.`}`;
+}
+
+/**
+ * Planning for a video that is one growing diagram: a single scene whose template draws the whole
+ * system, and the chapters that build it up (each becomes a step of that scene).
+ */
+export function canvasOutlinePrompt(topic: string, chapters: { min: number; max: number }, recent: RecentUse = {}): string {
+  const counts = new Map<string, number>();
+  for (const t of recent.templates ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
+  const often = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t);
+  const variety = often.length ? `\nThe viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefer others where they fit equally well.\n` : "";
+  return `Plan a narrated explainer video about:
+${topic}
+
+The whole video is ONE diagram that grows chapter by chapter on a single stage, with a camera that follows the action: not separate slides.
+${variety}
+Output only:
+- the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
+- exactly one "scene" line: scene main "Title" template=<the template whose picture is the whole system>, followed by one comment line "# shape: <shape> · goal: <what the finished diagram shows>"
+- then ${chapters.min}–${chapters.max} comment lines, in order: "# chapter: <id> · <what this chapter adds to the diagram and what it says>"
+No elements, narration or actions yet.`;
 }
 
 /** The narration of written scenes, without cues: the context later scenes need. */

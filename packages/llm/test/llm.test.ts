@@ -25,6 +25,7 @@ import {
   sceneKindOf,
   scenePrompt,
   castPlan,
+  canvasOutlinePrompt,
   bindCarry,
   pruneCarry,
   sceneSystemPrompt,
@@ -786,5 +787,22 @@ describe("pruneCarry", () => {
     const page = [line("a", "grid=L2-08"), line("b", "template=exchange", "client")].join("\n");
     expect(pruneCarry(page)).not.toContain("carry");
     expect(pruneCarry(line("a", "template=cards", "client"))).not.toContain("carry");
+  });
+});
+
+describe("one evolving diagram (canvas)", () => {
+  it("plans a single scene with chapters, and writes it as one diagram that grows", () => {
+    const ask = canvasOutlinePrompt("a page load", { min: 3, max: 5 });
+    expect(ask).toContain("ONE diagram that grows chapter by chapter");
+    expect(ask).toContain("exactly one \"scene\" line");
+    expect(ask).toContain("# chapter: <id>");
+    const outline = 'scene main "T" template=architecture\n# shape: architecture · goal: x\n# chapter: a · one\n# chapter: b · two';
+    const write = scenePrompt(outline, "main", "", true);
+    expect(write).toContain("one step per \"# chapter:\" line");
+    expect(write).not.toContain("other scenes cover the rest");
+    expect(scenePrompt(outline, "main")).toContain("other scenes cover the rest");
+    const sys = sceneSystemPrompt(sceneKindOf(outline.split("\n")[0]), [], true);
+    expect(sys).toContain("Declare EVERY element of the whole diagram first");
+    expect(sceneSystemPrompt(sceneKindOf(outline.split("\n")[0]), [])).not.toContain("Declare EVERY element");
   });
 });

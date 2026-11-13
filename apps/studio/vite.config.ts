@@ -134,6 +134,8 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
   const model = url.searchParams.get("model")?.trim() || undefined;
   const domain = url.searchParams.get("domain") === "tech" ? "tech" : undefined;
   const tts = ttsOf(url);
+  // "canvas": planned like an outline, written as one growing diagram.
+  const canvas = url.searchParams.get("mode") === "canvas";
   let mode = url.searchParams.get("mode") === "single" ? "single" : "outline";
 
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
@@ -172,6 +174,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
       client,
       mode,
       ...(domain && { domain }),
+      ...(canvas && { canvas }),
       ...(director && { director }),
       onLog: (m: string) => send("log", m),
       onCall: (call: unknown) => send("call", call),

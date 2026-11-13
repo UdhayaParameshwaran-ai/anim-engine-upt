@@ -274,9 +274,9 @@ export const PRIMITIVES: Record<string, Primitive> = {
 };
 
 /** Camera framing for `focus <id>`: the element plus context, canvas aspect, clamped to the canvas. */
-export function focusBox(target: { x: number; y: number; w: number; h: number }, canvas: { width: number; height: number }, factor = 1.8): Box {
+export function focusBox(target: { x: number; y: number; w: number; h: number }, canvas: { width: number; height: number }, factor = 1.8, minShare = 0.25): Box {
   const aspect = canvas.width / canvas.height;
-  let w = Math.max(target.w * factor, target.h * factor * aspect, canvas.width / 4);
+  let w = Math.max(target.w * factor, target.h * factor * aspect, canvas.width * minShare);
   w = Math.min(w, canvas.width);
   const h = w / aspect;
   const cx = target.x + target.w / 2;

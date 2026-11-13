@@ -3,7 +3,7 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { castPlan, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
+import { canvasOutlinePrompt, castPlan, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
@@ -18,6 +18,8 @@ export interface GenerateOptions {
   concurrency?: number;
   /** A subject area whose templates planning prefers (see DOMAINS). */
   domain?: Domain;
+  /** The whole video as one diagram that grows chapter by chapter (one scene with steps), instead of separate scenes. */
+  canvas?: boolean;
   /** How the video opens and ends (names from OPENINGS and CLOSINGS); by default the topic picks. */
   arc?: { open?: string; close?: string };
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
@@ -150,14 +152,20 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
   if ((opts.mode ?? "outline") === "outline") {
     // Planning only needs scene types and asset names, not the whole language.
     const recent = opts.director?.recent();
+    const canvas = opts.canvas === true;
     const arc = storyArc(topic, opts.arc, recent);
-    opts.director?.recordArc(arc.open.name, arc.close.name);
-    opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
-    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range, arc, recent) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
+    if (!canvas) {
+      opts.director?.recordArc(arc.open.name, arc.close.name);
+      opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
+    }
+    const ask = canvas ? canvasOutlinePrompt(topic, { min: 3, max: 5 }, recent) : outlinePrompt(topic, range, arc, recent);
+    const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
     const outline = pruneCarry(routed.text);
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
     const plan = split(outline);
+    // One growing diagram: a single scene; its chapters become the steps it is written with.
+    if (canvas) plan.scenes.splice(1);
     if (!plan.scenes.length) {
       note(ctx, planned.trace, { verdict: "no scenes; falling back to a single pass" });
       opts.onLog?.("outline had no scenes; falling back to a single pass");
@@ -170,10 +178,10 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     scenes = await pool(plan.scenes, opts.concurrency ?? opts.client.concurrency ?? 3, async (s, i) => {
       // Earlier scenes that are already written (all of them when scenes run one at a time).
       const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
-      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier) };
+      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, canvas) };
       // Only what this scene's kind needs, and the pictures that match its words.
       const planned = s.text.split("\n")[0]!;
-      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets));
+      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), canvas);
       const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
       // The plan's template or grid layout is binding: a scene line that changed it gets it back.
       const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);
