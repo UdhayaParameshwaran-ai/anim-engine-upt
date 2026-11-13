@@ -311,3 +311,22 @@ describe("story motions", () => {
     expect((cam.to as { w: number }).w).toBeLessThanOrEqual(1920);
   });
 });
+
+describe("auto camera", () => {
+  const items = Array.from({ length: 9 }, (_, i) => `c${i + 1} = icon:sun "Item ${i + 1}"`).join("\n");
+
+  it("follows the action in a dense template scene and ends on the full view", async () => {
+    const { tl } = await build(`video 1\nscene s "Many" template=cards\n${items}\n> {1}First is here.\n1 pop c1\n> {1}Then the second one right beside it.\n1 pop c2\n`);
+    const frames = tl.tracks.filter((t) => t.target === "s/camera" && t.prop === "camera" && t.verb === "frame");
+    expect(frames.length).toBeGreaterThan(0);
+    const last = tl.tracks.filter((t) => t.target === "s/camera" && t.prop === "camera").pop()!;
+    expect(last.to).toMatchObject({ x: 0, y: 0, w: 1920 });
+  });
+
+  it("leaves small scenes and scenes with their own camera lines alone", async () => {
+    const few = await build('video 1\nscene s "Few" template=cards\na = icon:sun "A"\nb = icon:moon "B"\n> {1}One.\n1 pop a\n2 pop b\n');
+    expect(few.tl.tracks.some((t) => t.verb === "frame")).toBe(false);
+    const own = await build(`video 1\nscene s "Many" template=cards\n${items}\n> {1}First is here.\n1 pop c1\n1 focus c1\n`);
+    expect(own.tl.tracks.some((t) => t.verb === "frame")).toBe(false);
+  });
+});

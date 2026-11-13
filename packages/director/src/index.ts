@@ -26,7 +26,17 @@ export interface StyleChoice {
 export interface HistoryEntry extends Omit<StyleChoice, "scenes" | "mood"> {
   /** template:variant pairs and mirrored grid codes used. */
   layouts: string[];
+  /** How the video opened and ended (names from the LLM package's OPENINGS and CLOSINGS). */
+  arc?: { open: string; close: string };
   at: number;
+}
+
+/** What recent videos used, oldest first: so planning can avoid the obvious sameness. */
+export interface Recent {
+  open: string[];
+  close: string[];
+  /** Diagram templates of the last few videos, one entry per scene. */
+  templates: string[];
 }
 
 export interface DirectOptions {
@@ -144,6 +154,7 @@ export class Director {
   private readonly mood: Mood;
   private readonly recentLayouts: string[];
   private last = "";
+  private arc?: { open: string; close: string };
   private style?: Pick<StyleChoice, "theme" | "motion">;
   private readonly scenes: StyleChoice["scenes"] = {};
   private readonly layouts: string[] = [];
@@ -213,7 +224,22 @@ export class Director {
 
   /** What to remember about this video. */
   entry(): HistoryEntry {
-    return { ...this.choice, layouts: [...this.layouts], at: Date.now() } as HistoryEntry;
+    return { ...this.choice, layouts: [...this.layouts], ...(this.arc && { arc: this.arc }), at: Date.now() } as HistoryEntry;
+  }
+
+  /** Notes how this video opens and ends, so the next one can differ. */
+  recordArc(open: string, close: string): void {
+    this.arc = { open, close };
+  }
+
+  /** What the last videos opened with, ended with and drew (scene layouts "template:variant"; grid codes are left out). */
+  recent(): Recent {
+    const last = this.history.slice(-4);
+    return {
+      open: last.flatMap((h) => (h.arc ? [h.arc.open] : [])),
+      close: last.flatMap((h) => (h.arc ? [h.arc.close] : [])),
+      templates: last.flatMap((h) => h.layouts.filter((l) => /^[a-z]/.test(l)).map((l) => l.split(":")[0]!)),
+    };
   }
 
   private arrange(scene: Script["scenes"][number]): void {

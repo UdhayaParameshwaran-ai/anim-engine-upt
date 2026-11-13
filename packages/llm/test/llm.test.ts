@@ -686,3 +686,50 @@ describe("pictures, structure and story arcs", () => {
     expect(CLOSINGS.map((c) => c.name)).toEqual(["bullets", "recap", "checklist", "takeaway"]);
   });
 });
+
+describe("quality: story motion (Q4)", () => {
+  const head = "video 1\ntheme light\n";
+  it("flags an exchange scene whose messages only appear, and accepts one that sends packets", () => {
+    const base = 'scene s "Call" template=exchange\na = icon:globe "Browser"\nb = icon:server "Server"\nm1 = arrow a->b "GET /"\n> The {1}browser asks the {2}server.\n1 pop a\n2 pop b\n> It {1}sends a request.\n';
+    expect(qualityIssues(head, `${base}1 draw m1`).some((q) => q.code === "Q4")).toBe(true);
+    expect(qualityIssues(head, `${base}1 send m1`).some((q) => q.code === "Q4")).toBe(false);
+  });
+});
+
+describe("variety budget", () => {
+  it("never repeats the opening or ending of the last video, and is stable for the same history", () => {
+    for (const topic of ["water cycle", "how a bill becomes law", "dns lookup", "tcp handshake", "binary search", "git rebase"]) {
+      for (const open of OPENINGS_FOR_TEST) {
+        for (const close of CLOSINGS_FOR_TEST) {
+          const a = storyArc(topic, {}, { open: [open], close: [close] });
+          expect(a.open.name).not.toBe(open);
+          expect(a.close.name).not.toBe(close);
+          expect(storyArc(topic, {}, { open: [open], close: [close] })).toEqual(a);
+        }
+      }
+    }
+  });
+
+  it("an explicit pick still wins over the history", () => {
+    expect(storyArc("dns", { open: "cold", close: "recap" }, { open: ["cold"], close: ["recap"] })).toMatchObject({ open: { name: "cold" }, close: { name: "recap" } });
+  });
+
+  it("the director remembers how videos opened and ended, and which templates they drew", () => {
+    const d = new Director({ topic: "dns" });
+    d.header("video 1\n");
+    d.recordArc("question", "takeaway");
+    const entry = d.entry();
+    expect(entry.arc).toEqual({ open: "question", close: "takeaway" });
+    const next = new Director({ topic: "tcp", history: [{ ...entry, layouts: ["exchange:lanes", "L2-08", "tree:down"] }] });
+    expect(next.recent()).toEqual({ open: ["question"], close: ["takeaway"], templates: ["exchange", "tree"] });
+  });
+
+  it("the outline asks for other templates when recent videos leaned on some", () => {
+    const text = outlinePrompt("dns", { min: 3, max: 4 }, storyArc("dns"), { templates: ["exchange", "exchange", "tree"] });
+    expect(text).toContain("leaned on these templates: exchange, tree");
+    expect(outlinePrompt("dns", { min: 3, max: 4 })).not.toContain("leaned on");
+  });
+});
+
+const OPENINGS_FOR_TEST = ["title", "question", "cold", "number"];
+const CLOSINGS_FOR_TEST = ["bullets", "recap", "checklist", "takeaway"];

@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3";
+  code: "Q1" | "Q2" | "Q3" | "Q4";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -19,6 +19,11 @@ const VISUAL = new Set(["icon", "asset", "chart", "node", "formula"]);
 const FRAME = new Set(["title", "footer", "arrow", "line", "edge"]);
 /** Attributions that name nobody in particular. */
 const VAGUE = /^\W*(an?\s+)?(unknown|anonymous|someone|expert|scientist|researcher|atmospheric scientist|professor|doctor|teacher|historian|author|source)s?\W*$/i;
+
+/** Templates whose subject is something that happens (messages, state changes, operations), not just things that exist. */
+const STORY_TEMPLATES = new Set(["exchange", "states", "structure", "tree", "gitgraph"]);
+/** Verbs that show something happening, not only appearing. */
+const STORY_VERBS = new Set(["send", "stream", "visit", "mark", "shake", "drop", "lift", "swap", "move", "frame", "focus"]);
 
 export function qualityIssues(header: string, sceneText: string): QualityIssue[] {
   const offset = header.split("\n").length;
@@ -47,6 +52,15 @@ export function qualityIssues(header: string, sceneText: string): QualityIssue[]
     const who = e.texts[1]?.trim() ?? "";
     if (!who || VAGUE.test(who)) {
       issues.push({ code: "Q3", line: e.span.line - offset, message: `quote \`${e.id}\` is attributed to ${who ? `"${who}"` : "nobody"}; quote a real, named person's actual words, or use callout/body instead` });
+    }
+  }
+  // Q4: a diagram of something that happens, shown only by things appearing.
+  const tpl = scene.attrs.template;
+  if (tpl && STORY_TEMPLATES.has(tpl)) {
+    const verbs = scene.steps.flatMap((st) => st.beats.flatMap((b) => b.actions.flatMap((a) => a.calls.map((c) => c.verb))));
+    if (verbs.length && !verbs.some((v) => STORY_VERBS.has(v))) {
+      const hint = tpl === "exchange" ? "show each message with send (a packet travels along it)" : tpl === "structure" ? "operate on the cells (drop, lift, swap, visit, mark)" : "move through it with visit and mark";
+      issues.push({ code: "Q4", message: `scene \`${scene.id}\` only makes things appear; show what happens: ${hint}` });
     }
   }
   return issues;

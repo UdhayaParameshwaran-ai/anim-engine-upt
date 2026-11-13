@@ -149,9 +149,11 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
   let scenes: string[];
   if ((opts.mode ?? "outline") === "outline") {
     // Planning only needs scene types and asset names, not the whole language.
-    const arc = storyArc(topic, opts.arc);
+    const recent = opts.director?.recent();
+    const arc = storyArc(topic, opts.arc, recent);
+    opts.director?.recordArc(arc.open.name, arc.close.name);
     opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
-    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range, arc) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
+    const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range, arc, recent) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
     const outline = routed.text;
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);

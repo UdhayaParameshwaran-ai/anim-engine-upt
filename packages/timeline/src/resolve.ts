@@ -260,6 +260,7 @@ class Resolver {
       this.note(TimelineCodes.LowPrecision, "info", `${lowPrecision} cue(s) in scene \`${scene.id}\` use interpolated word timing`, undefined, t0);
     }
 
+    this.autoFrame(scene, scheduled, beats);
     const contentEnd = Math.max(cursor, ...scheduled.map((s) => s.t0 + s.dur + Math.max(0, s.targets.length - 1) * s.stagger));
     const t1 = this.q(contentEnd + this.tailPad + trOut.duration);
     this.expand(scene, scheduled);
@@ -278,6 +279,53 @@ class Resolver {
     }
     this.scenes.push({ id: scene.id, t0, t1, transitionIn: trIn, transitionOut: trOut, steps, beats });
     return t1;
+  }
+
+  /**
+   * A dense template scene (8+ things) with no camera lines of its own gets a
+   * camera that follows the action: each beat frames the group it acts on when
+   * that group is a small part of the canvas, pulls out when it isn't, and
+   * ends the scene on the full view.
+   */
+  private autoFrame(scene: SceneIR, scheduled: Scheduled[], beats: { t0: number; t1: number }[]): void {
+    if (!scene.template) return;
+    const BACK = new Set(["panel", "rule", "zone", "chevron", "badge", "kicker", "caption"]);
+    const els = new Map(scene.elements.map((e) => [e.id, e]));
+    if (scene.elements.filter((e) => !e.link && e.box.w > 0 && !BACK.has(e.kind)).length < 8) return;
+    if (scene.steps.some((s) => s.focus) || scheduled.some((s) => s.verb === "focus" || s.verb === "frame")) return;
+    const { width, height } = this.video.canvas;
+    const added: Scheduled[] = [];
+    const camera = (verb: "frame" | "focus", targets: string[], t0: number): void => {
+      added.push({ order: this.order++, verb, targets, t0, dur: 0.9, stagger: 0, params: {}, line: 0 });
+    };
+    let framed = false;
+    for (const b of beats) {
+      const ids = new Set<string>();
+      for (const s of scheduled) {
+        if (s.t0 < b.t0 - 1e-6 || s.t0 >= b.t1 - 1e-6 || ["clear", "hide", "lift"].includes(s.verb)) continue;
+        for (const t of s.targets) {
+          const e = els.get(t.split(".")[0]!);
+          if (!e || e.id === "title") continue;
+          if (e.link) {
+            ids.add(e.link.from);
+            ids.add(e.link.to);
+          } else if (!BACK.has(e.kind)) ids.add(e.id);
+        }
+      }
+      const boxes = [...ids].map((id) => els.get(id)?.box).filter((x): x is Box => !!x && x.w > 0);
+      if (!boxes.length) continue;
+      const w = Math.max(...boxes.map((x) => x.x + x.w)) - Math.min(...boxes.map((x) => x.x));
+      const h = Math.max(...boxes.map((x) => x.y + x.h)) - Math.min(...boxes.map((x) => x.y));
+      if ((w * h) / (width * height) < 0.4) {
+        camera("frame", [...ids], b.t0);
+        framed = true;
+      } else if (framed) {
+        camera("focus", ["reset"], b.t0);
+        framed = false;
+      }
+    }
+    if (framed) camera("focus", ["reset"], beats[beats.length - 1]!.t1);
+    scheduled.push(...added);
   }
 
   /**

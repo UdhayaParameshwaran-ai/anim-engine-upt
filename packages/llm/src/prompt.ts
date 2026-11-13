@@ -479,14 +479,44 @@ export interface StoryArc {
   close: ArcPart;
 }
 
-/** The opening and ending for a topic: stable for the topic, varied across topics. `pick` names them instead. */
-export function storyArc(topic: string, pick: { open?: string; close?: string } = {}): StoryArc {
+/** What recent videos opened with, ended with and drew, oldest first. */
+export interface RecentUse {
+  open?: string[];
+  close?: string[];
+  templates?: string[];
+}
+
+/** Newest use rules a name out; older ones count less and less (1 = never used). */
+function freshness(name: string, used: string[] = []): number {
+  let k = 1;
+  used.forEach((u, i) => {
+    const age = used.length - 1 - i;
+    if (u === name) k *= age === 0 ? 0 : 1 - 0.85 * 0.7 ** (age - 1);
+  });
+  return k;
+}
+
+/** One of `parts`, by topic hash, weighted by how fresh each is; if all are ruled out, the first. */
+function pickFresh(parts: readonly ArcPart[], hash: number, used: string[] | undefined): ArcPart {
+  const w = parts.map((p) => freshness(p.name, used));
+  const total = w.reduce((a, b) => a + b, 0);
+  if (total <= 0) return parts[0]!;
+  let r = ((hash % 10007) / 10007) * total;
+  for (let i = 0; i < parts.length; i++) if ((r -= w[i]!) < 0) return parts[i]!;
+  return parts[parts.length - 1]!;
+}
+
+/**
+ * The opening and ending for a topic: stable for the topic and the history, varied across topics, and
+ * not what the last videos used (`recent`). `pick` names them instead.
+ */
+export function storyArc(topic: string, pick: { open?: string; close?: string } = {}, recent: RecentUse = {}): StoryArc {
   let h = 2166136261;
   for (const ch of topic.trim().toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
   h >>>= 0;
   return {
-    open: OPENINGS.find((o) => o.name === pick.open) ?? OPENINGS[h % OPENINGS.length]!,
-    close: CLOSINGS.find((c) => c.name === pick.close) ?? CLOSINGS[(h >>> 8) % CLOSINGS.length]!,
+    open: OPENINGS.find((o) => o.name === pick.open) ?? pickFresh(OPENINGS, h, recent.open),
+    close: CLOSINGS.find((c) => c.name === pick.close) ?? pickFresh(CLOSINGS, h >>> 8, recent.close),
   };
 }
 
@@ -503,13 +533,20 @@ Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS
 }
 
 /** First pass: plan the scenes without writing narration. */
-export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic)): string {
+export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic), recent: RecentUse = {}): string {
+  // The templates the last videos leaned on (most used first): a nudge, never a rule.
+  const counts = new Map<string, number>();
+  for (const t of recent.templates ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
+  const often = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t);
+  const variety = often.length ? `
+The viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefer others where they fit the idea equally well.
+` : "";
   return `Plan a narrated explainer video about:
 ${topic}
 
 Open with ${arc.open.ask}.
 End with ${arc.close.ask}.
-
+${variety}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"
