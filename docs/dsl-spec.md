@@ -15,7 +15,8 @@ Video ── settings (theme, voice, size, lang, fps)
 ```
 
 - Everything before the first `step` line in a scene belongs to an implicit step.
-- Elements persist for the whole scene. A new scene clears the stage, except ids listed in `keep=`.
+- Elements persist for the whole scene. A new scene clears the stage, except ids listed in `keep=` (they stay as they were) and `carry=` (see below).
+- **Carry.** `carry=<id,id>` on a scene continues elements from the previous scene: the scene declares them again (same id and kind), they are on screen from its first moment (never entered), and they glide from where they were to their place in the new layout (and size). The boundary is a cut; the rest of the previous scene clears away just before it. An id the previous scene didn't declare, or of another kind, is dropped (NAR309).
 - **Narration is the clock.** Each action is anchored to a word in its beat's narration. The final timing comes from TTS word timings (see the architecture doc, §7–8).
 
 ## 2. Lexical rules
@@ -34,7 +35,7 @@ The first token decides the statement type.
 |---|---|---|
 | Header | `video <version> ["title"]` | First line, required, once |
 | Setting | `theme <look>` · `motion <personality>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
-| Scene | `scene <id> ["title"] [template=<t>] [in=<transition>] [out=<transition>] [keep=<id,id>]` | Top level |
+| Scene | `scene <id> ["title"] [template=<t>] [in=<transition>] [out=<transition>] [keep=<id,id>] [carry=<id,id>]` | Top level |
 | Step | `step [<id>] ["title"]` | Inside a scene |
 | Layout | `layout <name>` | Inside a scene/step (when no template does the layout) |
 | Focus | `focus <id>` · `focus reset` | A step's camera, before its first beat |
@@ -80,12 +81,12 @@ The first token decides the statement type.
 
 | Category | Verb | Notes |
 |---|---|---|
-| enter | `fade` `pop` `draw` `write` | `draw` falls back to `fade` if the element can't be drawn. `write by=char\|word\|line`, `sync=true` reveals words as they are spoken. |
-| exit | `hide` `clear` | `clear` takes no targets |
+| enter | `fade` `pop` `draw` `write` `drop` `stream` | `drop` falls in from above (push onto a stack); `stream` is several packets in a row along a connector (`count=2..8`). | `draw` falls back to `fade` if the element can't be drawn. `write by=char\|word\|line`, `sync=true` reveals words as they are spoken. |
+| exit | `hide` `clear` `lift` | `clear` takes no targets; `lift` rises and fades (pop off a stack) |
 | emphasis | `highlight` `pulse` `dim` | `highlight style=glow\|marker\|underline`, supports `fit` |
-| transform | `move` `scale` | `move @slot`, `scale by=1.2` |
-| camera | `focus` | `focus <id>` or `focus reset` |
-| relation | `send` | `send <connector>`: a packet travels along the connector (drawing it first if it isn't shown yet); `back=true` sends it the other way. Sending along a connector again only moves the packet. |
+| transform | `move` `scale` `swap` | `move @slot`, `scale by=1.2`, `swap a,b` trades two elements' places along arcs |
+| camera | `focus` `frame` | `focus <id>` or `focus reset`; `frame a,b,c` frames several elements together. A dense template scene (8+ things) with no camera lines gets an automatic camera that follows the action and ends on the full view. |
+| relation | `send` | `send <connector>`: a packet travels along the connector (drawing it first if it isn't shown yet); `back=true` sends it the other way; `fail=true` stops it halfway (red); `wait=<s>` pauses it halfway. Sending along a connector again only moves the packet. |
 
 The registry (`packages/registry`) is the source of truth for verbs, their parameters and defaults.
 

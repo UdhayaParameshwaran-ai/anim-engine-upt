@@ -330,3 +330,33 @@ describe("auto camera", () => {
     expect(own.tl.tracks.some((t) => t.verb === "frame")).toBe(false);
   });
 });
+
+describe("carried elements", () => {
+  const SRC =
+    'video 1\nscene a "Parts" template=cards\nclient = icon:smartphone "Client"\nserver = icon:server "Server"\ndb = icon:database "Database"\n> The {1}client, the {2}server and the {3}database.\n1 pop client\n2 pop server\n3 pop db\n' +
+    'scene b "Call" template=exchange carry=client,server\nclient = icon:smartphone "Client"\nserver = icon:server "Server"\nm1 = arrow client->server "GET /"\n> The client {1}sends a request.\n1 send m1\n';
+
+  it("cuts at the boundary, starts the carried elements where they were and moves them to their new place", async () => {
+    const { ir, tl } = await build(SRC);
+    expect(ir.scenes[1]!.carry).toEqual(["client", "server"]);
+    expect(tl.scenes[0]!.transitionOut.type).toBe("cut");
+    expect(tl.scenes[1]!.transitionIn.type).toBe("cut");
+    const ev = createEvaluator(tl);
+    const t0 = tl.scenes[1]!.t0;
+    const before = ev.valueAt("a/client", "x", Infinity) as number;
+    expect(ev.valueAt("b/client", "x", t0)).toBeCloseTo(before);
+    expect(ev.valueAt("b/client", "opacity", t0)).toBe(1);
+    const place = ir.scenes[1]!.elements.find((e) => e.id === "client")!.box;
+    expect(ev.valueAt("b/client", "x", t0 + 1)).toBeCloseTo(place.x + place.w / 2);
+    expect(ev.valueAt("b/client", "scale", t0 + 1)).toBeCloseTo(1);
+  });
+
+  it("clears the rest of the previous scene just before the cut, so only the carried elements cross", async () => {
+    const { tl } = await build(SRC);
+    const ev = createEvaluator(tl);
+    const t0 = tl.scenes[1]!.t0;
+    expect(ev.valueAt("a/db", "opacity", t0 - 0.5)).toBe(1);
+    expect(ev.valueAt("a/db", "opacity", t0)).toBe(0);
+    expect(ev.valueAt("a/client", "opacity", t0)).toBe(1);
+  });
+});

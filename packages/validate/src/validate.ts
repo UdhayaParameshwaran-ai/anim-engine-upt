@@ -145,6 +145,9 @@ class Validator {
     this.report(code, "error", message, span, fix);
   }
 
+  /** Ids the scene being checked carries over from the previous scene (already on screen at its start). */
+  private carried = new Set<string>();
+
   private warn(code: string, message: string, span: Span, fix?: Fix): void {
     this.report(code, "warning", message, span, fix);
   }
@@ -213,6 +216,14 @@ class Validator {
       const el = prev.declared.get(id);
       if (el) declared.set(id, el);
     }
+    // Carried elements are declared again here (same id, a new place); one that isn't is kept as it was.
+    const carry = (scene.attrs.carry ?? "").split(",").filter(Boolean);
+    const own = new Set(scene.steps.flatMap((st) => st.elements.map((e) => e.id)));
+    for (const id of carry) {
+      const el = prev.declared.get(id);
+      if (!own.has(id) && el) declared.set(id, el);
+    }
+    this.carried = new Set(carry);
     const sceneOwn: ElementDecl[] = [];
 
     // Declarations, step by step, so a beat can only use elements declared by its step.
@@ -275,6 +286,8 @@ class Validator {
     if (!hasSpeech) this.error(C.NoNarration, `scene \`${scene.id}\` has no narration`, scene.span);
 
     const visible = new Set([...prev.visible].filter((id) => keep.includes(id)));
+    // A carried element is on screen from the first moment (when nothing precedes the scene, it is assumed to be).
+    for (const id of carry) if (own.has(id) || prev.declared.has(id)) visible.add(id);
     const shown = new Set(visible);
     for (const step of scene.steps) for (const beat of step.beats) this.visibility(beat, visible, shown, declared);
     // An element nothing shows would leave a hole in the scene: it fades in after the first
@@ -318,6 +331,35 @@ class Validator {
           desc: near ? `used \`${near}\`` : "removed; the scene falls back to a layout",
           apply: () => (near ? (scene.attrs.template = near) : delete scene.attrs.template),
         });
+      } else if (key === "carry") {
+        const ids = value.split(",").filter(Boolean);
+        // The first scene of a script has nothing before it (a scene checked on its own is first): nothing to check against.
+        const missing = prevDeclared.size ? ids.filter((id) => !prevDeclared.has(id)) : [];
+        if (missing.length) {
+          this.error(C.BadKeep, `carry: \`${missing.join(", ")}\` not declared in the previous scene`, scene.span, {
+            desc: "removed from carry",
+            apply: () => {
+              const rest = ids.filter((id) => !missing.includes(id));
+              if (rest.length) scene.attrs.carry = rest.join(",");
+              else delete scene.attrs.carry;
+            },
+          });
+        }
+        for (const id of ids) {
+          const before = prevDeclared.get(id);
+          const now = scene.steps.flatMap((st) => st.elements).find((e) => e.id === id);
+          // A different kind of element is not the same thing: it would morph into something else.
+          if (before && now && before.kind !== now.kind) {
+            this.error(C.BadKeep, `carry: \`${id}\` is a ${before.kind} in the previous scene but a ${now.kind} here`, now.span, {
+              desc: "removed from carry",
+              apply: () => {
+                const rest = (scene.attrs.carry ?? "").split(",").filter((x) => x && x !== id);
+                if (rest.length) scene.attrs.carry = rest.join(",");
+                else delete scene.attrs.carry;
+              },
+            });
+          }
+        }
       } else if (key === "keep") {
         const ids = value.split(",").filter(Boolean);
         const missing = ids.filter((id) => !prevDeclared.has(id));
@@ -702,7 +744,18 @@ class Validator {
     if (ENTER.has(v.name)) {
       // Entering a part (`write code.2`) of a shown element is how parts appear one by one.
       const part = call.targets.some((t) => t.startsWith(`${id}.`));
-      if (visible.has(id) && !part) this.warn(C.AlreadyVisible, `\`${id}\` is already visible`, call.span);
+      if (visible.has(id) && !part) {
+        this.warn(C.AlreadyVisible, `\`${id}\` is already visible`, call.span, this.carried.has(id)
+          ? {
+              desc: "removed the target (a carried element is already on screen)",
+              apply: () => {
+                remove(call.targets, id);
+                if (!call.targets.length) remove(action.calls, call);
+                if (!action.calls.length) remove(beat.actions, action);
+              },
+            }
+          : undefined);
+      }
       const el = declared.get(id)!;
       if (el.link) {
         const missing = [el.link.from, el.link.to].filter((e) => !visible.has(e) && !chainEnters.has(e));

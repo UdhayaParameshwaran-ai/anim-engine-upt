@@ -38,7 +38,13 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
   let prevElements = new Map<string, ElementIR>();
 
   for (const [sceneIndex, scene] of script.scenes.entries()) {
-    const keep = (scene.attrs.keep ?? "").split(",").filter(Boolean);
+    const keepAttr = (scene.attrs.keep ?? "").split(",").filter(Boolean);
+    // Carried: declared again here (it gets a place in this scene's layout and moves there from where it was).
+    // A carried id this scene doesn't declare stays as it was, like a kept one.
+    const declares = new Set(scene.steps.flatMap((st) => st.elements.map((e) => e.id)));
+    const carryAttr = (scene.attrs.carry ?? "").split(",").filter((id) => prevElements.has(id));
+    const carry = carryAttr.filter((id) => declares.has(id));
+    const keep = [...keepAttr, ...carryAttr.filter((id) => !declares.has(id) && !keepAttr.includes(id))];
     const kept = new Map(keep.filter((id) => prevBoxes.has(id)).map((id) => [id, prevBoxes.get(id)!]));
     const layout = layoutScene(scene, ctx, kept);
     diagnostics.push(...layout.diagnostics);
@@ -69,6 +75,7 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
       transitionIn: scene.attrs.in ?? DEFAULTS.transitionIn,
       transitionOut: scene.attrs.out ?? DEFAULTS.transitionOut,
       keep,
+      ...(carry.length && { carry }),
       elements,
       steps: scene.steps.map((step) => ({
         ...(step.id !== undefined && { id: step.id }),
@@ -204,7 +211,7 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
   const first = new Map<string, Moment>();
   // Elements kept from the previous scene are on screen from the start.
   const opening: Moment = { step: 0, beat: 0, rank: -1, anchor: "start", offset: 0, line: scene.steps[0]?.beats[0]?.line ?? 0 };
-  for (const id of scene.keep) first.set(id, opening);
+  for (const id of [...scene.keep, ...(scene.carry ?? [])]) first.set(id, opening);
   scene.steps.forEach((step, si) =>
     step.beats.forEach((beat, bi) => {
       const rankOf = (anchor: string) => {
@@ -306,8 +313,17 @@ function typed(raw: Record<string, string>, specs: Record<string, ParamSpec>): R
  */
 function boundaries(scenes: SceneIR[], script: Script, motion: MotionProfile): void {
   const pick = (name: string, i: number) => (name === "auto" ? motion.transitions[i % motion.transitions.length]! : name);
+  // A scene that carries an element on from the previous one meets it with a cut: the element must not fade with its scene.
+  const cutAtCarry = () =>
+    scenes.forEach((s, i) => {
+      if (i > 0 && s.carry?.length) {
+        s.transitionIn = "cut";
+        scenes[i - 1]!.transitionOut = "cut";
+      }
+    });
   if (motion.name === "standard") {
     for (const s of scenes) s.transitionIn = s.transitionIn === "auto" ? "fade" : s.transitionIn;
+    cutAtCarry();
     return;
   }
   scenes.forEach((s, i) => {
@@ -317,6 +333,7 @@ function boundaries(scenes: SceneIR[], script: Script, motion: MotionProfile): v
   });
   const last = scenes.at(-1);
   if (last && script.scenes.at(-1)!.attrs.out === undefined) last.transitionOut = "fade";
+  cutAtCarry();
 }
 
 function round2(n: number): number {

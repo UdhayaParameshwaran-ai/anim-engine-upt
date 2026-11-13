@@ -24,6 +24,9 @@ import {
   routeOutline,
   sceneKindOf,
   scenePrompt,
+  castPlan,
+  bindCarry,
+  pruneCarry,
   sceneSystemPrompt,
   shapeTable,
   storyArc,
@@ -733,3 +736,55 @@ describe("variety budget", () => {
 
 const OPENINGS_FOR_TEST = ["title", "question", "cold", "number"];
 const CLOSINGS_FOR_TEST = ["bullets", "recap", "checklist", "takeaway"];
+
+describe("cast and carry", () => {
+  const OUTLINE = [
+    'video 1 "Request"',
+    "theme light",
+    "motion corporate",
+    '# cast: client = icon:smartphone "Client"; server = icon:server "Server"',
+    'scene parts "Parts" template=cards',
+    "# shape: parts · goal: the parties",
+    'scene call "One request" template=exchange',
+    "# shape: interaction · goal: a request and its answer · carry: client, server",
+    'scene recap "Recap" grid=L2-08',
+    "# shape: page · goal: the idea",
+  ].join("\n");
+
+  it("reads the cast and which scenes carry what (never the first scene)", () => {
+    const plan = castPlan(OUTLINE);
+    expect([...plan.cast]).toEqual([["client", 'icon:smartphone "Client"'], ["server", 'icon:server "Server"']]);
+    expect(plan.carry.get("call")).toEqual(["client", "server"]);
+    expect(plan.carry.has("parts")).toBe(false);
+    expect(castPlan(OUTLINE.replace("goal: the parties", "goal: the parties · carry: client")).carry.has("parts")).toBe(false);
+  });
+
+  it("tells the scene that introduces the cast to declare it, and the carrying scene that it is already on screen", () => {
+    const first = scenePrompt(OUTLINE, "parts");
+    expect(first).toContain('client = icon:smartphone "Client"');
+    expect(first).not.toContain("Carried from the previous scene");
+    const second = scenePrompt(OUTLINE, "call");
+    expect(second).toContain("Carried from the previous scene (client, server)");
+    expect(second).toContain("carry=client,server");
+    expect(scenePrompt(OUTLINE, "recap")).not.toContain("Recurring elements");
+  });
+
+  it("binds carry= on the scene line to the plan", () => {
+    expect(bindCarry('scene call "One" template=exchange\nx = icon:sun', ["client"])).toContain('template=exchange carry=client\n');
+    expect(bindCarry('scene call "One" carry=a,b\nx = icon:sun', [])).toBe('scene call "One"\nx = icon:sun');
+    expect(bindCarry('scene call "One" carry=a\nx = icon:sun', ["c", "d"])).toContain("carry=c,d");
+  });
+});
+
+describe("pruneCarry", () => {
+  const line = (id: string, t: string, carry = "") => `scene ${id} "T" ${t}\n# shape: x · goal: y${carry ? ` · carry: ${carry}` : ""}`;
+  it("keeps carry between picture templates and drops it next to a flowchart, a page or code", () => {
+    const ok = [line("a", "template=cards"), line("b", "template=exchange", "client")].join("\n");
+    expect(pruneCarry(ok)).toContain("carry: client");
+    const flow = [line("a", "template=architecture"), line("b", "template=flow", "client")].join("\n");
+    expect(pruneCarry(flow)).not.toContain("carry");
+    const page = [line("a", "grid=L2-08"), line("b", "template=exchange", "client")].join("\n");
+    expect(pruneCarry(page)).not.toContain("carry");
+    expect(pruneCarry(line("a", "template=cards", "client"))).not.toContain("carry");
+  });
+});

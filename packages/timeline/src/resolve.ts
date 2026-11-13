@@ -158,6 +158,7 @@ class Resolver {
     const trOut = { type: scene.transitionOut, duration: this.q(outBase * this.motion.durScale) };
     const t0 = this.q(start);
     this.initScene(scene, prev);
+    this.carryIn(scene, prev, t0);
 
     const beatWords = sp.beats.map((r) => sp.words.filter((w) => w.start >= r.start && w.end <= r.end));
     const bounds = this.beatBounds(beatWords, sp.duration);
@@ -372,15 +373,50 @@ class Resolver {
         const props: Partial<Record<Prop, Value>> = {};
         for (const p of Object.keys(this.initial[from]!) as Prop[]) props[p] = this.valueAt(from, p, Infinity);
         this.initial[target] = props;
+      } else if (prev && scene.carry?.includes(el.id) && this.initial[`${prev.id}/${el.id}`]) {
+        // Carried: starts where it ended in the previous scene, as large as it looked there (carryIn moves it to its new place).
+        const from = `${prev.id}/${el.id}`;
+        const props: Partial<Record<Prop, Value>> = {};
+        for (const p of Object.keys(this.initial[from]!) as Prop[]) props[p] = this.valueAt(from, p, Infinity);
+        const old = prev.elements.find((e) => e.id === el.id);
+        if (old && old.box.w > 0 && el.box.w > 0) props.scale = Math.min(3, Math.max(0.3, (num(props.scale, 1) * old.box.w) / el.box.w));
+        this.initial[target] = props;
       } else {
         this.initial[target] = { opacity: 0, x: el.box.x + el.box.w / 2, y: el.box.y + el.box.h / 2, scale: 1, rotate: 0, draw: 1, reveal: 1, tint: 0 };
       }
     }
   }
 
+  /**
+   * A scene that carries elements on from the previous one: the carried
+   * element moves from where it was to its place in this scene, and what
+   * the previous scene still showed (everything else) fades out just before.
+   */
+  private carryIn(scene: SceneIR, prev: SceneIR | undefined, t0: number): void {
+    if (!prev || !scene.carry?.length) return;
+    const call = (id: string): Scheduled => ({ order: this.order++, verb: "move", targets: [id], t0, dur: 0.8, stagger: 0, params: {}, line: 0 });
+    for (const el of scene.elements) {
+      if (!scene.carry.includes(el.id) || !this.initial[`${scene.id}/${el.id}`]) continue;
+      const target = `${scene.id}/${el.id}`;
+      const s = call(el.id);
+      const [cx, cy] = [el.box.x + el.box.w / 2, el.box.y + el.box.h / 2];
+      const now = this.initial[target]!;
+      if (Math.abs(num(now.x as number, cx) - cx) > 1) this.add(target, { prop: "x", t0, t1: t0 + 0.8, to: cx, ease: "inout" }, s);
+      if (Math.abs(num(now.y as number, cy) - cy) > 1) this.add(target, { prop: "y", t0, t1: t0 + 0.8, to: cy, ease: "inout" }, s);
+      if (Math.abs(num(now.scale as number, 1) - 1) > 0.01) this.add(target, { prop: "scale", t0, t1: t0 + 0.8, to: 1, ease: "inout" }, s);
+    }
+    // The rest of the previous scene clears away just before the cut.
+    const keepOn = new Set([...scene.carry, ...scene.keep]);
+    for (const el of prev.elements) {
+      const target = `${prev.id}/${el.id}`;
+      if (keepOn.has(el.id) || num(this.valueAt(target, "opacity", Infinity) as number, 0) <= 0.01) continue;
+      this.add(target, { prop: "opacity", t0: Math.max(0, t0 - 0.35), t1: t0, to: 0, ease: "in" }, call(el.id));
+    }
+  }
+
   private expand(scene: SceneIR, scheduled: Scheduled[]): void {
     const elements = new Map(scene.elements.map((e) => [e.id, e]));
-    const visible = new Set(scene.keep.filter((id) => (this.initial[`${scene.id}/${id}`]?.opacity as number) > 0));
+    const visible = new Set([...scene.keep, ...(scene.carry ?? [])].filter((id) => (this.initial[`${scene.id}/${id}`]?.opacity as number) > 0));
     const canvas = this.video.canvas;
     scheduled.sort((a, b) => a.t0 - b.t0 || a.order - b.order);
 
@@ -560,6 +596,8 @@ function defaultValue(prop: Prop, canvas: { width: number; height: number }): Va
       return 0;
   }
 }
+
+const num = (v: Value | undefined, d: number): number => (typeof v === "number" ? v : d);
 
 function round(n: number): number {
   return Math.round(n * 1000) / 1000;

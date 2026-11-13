@@ -101,6 +101,34 @@ describe("references", () => {
   });
 });
 
+describe("carry", () => {
+  const A = 'video 1\nscene a\nx = icon:sun "Sun"\ny = icon:moon "Moon"\n> {1}Hi {2}there.\n1 pop x\n2 pop y\n';
+
+  it("accepts a carried element that is declared again, and treats it as already on screen", () => {
+    const src = A + 'scene b carry=x\nx = icon:sun "Sun"\n> {1}Still x.\n1 pulse x\n';
+    expect(validate(parse(src).script).diagnostics).toEqual([]);
+  });
+
+  it("removes the target of an enter verb on a carried element (it is already on screen)", () => {
+    const src = A + 'scene b carry=x\nx = icon:sun "Sun"\n> {1}Still x.\n1 pop x then pulse x\n';
+    const r = validate(parse(src).script);
+    expect(r.diagnostics.map((d) => d.code)).toEqual([C.AlreadyVisible]);
+    const b = print(r.script).slice(print(r.script).indexOf("scene b"));
+    expect(b).toContain("1 pulse x");
+    expect(b).not.toContain("pop x");
+  });
+
+  it("drops carry ids the previous scene did not declare, but not for a scene checked on its own", () => {
+    const src = A + 'scene b carry=x,z\nx = icon:sun "Sun"\nz = icon:star "Star"\n> {1}Both.\n1 pulse x then pop z\n';
+    const r = validate(parse(src).script);
+    expect(r.diagnostics.map((d) => d.code)).toContain(C.BadKeep);
+    expect(print(r.script)).toContain("carry=x");
+    expect(print(r.script)).not.toContain("carry=x,z");
+    const alone = 'video 1\nscene b carry=x\nx = icon:sun "Sun"\n> {1}Still x.\n1 pulse x\n';
+    expect(validate(parse(alone).script).diagnostics).toEqual([]);
+  });
+});
+
 describe("schema", () => {
   it("fixes misspelled verbs and drops unknown ones", () => {
     const r = check("a = icon:sun\n> {1}Hi there.\n1 pop a then hilight a\nend explode a");
@@ -216,5 +244,14 @@ describe("audit fixes", () => {
     const r = check("a = icon:sun \"A\"\nb = icon:wind \"B\"\n> First {1 the bright sun} then more words follow here.\n1 pop a\n2 pop b");
     expect(parse(r.printed).diagnostics).toEqual([]);
     expect(r.printed).toMatch(/\{1 the bright sun\} then .*\{2\}/);
+  });
+});
+
+describe("carry kinds", () => {
+  it("drops a carried id that is a different kind of element in this scene", () => {
+    const src = 'video 1\nscene a\nx = icon:sun "Sun"\n> {1}Hi.\n1 pop x\nscene b carry=x\nx = box "Sun"\n> {1}Still.\n1 pulse x\n';
+    const r = validate(parse(src).script);
+    expect(r.diagnostics.map((d) => d.code)).toContain(C.BadKeep);
+    expect(print(r.script)).not.toContain("carry=");
   });
 });

@@ -3,7 +3,7 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { type Domain, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
+import { castPlan, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
@@ -155,7 +155,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
     const planned = await chat(ctx, [{ role: "user", content: outlinePrompt(topic, range, arc, recent) }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
-    const outline = routed.text;
+    const outline = pruneCarry(routed.text);
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
     const plan = split(outline);
     if (!plan.scenes.length) {
@@ -181,7 +181,8 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
         opts.onLog?.(`scene ${s.id}: kept the planned ${kept.changed}`);
         note(ctx, reply.trace, { reason: `kept the planned ${kept.changed}` });
       }
-      const fixed = arrange(await repairLoop(ctx, header, kept.text, [first], s.id, reply.trace, system));
+      // What the plan carries from the previous scene is binding too (a repair may have dropped it).
+      const fixed = arrange(bindCarry(await repairLoop(ctx, header, kept.text, [first], s.id, reply.trace, system), castPlan(outline).carry.get(s.id) ?? []));
       written[i] = fixed;
       emit(fixed, i);
       return fixed;
@@ -444,6 +445,16 @@ export function routeOutline(text: string): { text: string; changes: string[] } 
     scene = -1;
   });
   return { text: lines.join("\n"), changes };
+}
+
+/** Sets `carry=` on a written scene line to exactly the planned ids (none: the attribute is removed). */
+export function bindCarry(sceneText: string, ids: string[]): string {
+  const lines = sceneText.split("\n");
+  const i = lines.findIndex((l) => /^\s*scene\s/.test(l));
+  if (i < 0) return sceneText;
+  const bare = lines[i]!.replace(/\s+carry=\S+/g, "");
+  lines[i] = ids.length ? `${bare} carry=${ids.join(",")}` : bare;
+  return lines.join("\n");
 }
 
 /**

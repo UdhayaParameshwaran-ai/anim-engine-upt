@@ -40,6 +40,8 @@ export interface SceneIR {
   transitionIn: string;
   transitionOut: string;
   keep: string[];
+  /** Ids declared again in this scene that continue from the previous one: same element, new place. */
+  carry?: string[];
   elements: ElementIR[];
   steps: StepIR[];
 }

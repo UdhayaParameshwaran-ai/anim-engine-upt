@@ -550,6 +550,7 @@ ${variety}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"
+- optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
 No elements, narration or actions yet.`;
 }
 
@@ -559,12 +560,22 @@ No elements, narration or actions yet.`;
  */
 export function scenePrompt(outline: string, sceneId: string, earlier = ""): string {
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
+  const plan = castPlan(outline);
+  const here = plan.carry.get(sceneId) ?? [];
+  const ahead = plan.carry.get(plan.order[plan.order.indexOf(sceneId) + 1] ?? "") ?? [];
+  const recurring = [...new Set([...here, ...ahead])].filter((id) => plan.cast.has(id));
+  const castBlock = recurring.length
+    ? `\n\nRecurring elements, the same thing in several scenes: declare each exactly as written (same id, picture and label):\n${recurring.map((id) => `  ${id} = ${plan.cast.get(id)}`).join("\n")}`
+    : "";
+  const carried = here.length
+    ? `\nCarried from the previous scene (${here.join(", ")}): they are already on screen when this scene starts. Declare them here, never show them (no pop, fade, draw or write on them), and use them: send along their links, highlight, mark. Put carry=${here.join(",")} on the scene line.`
+    : "";
   const line = outline.split("\n").find((l) => sceneLineId(l) === sceneId);
   const tpl = line ? findTemplate(/\btemplate=(\S+)/.exec(line)?.[1] ?? "") : undefined;
   const grid = line ? gridCard(/\bgrid=(\S+)/.exec(line)?.[1] ?? "") : undefined;
   const card = tpl ? `\n\n${templateCard(tpl)}` : grid ? `\n\n${grid}` : "";
   return `Video outline:
-${outline}${said}${card}
+${outline}${said}${card}${castBlock}${carried}
 
 Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
 Cover only this scene's goal; other scenes cover the rest.
@@ -609,6 +620,64 @@ ${numbered}
 
 ${kind === "errors" ? "Errors" : "Problems"}:
 ${diagnostics}`;
+}
+
+/**
+ * What an outline says about recurring things: the cast (`# cast: id = icon:name "Label"; …`), and per
+ * scene the ids it carries over from the previous scene (`· carry: a, b` on its comment line). The
+ * first scene carries nothing.
+ */
+export function castPlan(outline: string): { cast: Map<string, string>; carry: Map<string, string[]>; order: string[] } {
+  const cast = new Map<string, string>();
+  const carry = new Map<string, string[]>();
+  const order: string[] = [];
+  let scene: string | undefined;
+  for (const line of outline.split("\n")) {
+    const id = sceneLineId(line);
+    if (id) {
+      scene = id;
+      order.push(id);
+      continue;
+    }
+    const decl = /^\s*#\s*cast:\s*(.+)$/i.exec(line)?.[1];
+    if (decl) {
+      for (const part of decl.split(";")) {
+        const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?)\s*$/.exec(part);
+        if (m) cast.set(m[1]!, m[2]!);
+      }
+    }
+    const ids = /·\s*carry:\s*([A-Za-z0-9_,\s]+?)\s*(?:·|$)/i.exec(line)?.[1];
+    if (scene && ids && order.length > 1) {
+      const list = ids.split(/[,\s]+/).filter(Boolean);
+      if (list.length) carry.set(scene, list);
+    }
+  }
+  return { cast, carry, order };
+}
+
+/** Templates whose items are pictures: a recurring picture can be one of their items (not a flowchart's node, a grid page, a code panel). */
+const CARRY_TEMPLATES = new Set(["compare", "steps", "cycle", "timeline", "hub", "cards", "spotlight", "converge", "diverge", "process", "exchange", "architecture", "stack"]);
+
+/**
+ * Drops the `· carry:` of a scene when it or the scene before it can't hold a recurring picture
+ * (a flowchart, a page, code...): the carried thing would have nowhere to be.
+ */
+export function pruneCarry(outline: string): string {
+  const lines = outline.split("\n");
+  const kinds: (string | undefined)[] = [];
+  const at: number[] = [];
+  lines.forEach((l, i) => {
+    if (sceneLineId(l) === undefined) return;
+    kinds.push(/\btemplate=(\S+)/.exec(l)?.[1]);
+    at.push(i);
+  });
+  at.forEach((start, k) => {
+    const end = at[k + 1] ?? lines.length;
+    const ok = k > 0 && CARRY_TEMPLATES.has(kinds[k] ?? "") && CARRY_TEMPLATES.has(kinds[k - 1] ?? "");
+    if (ok) return;
+    for (let i = start + 1; i < end; i++) lines[i] = lines[i]!.replace(/\s*·\s*carry:[^·]*/i, "");
+  });
+  return lines.join("\n");
 }
 
 function sceneLineId(line: string): string | undefined {
