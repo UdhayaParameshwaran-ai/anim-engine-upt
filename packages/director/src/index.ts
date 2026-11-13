@@ -140,6 +140,15 @@ function pick(weights: Weights, rand: () => number): string {
   return entries.at(-1)![0];
 }
 
+/**
+ * Templates that lay out cleanly with airier or tighter spacing, and that read the same mirrored, at
+ * every item count their cards promise (measured by the quality matrix; sequences, timelines and
+ * flows have a direction, so they are never mirrored).
+ */
+const NO_AIRY = new Set(["flow", "timeline", "cards", "converge", "diverge"]);
+const NO_TIGHT = new Set(["flow"]);
+const MIRRORABLE = new Set(["title", "compare", "spotlight", "hub", "cycle", "stack"]);
+
 const ALL_LOOKS = new Set<string>(THEMES);
 const ALL_MOTIONS = new Set(MOTIONS.map((m) => m.name));
 
@@ -151,6 +160,10 @@ const ALL_MOTIONS = new Set(MOTIONS.map((m) => m.name));
 export class Director {
   private readonly history: HistoryEntry[];
   private readonly rand: () => number;
+  /** Its own stream, so spacing and mirroring never change the other seeded choices. */
+  private readonly knobRand: () => number;
+  /** The previous scene got a spacing or mirror choice: the next one keeps the default. */
+  private knobbed = false;
   private readonly mood: Mood;
   private readonly recentLayouts: string[];
   private last = "";
@@ -162,6 +175,7 @@ export class Director {
   constructor(private readonly opts: DirectOptions) {
     this.history = opts.history ?? [];
     this.rand = prng(hash(opts.topic) ^ (this.history.length * 2654435761));
+    this.knobRand = prng(hash(opts.topic) ^ 0x9e3779b9 ^ (this.history.length * 40503));
     this.mood = moodOf(opts.topic);
     this.recentLayouts = this.history.slice(-3).flatMap((h) => h.layouts);
   }
@@ -266,6 +280,17 @@ export class Director {
       if (v !== tpl.variants[0]) set.variant = v;
     }
     if (a.grid !== undefined && a.mirror === undefined && this.rand() < 0.4) set.mirror = "true";
+    // Spacing and mirroring for template scenes: now and then, never two scenes in a row.
+    if (tpl) {
+      const k = this.knobRand;
+      if (!this.knobbed && a.density === undefined && k() < 0.22) {
+        const airy = !NO_AIRY.has(tpl.name) && k() < 0.5;
+        if (airy) set.density = "airy";
+        else if (!NO_TIGHT.has(tpl.name)) set.density = "tight";
+      }
+      if (!this.knobbed && !set.density && a.mirror === undefined && MIRRORABLE.has(tpl.name) && k() < 0.35) set.mirror = "true";
+      this.knobbed = Object.keys(set).some((x) => x === "density" || x === "mirror");
+    }
     Object.assign(a, set);
     if (Object.keys(set).length) this.scenes[scene.id] = set;
     if (tpl) this.last = `${tpl.name}:${a.variant ?? tpl.variants[0]}`;

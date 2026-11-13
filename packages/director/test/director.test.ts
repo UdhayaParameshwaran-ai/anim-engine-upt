@@ -82,3 +82,33 @@ describe("style director", () => {
     expect([...used]).toEqual(["around"]);
   });
 });
+
+describe("spacing and mirroring", () => {
+  const scenes = ["title", "compare", "spotlight", "hub", "cycle", "stack", "steps", "process", "exchange", "flow", "cards", "timeline"]
+    .map((t, i) => `scene s${i} template=${t}\nx = icon:sun "A"\n> {1}Hi.\n1 pop x\n`)
+    .join("\n");
+  const src = `video 1\n${scenes}`;
+
+  it("sets density or mirror now and then, never on two scenes in a row, and never where a template can't take it", () => {
+    let seen = 0;
+    for (const topic of ["dns", "tcp", "git", "http", "cache", "queue", "stack", "tree", "cdn", "jwt", "rest", "sql"]) {
+      const { script } = direct(src, { topic });
+      const lines = script.split("\n").filter((l) => l.startsWith("scene "));
+      let prev = false;
+      for (const l of lines) {
+        const knob = /\bdensity=\S+|\bmirror=true/.test(l);
+        expect(knob && prev, `two in a row: ${l}`).toBe(false);
+        prev = knob;
+        if (knob) seen++;
+        if (/template=(flow|timeline|cards|converge|diverge)\b/.test(l)) expect(l).not.toContain("density=airy");
+        if (/template=flow\b/.test(l)) expect(l).not.toMatch(/density=|mirror=/);
+        if (/template=(steps|process|exchange|flow|timeline|cards)\b/.test(l)) expect(l).not.toContain("mirror=true");
+      }
+    }
+    expect(seen).toBeGreaterThan(5);
+  });
+
+  it("is stable for the same topic and history", () => {
+    expect(direct(src, { topic: "dns" }).script).toBe(direct(src, { topic: "dns" }).script);
+  });
+});

@@ -146,3 +146,24 @@ describe("audit regressions", () => {
     expect(unfit(script, "fit")).toEqual([]);
   });
 });
+
+describe("spacing and mirroring (what the Director may set)", () => {
+  const NO_AIRY = new Set(["flow", "timeline", "cards", "converge", "diverge"]);
+  const MIRRORABLE = new Set(["title", "compare", "spotlight", "hub", "cycle", "stack"]);
+  const withKnob = (t: TemplateManifest, knob: string, v: string, n: number) => templateScript(t, v, n).replace(`template=${t.name}`, `template=${t.name} ${knob}`);
+
+  it.each([
+    ["density=airy", (t: TemplateManifest) => !NO_AIRY.has(t.name)],
+    ["density=tight", (t: TemplateManifest) => t.name !== "flow"],
+    ["mirror=true", (t: TemplateManifest) => MIRRORABLE.has(t.name)],
+  ])("%s lays out cleanly for every variant and item count", (knob, allowedFor) => {
+    const problems: string[] = [];
+    for (const t of TEMPLATES.filter(allowedFor))
+      for (const v of t.variants)
+        for (const n of allowed(t)) {
+          const bad = unfit(withKnob(t, knob, v, n), "exact");
+          if (bad.length) problems.push(`${t.name}:${v} ×${n}`);
+        }
+    expect(problems).toEqual([]);
+  });
+});
