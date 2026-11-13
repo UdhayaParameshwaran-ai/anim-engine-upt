@@ -400,3 +400,50 @@ describe("tech elements", () => {
     expect(spans[0]!.getAttribute("fill")).not.toBe(spans[6]!.getAttribute("fill"));
   });
 });
+
+describe("value verbs", () => {
+  async function stageOf(src: string): Promise<{ stage: Stage; tl: ResolvedTimeline }> {
+    const ir = compile(src).ir!;
+    const speech = await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) });
+    const tl = resolve(ir, speech);
+    return { stage: new Stage(container, ir, tl, { autoFit: false }), tl };
+  }
+  // Wrapped text is one tspan per line: compare without spaces.
+  const textOf = (n: Element) => (n.querySelector("text")?.textContent ?? "").replace(/\s+/g, "");
+  const HEAD = 'video 1\nscene s "V" template=cards\nstatus = box "200 OK"\nhits = box "0"\nold = box "v1"\n';
+
+  it("set changes an element's text in place, from the peak of its bump on (also when seeking back)", async () => {
+    const { stage, tl } = await stageOf(`${HEAD}> {1}A status, then {2}it changes.\n1 pop status\n2 set status to="404 Not Found"\n`);
+    const bump = tl.tracks.find((t) => t.target === "s/status" && t.meta?.set !== undefined)!;
+    const n = node(stage, "s", "status");
+    stage.render(bump.t0 - 0.05);
+    expect(textOf(n)).toBe("200OK");
+    stage.render(bump.t1 + 0.05);
+    expect(textOf(n)).toBe("404NotFound");
+    stage.render(bump.t0 - 0.05);
+    expect(textOf(n)).toBe("200OK");
+  });
+
+  it("count runs a number up in the element's text and ends on the final value", async () => {
+    const { stage, tl } = await stageOf(`${HEAD}> {1}A counter, then {2}it counts.\n1 pop hits\n2 count hits from=0 to=100 suffix=" ms"\n`);
+    const c = tl.tracks.find((t) => t.target === "s/hits" && t.prop === "count")!;
+    const n = node(stage, "s", "hits");
+    stage.render(c.t0 + (c.t1 - c.t0) * 0.3);
+    const mid = parseInt(textOf(n), 10);
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(100);
+    stage.render(c.t1 + 0.1);
+    expect(textOf(n)).toBe("100ms");
+  });
+
+  it("strike draws a line across the element and dims it", async () => {
+    const { stage, tl } = await stageOf(`${HEAD}> {1}An option, then {2}it is struck out.\n1 pop old\n2 strike old\n`);
+    const s = tl.tracks.find((t) => t.target === "s/old" && t.prop === "strike")!;
+    const line = node(stage, "s", "old").querySelector("line")!;
+    stage.render(s.t0 - 0.05);
+    expect(line.style.opacity).toBe("0");
+    stage.render(s.t1 + 0.05);
+    expect(line.style.opacity).toBe("1");
+    expect(line.getAttribute("stroke-dashoffset")).toBe("0");
+  });
+});

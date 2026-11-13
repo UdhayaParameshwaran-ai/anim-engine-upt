@@ -25,6 +25,12 @@ export interface Instance {
   innerText: Element[];
   /** Grid elements: plays the element's signature motion for draw progress k (0..1). */
   motion?: (k: number) => void;
+  /** Replaces the element's main text (`set`, `count`): refits it and rebuilds its characters. */
+  retext?: (content: string) => void;
+  /** The text shown now (what `retext` last set); the element's own text until then. */
+  shown?: string;
+  /** A line across the element, drawn by `strike`. */
+  strikeLine?: SVGLineElement;
   /** Connectors are re-routed every frame between their endpoints. */
   connector?: { from: string; to: string; path: SVGPathElement; head?: SVGPathElement; label?: SVGTextElement; token?: SVGCircleElement };
 }
@@ -237,6 +243,7 @@ function wrap(content: string, perLine: number): string[] {
 }
 
 function text(doc: Document, inst: Instance, content: string, font: number, maxW: number, maxH: number, theme: Theme, opts: TextOpts = {}): SVGTextElement {
+  const chars0 = inst.chars.length;
   const upper = opts.heading && theme.headingCase === "upper";
   // Capitals and tracking widen the text; fit with the wider estimate.
   const charW = theme.charW * (upper ? 1.15 : 1) + (opts.heading ? theme.headingTracking : 0);
@@ -278,6 +285,26 @@ function text(doc: Document, inst: Instance, content: string, font: number, maxW
     t.append(ln);
   });
   if (opts.inner) inst.innerText.push(t);
+  // The first text of an element is its main one: `set` and `count` replace it (refitted, characters rebuilt).
+  if (!inst.retext) {
+    let mine = inst.chars.slice(chars0);
+    let current: SVGTextElement = t;
+    inst.retext = (next: string) => {
+      const before = inst.chars.length;
+      const fresh = text(doc, inst, next, font, maxW, maxH, theme, opts);
+      const added = inst.chars.slice(before);
+      inst.chars = [...inst.chars.slice(0, before).filter((c) => !mine.includes(c)), ...added];
+      // The caller may have set attributes after building the node (position, fill): they carry over, the size is refitted.
+      for (const a of Array.from(current.attributes)) if (a.name !== "font-size" && a.name !== "text-anchor") fresh.setAttribute(a.name, a.value);
+      const i = inst.innerText.indexOf(current);
+      if (i >= 0) inst.innerText.splice(i, 1);
+      inst.innerText = inst.innerText.filter((n) => n !== fresh);
+      if (i >= 0) inst.innerText.push(fresh);
+      current.replaceWith(fresh);
+      current = fresh;
+      mine = added;
+    };
+  }
   return t;
 }
 

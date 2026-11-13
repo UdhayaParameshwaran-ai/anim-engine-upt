@@ -69,6 +69,10 @@ export class Stage {
   private readonly revealBy = new Map<string, string>();
   /** `send` tweens per connector: while one runs, its packet travels along the connector. */
   private readonly sends = new Map<string, Tween[]>();
+  /** `set` tweens per element (meta.set is the new text, shown from the end of the tween), in time order. */
+  private readonly sets = new Map<string, Tween[]>();
+  /** `count` tweens per element (meta: from, to, prefix, suffix, decimals; the tween's value is the progress). */
+  private readonly counts = new Map<string, Tween[]>();
   /** When each element has finished appearing (pictures start to float from then on). */
   private readonly shownAt = new Map<string, number>();
   /** How far pictures float while on screen (px), from the motion personality. */
@@ -100,6 +104,8 @@ export class Stage {
       if (tw.prop === "tint") (this.tints.get(tw.target) ?? this.tints.set(tw.target, []).get(tw.target)!).push(tw);
       if (tw.prop === "reveal" && tw.meta?.by && !this.revealBy.has(tw.target)) this.revealBy.set(tw.target, String(tw.meta.by));
       if (tw.prop === "reveal" && tw.meta?.send) (this.sends.get(tw.target) ?? this.sends.set(tw.target, []).get(tw.target)!).push(tw);
+      if (tw.prop === "scale" && tw.meta?.set !== undefined) (this.sets.get(tw.target) ?? this.sets.set(tw.target, []).get(tw.target)!).push(tw);
+      if (tw.prop === "count") (this.counts.get(tw.target) ?? this.counts.set(tw.target, []).get(tw.target)!).push(tw);
     }
 
     this.root = doc.createElement("div");
@@ -146,6 +152,13 @@ export class Stage {
         for (const nodes of inst.parts.values()) for (const n of nodes) this.baseStyle.set(n, (n as SVGElement).style.cssText);
         instances.set(el.id, inst);
         (inst.layer === "html" ? html : g).append(inst.root);
+        // An element that gets struck through carries its line from the start (hidden until `strike`).
+        if (inst.layer === "svg" && !inst.connector && timeline.tracks.some((tw) => tw.prop === "strike" && tw.target === `${res.id}/${el.id}`)) {
+          const line = svg(doc, "line", { x1: round(-el.box.w * 0.46), y1: 0, x2: round(el.box.w * 0.46), y2: 0, pathLength: 1, "stroke-width": 7, "stroke-linecap": "round", stroke: color(this.theme, "warn") }) as SVGLineElement;
+          line.style.opacity = "0";
+          inst.root.append(line);
+          inst.strikeLine = line;
+        }
       }
       this.svgCamera.append(g);
       this.htmlCamera.append(html);
@@ -326,6 +339,30 @@ export class Stage {
     inst.motion?.(clamp01(Math.min(draw, num(p.reveal, 1))));
     if (inst.layer === "html") style.push(["clip-path", reveal < 1 ? `inset(0 ${round((1 - reveal) * 100)}% 0 0)` : ""]);
     else this.reveal(inst, target, reveal);
+
+    // set / count: the element's text changes (a pure function of time, so seeking agrees)
+    if (inst.retext) {
+      let want = inst.el.texts[0] ?? "";
+      for (const tw of this.sets.get(target) ?? []) if (this.time >= tw.t1) want = String(tw.meta!.set);
+      const counting = (this.counts.get(target) ?? []).filter((tw) => this.time >= tw.t0).pop();
+      if (counting) {
+        const m = counting.meta ?? {};
+        const k = clamp01(num(p.count, 0));
+        const v = Number(m.from ?? 0) + (Number(m.to ?? 0) - Number(m.from ?? 0)) * k;
+        want = `${m.prefix ?? ""}${v.toFixed(Math.max(0, Math.min(3, Number(m.decimals ?? 0))))}${m.suffix ?? ""}`;
+      }
+      if (want !== (inst.shown ?? (inst.el.texts[0] ?? ""))) {
+        inst.retext(want);
+        inst.shown = want;
+      }
+    }
+    // strike: a line across the element
+    if (inst.strikeLine) {
+      const k = clamp01(num(p.strike, 0));
+      inst.strikeLine.setAttribute("stroke-dasharray", "1 1");
+      inst.strikeLine.setAttribute("stroke-dashoffset", String(round(1 - k, 4)));
+      inst.strikeLine.style.opacity = k > 0.001 ? "1" : "0";
+    }
 
     // tint (highlight)
     const tint = num(p.tint, 0);

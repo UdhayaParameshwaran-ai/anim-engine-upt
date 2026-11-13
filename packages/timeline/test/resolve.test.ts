@@ -386,3 +386,27 @@ describe("camera per chapter", () => {
     expect(frames.length).toBeLessThanOrEqual(2);
   });
 });
+
+describe("clone and merge", () => {
+  const HEAD = 'video 1\nscene s "C" template=cards\na = box "A"\nb = box "B"\nc = box "C"\n> {1}One.\n1 pop a\n';
+
+  it("clone flies a copy from the source to each destination, which were hidden before", async () => {
+    const { ir, tl } = await build(`${HEAD}> {1}Copies.\n1 clone a,b,c\n`);
+    const ev = createEvaluator(tl);
+    const t = tl.tracks.find((x) => x.verb === "clone" && x.prop === "x" && x.target === "s/b")!;
+    const bBox = ir.scenes[0]!.elements.find((e) => e.id === "b")!.box;
+    expect(ev.valueAt("s/b", "opacity", t.t0 - 0.05)).toBe(0);
+    expect(ev.valueAt("s/b", "x", t.t0)).toBeCloseTo(ev.valueAt("s/a", "x", t.t0) as number);
+    expect(ev.valueAt("s/b", "x", tl.duration)).toBeCloseTo(bBox.x + bBox.w / 2);
+    expect(ev.valueAt("s/b", "opacity", tl.duration)).toBe(1);
+  });
+
+  it("merge flies the sources into the last element, which appears as they vanish", async () => {
+    const { tl } = await build(`${HEAD}> {1}Two.\n1 pop b\n> {1}Merge.\n1 merge a,b,c\n`);
+    const ev = createEvaluator(tl);
+    expect(ev.valueAt("s/a", "opacity", tl.duration)).toBe(0);
+    expect(ev.valueAt("s/b", "opacity", tl.duration)).toBe(0);
+    expect(ev.valueAt("s/c", "opacity", tl.duration)).toBe(1);
+    expect(ev.valueAt("s/a", "x", tl.duration)).toBeCloseTo(ev.valueAt("s/c", "x", tl.duration) as number);
+  });
+});

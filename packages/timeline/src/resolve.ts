@@ -445,6 +445,49 @@ class Resolver {
         this.add(`${scene.id}/camera`, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.5, 0.5), ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
         continue;
       }
+      if (s.verb === "clone" && s.targets.length >= 2) {
+        // A copy flies from the source to each destination (declared hidden) and settles there.
+        const src = elements.get(s.targets[0]!);
+        if (!src) continue;
+        const A = this.currentBox(scene, src, s.t0);
+        for (const id of s.targets.slice(1)) {
+          const el = elements.get(id);
+          if (!el) continue;
+          const target = `${scene.id}/${id}`;
+          if (!this.initial[target]) this.initial[target] = { opacity: 0, scale: 1, tint: 0, draw: 1, reveal: 1 };
+          const [cx, cy] = [el.box.x + el.box.w / 2, el.box.y + el.box.h / 2];
+          const k = el.box.w > 0 ? Math.min(3, Math.max(0.3, A.w / el.box.w)) : 1;
+          this.add(target, { prop: "opacity", t0: s.t0, t1: s.t0 + 0.15, from: 0, to: 1, ease: "out" }, s);
+          this.add(target, { prop: "x", t0: s.t0, t1: s.t0 + s.dur, from: A.x + A.w / 2, to: cx, ease: "inout" }, s);
+          this.add(target, { prop: "y", t0: s.t0, t1: s.t0 + s.dur, from: A.y + A.h / 2, to: cy, ease: "inout" }, s);
+          this.add(target, { prop: "scale", t0: s.t0, t1: s.t0 + s.dur, from: k, to: 1, ease: "inout" }, s);
+          visible.add(id);
+        }
+        continue;
+      }
+      if (s.verb === "merge" && s.targets.length >= 2) {
+        // The sources fly into the last element and vanish; it appears as they arrive.
+        const dest = elements.get(s.targets[s.targets.length - 1]!);
+        if (!dest) continue;
+        const [cx, cy] = [dest.box.x + dest.box.w / 2, dest.box.y + dest.box.h / 2];
+        for (const id of s.targets.slice(0, -1)) {
+          const el = elements.get(id);
+          if (!el) continue;
+          const target = `${scene.id}/${id}`;
+          if (!this.initial[target]) this.initial[target] = { opacity: 1, scale: 1, tint: 0, draw: 1, reveal: 1 };
+          const k = el.box.w > 0 ? Math.min(3, Math.max(0.3, dest.box.w / el.box.w)) : 1;
+          this.add(target, { prop: "x", t0: s.t0, t1: s.t0 + s.dur, to: cx, ease: "inout" }, s);
+          this.add(target, { prop: "y", t0: s.t0, t1: s.t0 + s.dur, to: cy, ease: "inout" }, s);
+          this.add(target, { prop: "scale", t0: s.t0, t1: s.t0 + s.dur, to: k, ease: "inout" }, s);
+          this.add(target, { prop: "opacity", t0: s.t0 + s.dur * 0.6, t1: s.t0 + s.dur, to: 0, ease: "in" }, s);
+          visible.delete(id);
+        }
+        const target = `${scene.id}/${dest.id}`;
+        if (!this.initial[target]) this.initial[target] = { opacity: 0, scale: 1, tint: 0, draw: 1, reveal: 1 };
+        this.add(target, { prop: "opacity", t0: s.t0 + s.dur * 0.6, t1: s.t0 + s.dur, from: 0, to: 1, ease: "out" }, s);
+        visible.add(dest.id);
+        continue;
+      }
       if (s.verb === "swap" && s.targets.length >= 2) {
         // Two elements trade places along arcs (one over, one under).
         const [a, b] = [s.targets[0]!, s.targets[1]!];

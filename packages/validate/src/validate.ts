@@ -728,6 +728,18 @@ class Validator {
 
   private visit(v: VerbManifest, id: string, call: VerbCall, action: Action, beat: Beat, visible: Set<string>, shown: Set<string>, declared: Map<string, ElementDecl>, chainEnters: Set<string>): void {
     if (!declared.has(id)) return;
+    if (v.name === "clone" || v.name === "merge") {
+      // clone a,b,c: the first is the source, the others appear as copies. merge a,b,c: the last appears, the others fly into it.
+      const ids = call.targets.map((t) => t.split(".")[0]!);
+      const sources = v.name === "clone" ? ids.slice(0, 1) : ids.slice(0, -1);
+      const dests = v.name === "clone" ? ids.slice(1) : ids.slice(-1);
+      if (sources.includes(id) && !visible.has(id)) this.warn(C.NotVisible, `\`${v.name}\` takes \`${id}\` before it appears`, call.span);
+      if (dests.includes(id)) {
+        visible.add(id);
+        shown.add(id);
+      } else if (v.name === "merge") visible.delete(id);
+      return;
+    }
     if (v.name === "send" || v.name === "stream") {
       // A packet travels along a connector, drawing it first if it isn't shown yet; sending again is fine.
       const el = declared.get(id)!;

@@ -234,11 +234,11 @@ const LINKED = new Set(["exchange", "architecture", "tree", "states", "gitgraph"
  * template, sent only with that template's scene call.
  */
 const STORY: Record<string, string> = {
-  exchange: "- Let the messages tell the story, not only appear: send m1 fail=true (the packet is lost halfway), send m1 wait=1 (the server is busy, then it goes on), stream m1 (steady traffic), shake <party> (a rejection or error), mark <party> as=fail|ok.",
-  architecture: "- Show traffic, not only boxes: send l1 along a link, stream l1 for steady load, mark <component> as=fail when it goes down, frame a,b,c to bring a group closer (focus reset pulls out).",
-  states: "- Move through the machine: visit s1, then visit s2 when the event happens (one ring of \"current state\" travels), send t1 along the transition, mark s3 as=fail|ok on an end state.",
+  exchange: "- Let the messages tell the story, not only appear: send m1 fail=true (the packet is lost halfway), send m1 wait=1 (the server is busy, then it goes on), stream m1 (steady traffic), shake <party> (a rejection or error), mark <party> as=fail|ok, set <party> to=\"…\" to change a label in place (a status 200 → 503).",
+  architecture: "- Show traffic, not only boxes: send l1 along a link, stream l1 for steady load, mark <component> as=fail when it goes down, clone web,web2,web3 (replicas appear as copies), count <label> from=0 to=900 suffix=\"ms\" for a metric, frame a,b,c to bring a group closer (focus reset pulls out).",
+  states: "- Move through the machine: visit s1, then visit s2 when the event happens (one ring of \"current state\" travels), send t1 along the transition, mark s3 as=fail|ok on an end state, set s1 to=\"…\" when a state renames itself.",
   tree: "- Walk the tree: visit root, then visit its child, and mark each finished node as=visited (a search or traversal); mark the found node as=ok.",
-  structure: "- Operate on the cells: drop c4 to push onto a stack, lift c4 to pop, swap c1,c2 to sort, visit c3 to move a search to a cell, mark c3 as=ok when found.",
+  structure: "- Operate on the cells: drop c4 to push onto a stack, lift c4 to pop, swap c1,c2 to sort, visit c3 to move a search to a cell, mark c3 as=ok when found, strike c2 to cross out a rejected value, merge c1,c2,c3 to combine cells into the last one.",
   stack: "- Move data through the layers: send a packet along an arrow between layers, mark a layer as=fail where it breaks, drop a new layer onto the stack.",
   flow: "- Follow the path: visit n1, visit n2, … along the route the data takes; mark the end node as=ok|fail.",
   steps: "- Let something travel through the stages: visit step1, then step2 … so the viewer follows one item, and mark the stage that fails as=fail.",

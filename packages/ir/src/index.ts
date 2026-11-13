@@ -135,7 +135,7 @@ export interface SceneSpeech {
  * Animatable properties. x/y are the element's center; camera is a Box
  * (the visible region of the canvas).
  */
-export type Prop = "opacity" | "x" | "y" | "scale" | "rotate" | "draw" | "reveal" | "tint" | "blur" | "camera";
+export type Prop = "opacity" | "x" | "y" | "scale" | "rotate" | "draw" | "reveal" | "tint" | "blur" | "camera" | "strike" | "count";
 
 export interface Tween {
   /** `scene/id`, `scene/id.part`, or `scene/camera`. */

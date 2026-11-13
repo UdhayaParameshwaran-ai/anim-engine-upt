@@ -204,6 +204,40 @@ export const PRIMITIVES: Record<string, Primitive> = {
     return [{ prop: "tint", t0: c.t0, t1: c.t0 + Math.min(0.3, c.dur / 2), to: 1, ease: "out", meta: { color, style: "glow" } }];
   },
 
+  /** The element's text changes in place: a small bump, and the new text from the peak on. */
+  set: (c) => {
+    const to = c.params.to === undefined ? undefined : String(c.params.to);
+    if (to === undefined || !c.el || c.el.link) return [];
+    const s = num(c.cur("scale"), 1);
+    const mid = c.t0 + c.dur / 2;
+    return [
+      { prop: "scale", t0: c.t0, t1: mid, to: s * 1.14, ease: "out", meta: { set: to } },
+      { prop: "scale", t0: mid, t1: end(c), to: s, ease: "in" },
+    ];
+  },
+
+  /** A number counts from one value to another in the element's text. */
+  count: (c) => {
+    if (!c.el || c.el.link) return [];
+    const meta: Record<string, string | number | boolean> = {
+      from: Number(c.params.from ?? 0),
+      to: Number(c.params.to ?? 100),
+      prefix: String(c.params.prefix ?? ""),
+      suffix: String(c.params.suffix ?? ""),
+      decimals: Number(c.params.decimals ?? 0),
+    };
+    return [{ prop: "count", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "out", meta }];
+  },
+
+  /** A line is struck through the element, which dims: wrong, rejected, removed. */
+  strike: (c) => {
+    if (!c.el || c.el.link) return [];
+    return [
+      { prop: "strike", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "out" },
+      { prop: "opacity", t0: c.t0, t1: end(c), to: 0.55, ease: "out" },
+    ];
+  },
+
   shake: (c) => {
     if (!c.el || c.el.link) return [];
     const x = num(c.cur("x"), 0);

@@ -23,7 +23,7 @@ const VAGUE = /^\W*(an?\s+)?(unknown|anonymous|someone|expert|scientist|research
 /** Templates whose subject is something that happens (messages, state changes, operations), not just things that exist. */
 const STORY_TEMPLATES = new Set(["exchange", "states", "structure", "tree", "gitgraph"]);
 /** Verbs that show something happening, not only appearing. */
-const STORY_VERBS = new Set(["send", "stream", "visit", "mark", "shake", "drop", "lift", "swap", "move", "frame", "focus"]);
+const STORY_VERBS = new Set(["send", "stream", "visit", "mark", "shake", "drop", "lift", "swap", "move", "frame", "focus", "set", "count", "strike", "clone", "merge"]);
 
 export function qualityIssues(header: string, sceneText: string): QualityIssue[] {
   const offset = header.split("\n").length;

@@ -86,6 +86,8 @@ The first token decides the statement type.
 | emphasis | `highlight` `pulse` `dim` | `highlight style=glow\|marker\|underline`, supports `fit` |
 | transform | `move` `scale` `swap` | `move @slot`, `scale by=1.2`, `swap a,b` trades two elements' places along arcs |
 | camera | `focus` `frame` | `focus <id>` or `focus reset`; `frame a,b,c` frames several elements together. A dense template scene (8+ things) with no camera lines gets an automatic camera that follows the action and ends on the full view. |
+| value | `set` `count` `strike` | `set x to="404 Not Found"` changes an element's text in place (a small bump; the new text from its peak on); `count x from=0 to=1200 suffix=" ms" decimals=0` runs a number in the element's text; `strike x` draws a line across the element and dims it. |
+| relation | `clone` `merge` | `clone a,b,c`: copies of the first element fly to the others (declared hidden). `merge a,b,c`: the others fly into the last, which appears. |
 | relation | `send` | `send <connector>`: a packet travels along the connector (drawing it first if it isn't shown yet); `back=true` sends it the other way; `fail=true` stops it halfway (red); `wait=<s>` pauses it halfway. Sending along a connector again only moves the packet. |
 
 The registry (`packages/registry`) is the source of truth for verbs, their parameters and defaults.
