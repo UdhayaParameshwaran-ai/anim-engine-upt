@@ -2,6 +2,7 @@ import { Stage } from "@anim/engine";
 import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { COMPOSE_PATTERNS, GRID_ELEMENTS, GRID_LAYOUTS, TEMPLATES, THEMES } from "@anim/registry";
 import { composeGroup, elementGroup, gridGroup, templateGroup, type Case, type Density, type Group } from "./gallery-cases.js";
+import { motionGroup } from "./gallery-motions.js";
 import { $, escape } from "./util.js";
 
 /**
@@ -56,7 +57,7 @@ function build(c: Case): Promise<Built> {
 }
 
 function groups(): Group[] {
-  return [templateGroup(densitySel.value as Density), gridGroup(), elementGroup(), composeGroup()];
+  return [templateGroup(densitySel.value as Density), gridGroup(), elementGroup(), composeGroup(), motionGroup()];
 }
 
 function render(): void {
