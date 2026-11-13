@@ -3,7 +3,7 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { canvasOutlinePrompt, castPlan, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
+import { CANVAS_CHOICE_SYSTEM, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 
 export interface GenerateOptions {
@@ -18,8 +18,11 @@ export interface GenerateOptions {
   concurrency?: number;
   /** A subject area whose templates planning prefers (see DOMAINS). */
   domain?: Domain;
-  /** The whole video as one diagram that grows chapter by chapter (one scene with steps), instead of separate scenes. */
-  canvas?: boolean;
+  /**
+   * The whole video as one diagram that grows chapter by chapter (one scene with steps), instead of separate scenes.
+   * "auto": a short LLM call decides from the topic.
+   */
+  canvas?: boolean | "auto";
   /** How the video opens and ends (names from OPENINGS and CLOSINGS); by default the topic picks. */
   arc?: { open?: string; close?: string };
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
@@ -45,7 +48,7 @@ export interface GenerateOptions {
   onCall?: (call: CallTrace) => void;
 }
 
-export type CallKind = "outline" | "scene" | "repair" | "quality" | "single";
+export type CallKind = "outline" | "scene" | "repair" | "quality" | "single" | "choose";
 
 /** One LLM call: what was asked, what came back, how long it took and what it cost. */
 export interface CallTrace {
@@ -152,7 +155,13 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
   if ((opts.mode ?? "outline") === "outline") {
     // Planning only needs scene types and asset names, not the whole language.
     const recent = opts.director?.recent();
-    const canvas = opts.canvas === true;
+    let canvas = opts.canvas === true;
+    if (opts.canvas === "auto") {
+      const choice = await chat(ctx, [{ role: "user", content: canvasChoicePrompt(topic) }], { kind: "choose" }, undefined, CANVAS_CHOICE_SYSTEM);
+      canvas = chosenCanvas(choice.text);
+      note(ctx, choice.trace, { verdict: canvas ? "one growing diagram" : "several scenes" });
+      opts.onLog?.(`shape of the video: ${canvas ? "one growing diagram" : "several scenes"}`);
+    }
     const arc = storyArc(topic, opts.arc, recent);
     if (!canvas) {
       opts.director?.recordArc(arc.open.name, arc.close.name);

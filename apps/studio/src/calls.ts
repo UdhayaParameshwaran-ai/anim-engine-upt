@@ -3,7 +3,7 @@ import { escape } from "./util.js";
 /** Mirrors @anim/llm's CallTrace (the Studio receives it as JSON). */
 export interface CallTrace {
   id: number;
-  kind: "outline" | "scene" | "repair" | "quality" | "single";
+  kind: "outline" | "scene" | "repair" | "quality" | "single" | "choose";
   scene?: string;
   attempt?: number;
   status: "running" | "done" | "failed";
@@ -27,7 +27,7 @@ export interface CallTrace {
   error?: string;
 }
 
-const KIND_LABEL: Record<CallTrace["kind"], string> = { outline: "Outline", scene: "Scene", repair: "Repair", quality: "Improve", single: "Script" };
+const KIND_LABEL: Record<CallTrace["kind"], string> = { outline: "Outline", scene: "Scene", repair: "Repair", quality: "Improve", single: "Script", choose: "Choose" };
 
 /**
  * Live table of the LLM calls behind a generation: what each call was for,

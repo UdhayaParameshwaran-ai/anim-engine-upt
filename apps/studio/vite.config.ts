@@ -135,7 +135,8 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
   const domain = url.searchParams.get("domain") === "tech" ? "tech" : undefined;
   const tts = ttsOf(url);
   // "canvas": planned like an outline, written as one growing diagram.
-  const canvas = url.searchParams.get("mode") === "canvas";
+  // "auto": a short call decides between one diagram and several scenes.
+  const canvas: boolean | "auto" = url.searchParams.get("mode") === "auto" ? "auto" : url.searchParams.get("mode") === "canvas";
   let mode = url.searchParams.get("mode") === "single" ? "single" : "outline";
 
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });

@@ -619,7 +619,7 @@ table.calls { width: 100%; border-collapse: collapse; font-size: 12px; }
 .kind { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 6px; background: var(--muted-bg); color: var(--fg); }
 .kind.repair { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 .kind.quality { background: color-mix(in srgb, #b06000 16%, transparent); color: #b06000; }
-.kind.outline, .kind.single { background: var(--invert-bg); color: var(--invert-fg); }
+.kind.outline, .kind.single, .kind.choose { background: var(--invert-bg); color: var(--invert-fg); }
 
 .bar-cell { position: relative; width: 32%; min-width: 140px; }
 .bar { position: absolute; top: 50%; height: 8px; margin-top: -4px; border-radius: 3px; background: var(--fg-2); }

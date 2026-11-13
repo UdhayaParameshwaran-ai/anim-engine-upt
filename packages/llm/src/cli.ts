@@ -48,6 +48,7 @@ const result = await generate(topic, {
   mode: args.includes("--single") ? "single" : "outline",
   ...(value("domain") === "tech" && { domain: "tech" as const }),
   ...(args.includes("--canvas") && { canvas: true }),
+  ...(value("canvas") === "auto" && { canvas: "auto" as const }),
   scenes: { min: min ?? 2, max: max ?? min ?? 4 },
   onScene: (_, i) => console.error(`  scene ${i + 1} ready`),
   onLog: (m) => verbose && console.error(`  ${m.replace(/\n/g, "\n    ")}`),

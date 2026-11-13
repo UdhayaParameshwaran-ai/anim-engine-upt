@@ -25,7 +25,9 @@ import {
   sceneKindOf,
   scenePrompt,
   castPlan,
+  canvasChoicePrompt,
   canvasOutlinePrompt,
+  chosenCanvas,
   bindCarry,
   pruneCarry,
   sceneSystemPrompt,
@@ -806,5 +808,21 @@ describe("one evolving diagram (canvas)", () => {
     const sys = sceneSystemPrompt(sceneKindOf(outline.split("\n")[0]), [], true);
     expect(sys).toContain("Declare EVERY element of the whole diagram first");
     expect(sceneSystemPrompt(sceneKindOf(outline.split("\n")[0]), [])).not.toContain("Declare EVERY element");
+  });
+});
+
+describe("choosing between one diagram and scenes", () => {
+  it("reads the one-word answer", () => {
+    expect(chosenCanvas("diagram")).toBe(true);
+    expect(chosenCanvas("Diagram.")).toBe(true);
+    expect(chosenCanvas("scenes")).toBe(false);
+    expect(chosenCanvas("scenes, not a diagram")).toBe(false);
+    expect(chosenCanvas("")).toBe(false);
+  });
+
+  it("asks about the topic, and leans to scenes when unsure", () => {
+    const ask = canvasChoicePrompt("How TCP connections change state");
+    expect(ask).toContain("Topic: How TCP connections change state");
+    expect(ask).toContain("When unsure, answer scenes");
   });
 });

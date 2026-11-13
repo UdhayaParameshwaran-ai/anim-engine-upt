@@ -593,6 +593,25 @@ Cover only this scene's goal; other scenes cover the rest.
 Output only this scene, starting with its "scene" line.`}`;
 }
 
+/** The system prompt of the call that decides between one growing diagram and several scenes. */
+export const CANVAS_CHOICE_SYSTEM = "You decide how a narrated explainer video about a software topic is best shown. Reply with one word.";
+
+/** Asks whether a topic is one system that a single growing diagram can walk through, or needs several different pictures. */
+export function canvasChoicePrompt(topic: string): string {
+  return `Topic: ${topic}
+
+Answer "diagram" if the topic is ONE system or process whose parts build on each other, so a single diagram can grow while the narration walks through it: the path of a request through servers, a protocol's states, a hierarchy, a pipeline, a branching history, an architecture.
+Answer "scenes" if explaining it needs several different pictures: a comparison of two things, a concept with unrelated parts, a data format or the anatomy of something, a how-to with code, history, advice, a list of separate ideas.
+A diagram needs at least four things that interact or follow one another. When unsure, answer scenes: it is the safer choice.
+Reply with one word: diagram or scenes.`;
+}
+
+/** True when the reply chose one growing diagram. */
+export function chosenCanvas(reply: string): boolean {
+  // The first of the two words in the reply is the answer.
+  return /\b(diagram|scenes)\b/i.exec(reply)?.[1]?.toLowerCase() === "diagram";
+}
+
 /**
  * Planning for a video that is one growing diagram: a single scene whose template draws the whole
  * system, and the chapters that build it up (each becomes a step of that scene).
