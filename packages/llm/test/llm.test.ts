@@ -794,7 +794,9 @@ describe("one evolving diagram (canvas)", () => {
   it("plans a single scene with chapters, and writes it as one diagram that grows", () => {
     const ask = canvasOutlinePrompt("a page load", { min: 3, max: 5 });
     expect(ask).toContain("ONE diagram that grows chapter by chapter");
-    expect(ask).toContain("exactly one \"scene\" line");
+    expect(ask).toContain("exactly three \"scene\" lines");
+    expect(ask).toContain("scene intro");
+    expect(ask).toContain("scene recap");
     expect(ask).toContain("# chapter: <id>");
     const outline = 'scene main "T" template=architecture\n# shape: architecture · goal: x\n# chapter: a · one\n# chapter: b · two';
     const write = scenePrompt(outline, "main", "", true);

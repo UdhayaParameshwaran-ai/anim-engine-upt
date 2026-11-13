@@ -605,12 +605,15 @@ export function canvasOutlinePrompt(topic: string, chapters: { min: number; max:
   return `Plan a narrated explainer video about:
 ${topic}
 
-The whole video is ONE diagram that grows chapter by chapter on a single stage, with a camera that follows the action: not separate slides.
+The body of the video is ONE diagram that grows chapter by chapter on a single stage, with a camera that follows the action: not separate slides. A short title scene opens it and a short closing page ends it.
 ${variety}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
-- exactly one "scene" line: scene main "Title" template=<the template whose picture is the whole system>, followed by one comment line "# shape: <shape> · goal: <what the finished diagram shows>"
-- then ${chapters.min}–${chapters.max} comment lines, in order: "# chapter: <id> · <what this chapter adds to the diagram and what it says>"
+- exactly three "scene" lines, each followed by its comment line "# shape: <shape> · goal: <…>":
+  1. scene intro "Title" template=title: the headline as a statement, with 1–3 pictures of the topic (shape: intro)
+  2. scene main "Title" template=<the template whose picture is the whole system>: the diagram that grows (goal: what the finished diagram shows)
+  3. scene recap "Title" grid=L2-08: the one idea to remember (shape: page)
+- right after scene main's comment line, ${chapters.min}–${chapters.max} comment lines, in order: "# chapter: <id> · <what this chapter adds to the diagram and what it says>"
 No elements, narration or actions yet.`;
 }
 

@@ -164,8 +164,8 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     const outline = pruneCarry(routed.text);
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
     const plan = split(outline);
-    // One growing diagram: a single scene; its chapters become the steps it is written with.
-    if (canvas) plan.scenes.splice(1);
+    // The scene planned with chapters is the growing diagram (its chapters become the steps it is written with).
+    const isCanvas = (text: string) => canvas && /^\s*#\s*chapter:/m.test(text);
     if (!plan.scenes.length) {
       note(ctx, planned.trace, { verdict: "no scenes; falling back to a single pass" });
       opts.onLog?.("outline had no scenes; falling back to a single pass");
@@ -178,10 +178,10 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     scenes = await pool(plan.scenes, opts.concurrency ?? opts.client.concurrency ?? 3, async (s, i) => {
       // Earlier scenes that are already written (all of them when scenes run one at a time).
       const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
-      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, canvas) };
+      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text)) };
       // Only what this scene's kind needs, and the pictures that match its words.
       const planned = s.text.split("\n")[0]!;
-      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), canvas);
+      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), isCanvas(s.text));
       const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
       // The plan's template or grid layout is binding: a scene line that changed it gets it back.
       const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);
