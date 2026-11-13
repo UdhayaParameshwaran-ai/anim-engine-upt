@@ -122,6 +122,18 @@ export const LAYOUTS = ["center", "row", "col", "grid", "split", "stack", "cycle
 /** Scene transitions; `auto` (the default) takes the next one from the motion personality's set. */
 export const TRANSITIONS = ["auto", "cut", "fade", "slide", "wipe", "iris", "zoom", "blur", "rise"] as const;
 
+/**
+ * Decor kits: how the lines and cards a template draws look, one per video (besides its look).
+ * `plain` is the look's own; the others change connectors and panels.
+ */
+export const KITS = ["plain", "dashed", "bold", "soft"] as const;
+export const KIT_SUMMARIES: Record<(typeof KITS)[number], string> = {
+  plain: "the look's own lines and cards",
+  dashed: "dashed connectors, dashed card borders: sketched, draft-like",
+  bold: "thick connectors, strong card borders: loud and clear",
+  soft: "dotted connectors, borderless cards: light and airy",
+};
+
 /** Looks: token sets the engine defines (fonts, palette, shapes, emphasis). Picked per video with `theme`. */
 export const THEMES = ["chalk", "paper", "dark", "light", "editorial", "neo-brutal", "soft-pastel", "tech-neon", "magazine", "bold-pop", "crayon", "midnight-luxe", "blueprint"] as const;
 /** One line per look, for the LLM and the style director. */
@@ -143,7 +155,7 @@ export const THEME_SUMMARIES: Record<(typeof THEMES)[number], string> = {
 };
 export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
-export const SCENE_ATTRS = ["template", "grid", "compose", "in", "out", "keep", "carry", "variant", "emphasis", "density", "mirror"] as const;
+export const SCENE_ATTRS = ["template", "grid", "compose", "in", "out", "keep", "carry", "frame", "variant", "emphasis", "density", "mirror"] as const;
 
 /** `compose=`: arrangements the constraint solver understands (`auto` tries them all). */
 export const COMPOSE_PATTERNS = ["auto", "hero-left", "hero-right", "hero-top", "hero-center", "columns", "rows", "pyramid", "z"] as const;
@@ -155,6 +167,8 @@ export const LAYOUT_KNOBS = {
   density: ["airy", "normal", "tight"],
   /** Flip the layout left↔right. */
   mirror: ["true", "false"],
+  /** `close`: the scene opens with the camera close on its first item (or the emphasized one) and pulls out. */
+  frame: ["close"],
 } as const;
 
 /** A template slot: where content goes. The template decides geometry. */

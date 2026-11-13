@@ -426,3 +426,20 @@ describe("zoom into an element (in=into:<id>)", () => {
     expect(tl.scenes[0]!.transitionOut.focus!.y).toBeCloseTo(box.y + box.h / 2);
   });
 });
+
+describe("frame=close", () => {
+  const SRC = 'video 1\nscene s "Open close" template=cards frame=close\na = icon:sun "A"\nb = icon:moon "B"\nc = icon:star "C"\n> {1}One {2}two {3}three.\n1 pop a\n2 pop b\n3 pop c\n';
+
+  it("opens with the camera close on the first element and pulls out to the full view", async () => {
+    const { tl } = await build(SRC);
+    const ev = createEvaluator(tl);
+    const start = ev.valueAt("s/camera", "camera", 0) as { w: number };
+    expect(start.w).toBeLessThan(1920 * 0.75);
+    expect((ev.valueAt("s/camera", "camera", tl.duration) as { w: number }).w).toBe(1920);
+  });
+
+  it("leaves a scene that moves the camera itself alone", async () => {
+    const { tl } = await build(SRC.replace("1 pop a\n", "1 pop a\n1 focus b\n").replace("1 focus b", "").replace("scene s", "scene s").replace("\n1 pop a\n", "\n1 pop a\n"));
+    expect(tl.tracks.some((t) => t.target === "s/camera" && t.verb === "focus" && t.prop === "camera")).toBe(true);
+  });
+});

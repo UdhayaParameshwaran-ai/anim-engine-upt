@@ -96,7 +96,9 @@ describe("spacing and mirroring", () => {
       const lines = script.split("\n").filter((l) => l.startsWith("scene "));
       let prev = false;
       for (const l of lines) {
-        const knob = /\bdensity=\S+|\bmirror=true/.test(l);
+        const knob = /\bdensity=\S+|\bmirror=true|\bemphasis=\S+|\bframe=close/.test(l);
+        if (/\bemphasis=/.test(l)) expect(l).toMatch(/template=steps\b/);
+        if (/\bframe=close/.test(l)) expect(l).toMatch(/template=(architecture|exchange|steps|hub|process|cycle|stack)\b/);
         expect(knob && prev, `two in a row: ${l}`).toBe(false);
         prev = knob;
         if (knob) seen++;
@@ -110,5 +112,28 @@ describe("spacing and mirroring", () => {
 
   it("is stable for the same topic and history", () => {
     expect(direct(src, { topic: "dns" }).script).toBe(direct(src, { topic: "dns" }).script);
+  });
+});
+
+describe("decor kit", () => {
+  const src = 'video 1\nscene a template=cards\nx = icon:sun "A"\n> {1}Hi.\n1 pop x\n';
+
+  it("picks a kit per video, writes it to the header unless plain, and avoids the last video's", () => {
+    const seen = new Set<string>();
+    let history: HistoryEntry[] = [];
+    for (let i = 0; i < 12; i++) {
+      const r = direct(src, { topic: `topic ${i}`, history });
+      const kit = r.choice.kit ?? "plain";
+      seen.add(kit);
+      if (kit === "plain") expect(r.script).not.toMatch(/^kit /m);
+      else expect(r.script).toMatch(new RegExp(`^kit ${kit}$`, "m"));
+      if (history.length) expect(kit).not.toBe(history[history.length - 1]!.kit ?? "plain");
+      history = [...history, r.entry];
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps a locked kit", () => {
+    expect(direct(src, { topic: "dns", lock: { kit: "bold" } }).script).toMatch(/^kit bold$/m);
   });
 });

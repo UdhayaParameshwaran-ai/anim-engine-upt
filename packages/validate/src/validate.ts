@@ -17,6 +17,7 @@ import {
   SCENE_ATTRS,
   SLOTS,
   TEMPLATES,
+  KITS,
   THEMES,
   TRANSITIONS,
   VERBS,
@@ -183,6 +184,15 @@ class Validator {
           const near = arg ? closest(arg, names) : undefined;
           this.warn(C.BadSetting, `unknown motion \`${arg ?? ""}\` (motions: ${names.join(", ")})`, s.span, {
             desc: near ? `used \`${near}\`` : "removed; standard motion applies",
+            apply: () => (near ? (s.args = [near]) : remove(settings, s)),
+          });
+          break;
+        }
+        case "kit": {
+          if (arg && (KITS as readonly string[]).includes(arg)) break;
+          const near = arg ? closest(arg, KITS) : undefined;
+          this.warn(C.BadSetting, `unknown kit \`${arg ?? ""}\` (kits: ${KITS.join(", ")})`, s.span, {
+            desc: near ? `used \`${near}\`` : "removed; the look's own lines apply",
             apply: () => (near ? (s.args = [near]) : remove(settings, s)),
           });
           break;
@@ -407,6 +417,7 @@ class Validator {
       knob("density", `density= takes ${LAYOUT_KNOBS.density.join(", ")}`, closest(a.density, LAYOUT_KNOBS.density));
     }
     if (a.mirror !== undefined && !["true", "false"].includes(a.mirror)) knob("mirror", "mirror= takes true or false");
+    if (a.frame !== undefined && !(LAYOUT_KNOBS.frame as readonly string[]).includes(a.frame)) knob("frame", `frame= takes ${LAYOUT_KNOBS.frame.join(", ")}`);
     if (a.compose !== undefined) {
       if (tpl || a.grid !== undefined) knob("compose", `compose= replaces a template or grid; remove one (keeping \`${tpl ? "template" : "grid"}\`)`);
       else if (!(COMPOSE_PATTERNS as readonly string[]).includes(a.compose)) knob("compose", `compose= takes ${COMPOSE_PATTERNS.join(", ")}`, closest(a.compose, COMPOSE_PATTERNS) ?? "auto");

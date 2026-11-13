@@ -96,7 +96,7 @@ export class Stage {
     opts: StageOptions = {},
   ) {
     const doc = container.ownerDocument;
-    this.theme = getTheme(opts.theme ?? ir.theme);
+    this.theme = { ...getTheme(opts.theme ?? ir.theme), ...(ir.kit && { kit: ir.kit }) };
     this.width = ir.canvas.width;
     this.height = ir.canvas.height;
     this.evaluator = createEvaluator(timeline);

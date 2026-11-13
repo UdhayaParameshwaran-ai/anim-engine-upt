@@ -447,3 +447,24 @@ describe("value verbs", () => {
     expect(line.getAttribute("stroke-dashoffset")).toBe("0");
   });
 });
+
+describe("decor kits", () => {
+  async function connectorOf(kit: string): Promise<SVGPathElement> {
+    const ir = compile(`video 1\ntheme light\nkit ${kit}\nscene s "C" template=exchange\na = icon:globe "A"\nb = icon:server "B"\nm1 = arrow a->b "GET"\n> {1}Hi {2}there.\n1 pop a,b\n2 draw m1\n`).ir!;
+    const speech = await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) });
+    const stage = new Stage(container, ir, resolve(ir, speech), { autoFit: false });
+    return node(stage, "s", "m1").querySelector("path")! as unknown as SVGPathElement;
+  }
+
+  it("draws connectors dashed, thick or dotted by kit (dashes in path-length units)", async () => {
+    const plain = await connectorOf("plain");
+    const dashed = await connectorOf("dashed");
+    const bold = await connectorOf("bold");
+    const soft = await connectorOf("soft");
+    expect(plain.getAttribute("data-dash")).toBeNull();
+    expect(dashed.getAttribute("data-dash")).toBe("0.025 0.02");
+    expect(Number(bold.getAttribute("stroke-width"))).toBeGreaterThan(Number(soft.getAttribute("stroke-width")) * 0.9);
+    expect(soft.getAttribute("stroke-linecap")).toBe("round");
+    expect(soft.getAttribute("data-dash")).toBe("0.002 0.022");
+  });
+});

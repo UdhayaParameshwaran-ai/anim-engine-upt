@@ -35,7 +35,7 @@ The first token decides the statement type.
 | Statement | Syntax | Where |
 |---|---|---|
 | Header | `video <version> ["title"]` | First line, required, once |
-| Setting | `theme <look>` · `motion <personality>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
+| Setting | `theme <look>` · `motion <personality>` · `kit <plain|dashed|bold|soft>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
 | Scene | `scene <id> ["title"] [template=<t>] [in=<transition>] [out=<transition>] [keep=<id,id>] [carry=<id,id>]` | Top level |
 | Step | `step [<id>] ["title"]` | Inside a scene |
 | Layout | `layout <name>` | Inside a scene/step (when no template does the layout) |
@@ -140,6 +140,7 @@ The registry (`packages/registry`) is the source of truth for verbs, their param
 A script's visual style comes from two video-wide settings. Neither changes the script's content, layout or timing anchors, so any script can be restyled by changing one line.
 
 - **`theme <look>`** picks a token set: palette, fonts, heading style, corner radius, stroke weight, shadows, emphasis style and how data widgets are filled. Looks: `chalk` `paper` `dark` `light` `editorial` `neo-brutal` `soft-pastel` `tech-neon` `magazine` `bold-pop` `crayon` `midnight-luxe` `blueprint`. Fonts are bundled (Fontsource, OFL), so the preview and the MP4 match on every machine.
+- **`kit <name>`** is the decor kit of the video: how the lines and cards a template draws look, besides the look itself. `plain` (default) is the look's own; `dashed` draws connectors and card borders dashed; `bold` thickens connectors and card borders; `soft` draws connectors dotted and cards without a border. The Director picks one per video and avoids the last one.
 - **`motion <personality>`** decides how the verbs move. It rescales default durations and explicit staggers, reinterprets ease names (`out` under *cinematic* is a long exponential ease), and gives enter verbs their own entrance:
 
 | Motion | Feel | `fade` enters by | `pop` |
@@ -218,7 +219,8 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
   - **Each scene request** carries only its template's card and example.
   - **The style director** rotates only among variants whose card covers the scene's item count.
   - **The quality test** (`apps/studio/test/quality.test.ts`) holds every variant to its card's item range.
-- `emphasis=first|last|<id>` gives that element more room (the larger side of `compare`, the hero of `grid variant=feature`).
+- `emphasis=first|last|<id>` gives that element more room (the larger side of `compare`, the hero of `grid variant=feature`). In the other templates the element grows by up to 30% about its center, as far as its cell, the safe area and its neighbours allow.
+- `frame=close` opens the scene with the camera close on its first item (about 1.6x) and pulls out to the full view as the first sentence begins; it is left alone when the scene moves the camera itself.
 - `density=airy|normal|tight` changes spacing and how much of its cell each element fills.
 - `mirror=true` flips the scene left↔right; it works on grid pages too, so the 27 rule-book layouts have 54 arrangements.
 

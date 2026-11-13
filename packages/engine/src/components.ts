@@ -149,7 +149,14 @@ export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${
     case "panel": {
       // A card behind an item: the look's surface, a quiet border, the look's shadow.
       const hard = theme.shadow === "hard";
-      const r = svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(theme.radius + 6, h / 2), "data-fill": theme.panel, "data-solid": "", stroke: hard ? theme.fg : theme.muted, "stroke-opacity": hard ? 1 : 0.35, "stroke-width": hard ? theme.stroke : Math.max(1.5, theme.stroke * 0.6) });
+      const kit = theme.kit;
+      const r = svg(doc, "rect", {
+        x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(theme.radius + 6, h / 2), "data-fill": theme.panel, "data-solid": "",
+        stroke: hard || kit === "bold" ? theme.fg : theme.muted,
+        "stroke-opacity": kit === "soft" ? 0 : kit === "bold" ? 0.9 : hard ? 1 : kit === "dashed" ? 0.6 : 0.35,
+        "stroke-width": kit === "bold" ? theme.stroke * 1.4 : hard ? theme.stroke : Math.max(1.5, theme.stroke * 0.6),
+        ...(kit === "dashed" && { "stroke-dasharray": "0.006 0.005" }),
+      });
       shadow(g, theme);
       g.append(stroke(inst, r));
       break;
@@ -501,7 +508,17 @@ function connector(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR,
   const quiet = el.params.tone === "muted";
   // A line with a color index (a git branch) is drawn thick in that color.
   const hued = el.kind === "line" && el.params.hue !== undefined ? itemColor(theme, Number(el.params.hue)) : undefined;
-  const path = stroke(inst, svg(doc, "path", { d: "M0 0", ...(el.params.style === "dashed" && { "stroke-dasharray": "12 10" }), ...(quiet && { stroke: theme.muted, "stroke-opacity": 0.7 }), ...(hued && { stroke: hued, "stroke-width": 6 }) })) as SVGPathElement;
+  // Dashes are in path-length units (the stroke is normalized for `draw`): a few percent of the line.
+  const kit = theme.kit;
+  const dashed = el.params.style === "dashed" || kit === "dashed";
+  const path = stroke(inst, svg(doc, "path", {
+    d: "M0 0",
+    ...(dashed && { "stroke-dasharray": "0.025 0.02" }),
+    ...(kit === "soft" && !dashed && { "stroke-dasharray": "0.002 0.022", "stroke-linecap": "round", "stroke-width": theme.stroke * 1.5 }),
+    ...(kit === "bold" && { "stroke-width": theme.stroke * 1.7 }),
+    ...(quiet && { stroke: theme.muted, "stroke-opacity": 0.7 }),
+    ...(hued && { stroke: hued, "stroke-width": 6 }),
+  })) as SVGPathElement;
   g.append(path);
   const c: NonNullable<Instance["connector"]> = { from: el.link!.from, to: el.link!.to, path };
   if (el.kind !== "line") {

@@ -1,7 +1,7 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse, print, printScene, type Script } from "@anim/dsl";
-import { findTemplate, MOTIONS, THEMES, variantGuide } from "@anim/registry";
+import { findTemplate, KITS, MOTIONS, THEMES, variantGuide } from "@anim/registry";
 
 const LINKS = new Set(["arrow", "line", "edge"]);
 
@@ -18,6 +18,8 @@ const LINKS = new Set(["arrow", "line", "edge"]);
 export interface StyleChoice {
   theme: string;
   motion: string;
+  /** Decor kit (how connectors and cards are drawn); absent in older history. */
+  kit?: string;
   /** Scene id → layout attributes the director set. */
   scenes: Record<string, Record<string, string>>;
   mood: string;
@@ -45,7 +47,7 @@ export interface DirectOptions {
   /** Past videos of this user, newest last. */
   history?: HistoryEntry[];
   /** Choices the user fixed (brand kit, "make it playful"); never changed. */
-  lock?: Partial<Pick<StyleChoice, "theme" | "motion">>;
+  lock?: Partial<Pick<StyleChoice, "theme" | "motion" | "kit">>;
   /** Keep a look/motion the script already names unless it was used recently. Default true. */
   respectScript?: boolean;
 }
@@ -148,6 +150,8 @@ function pick(weights: Weights, rand: () => number): string {
 const NO_AIRY = new Set(["flow", "timeline", "cards", "converge", "diverge"]);
 const NO_TIGHT = new Set(["flow"]);
 const MIRRORABLE = new Set(["title", "compare", "spotlight", "hub", "cycle", "stack"]);
+/** Templates whose first item is a fair place to open close on (the camera pulls out as the scene begins). */
+const FRAMEABLE = new Set(["architecture", "exchange", "steps", "hub", "process", "cycle", "stack"]);
 
 const ALL_LOOKS = new Set<string>(THEMES);
 const ALL_MOTIONS = new Set(MOTIONS.map((m) => m.name));
@@ -168,7 +172,7 @@ export class Director {
   private readonly recentLayouts: string[];
   private last = "";
   private arc?: { open: string; close: string };
-  private style?: Pick<StyleChoice, "theme" | "motion">;
+  private style?: Pick<StyleChoice, "theme" | "motion" | "kit">;
   private readonly scenes: StyleChoice["scenes"] = {};
   private readonly layouts: string[] = [];
 
@@ -207,9 +211,17 @@ export class Director {
       motion = pick(w, rand);
     }
 
-    this.style = { theme, motion };
+    // Decor kit: the lines and cards a template draws. The look's own (plain) is the most likely; recent kits are not repeated.
+    let kit = opts.lock?.kit;
+    if (!kit) {
+      const w: Weights = {};
+      for (const k of KITS) w[k] = (k === "plain" ? 2 : 1) * novelty((h) => (h.kit ?? "plain") === k, history);
+      kit = pick(w, this.knobRand);
+    }
+    this.style = { theme, motion, kit };
     setSetting(script, "theme", theme);
     setSetting(script, "motion", motion);
+    if (kit !== "plain") setSetting(script, "kit", kit);
     // Backgrounds aren't a feature; a stray `bg` line from the LLM is dropped here rather than warned about.
     script.settings = script.settings.filter((x) => x.key !== "bg");
     for (const scene of script.scenes) this.arrange(scene);
@@ -291,7 +303,12 @@ export class Director {
         else if (!NO_TIGHT.has(tpl.name)) set.density = "tight";
       }
       if (!this.knobbed && !set.density && a.mirror === undefined && MIRRORABLE.has(tpl.name) && k() < 0.35) set.mirror = "true";
-      this.knobbed = Object.keys(set).some((x) => x === "density" || x === "mirror");
+      // The last step of a sequence is its payoff: now and then it gets the most room. Some scenes open close on their first item.
+      if (!this.knobbed && !set.density && !set.mirror && !chapters) {
+        if (tpl.name === "steps" && a.emphasis === undefined && k() < 0.14) set.emphasis = "last";
+        else if (FRAMEABLE.has(tpl.name) && a.frame === undefined && k() < 0.12) set.frame = "close";
+      }
+      this.knobbed = Object.keys(set).some((x) => x === "density" || x === "mirror" || x === "emphasis" || x === "frame");
     }
     Object.assign(a, set);
     if (Object.keys(set).length) this.scenes[scene.id] = set;

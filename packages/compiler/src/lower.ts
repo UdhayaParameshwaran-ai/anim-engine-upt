@@ -1,6 +1,6 @@
 import type { Action, Args, Diagnostic, ElementDecl, Script, Setting } from "@anim/dsl";
 import { IR_VERSION, type ActionIR, type BeatIR, type Box, type ElementIR, type SceneIR, type VideoIR } from "@anim/ir";
-import { COMPONENTS, findComponent, findMotion, findVerb, partsOf, VERBS, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
+import { COMPONENTS, findComponent, findMotion, findVerb, KITS, partsOf, VERBS, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
 import { layoutScene, type SceneLayout } from "./layout.js";
 
 export const DEFAULTS = {
@@ -76,6 +76,7 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
       transitionOut: scene.attrs.out ?? DEFAULTS.transitionOut,
       keep,
       ...(carry.length && { carry }),
+      ...(scene.attrs.frame === "close" && { frame: "close" as const }),
       elements,
       steps: scene.steps.map((step) => ({
         ...(step.id !== undefined && { id: step.id }),
@@ -107,6 +108,7 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
       // Grid scenes are designed for the monochrome editorial theme.
       theme: setting(script.settings, "theme")?.[0] ?? (script.scenes.some((s) => s.attrs.grid !== undefined) ? "editorial" : DEFAULTS.theme),
       motion: motion.name,
+      ...(kitOf(script) && { kit: kitOf(script) }),
       voice: setting(script.settings, "voice")?.[0] ?? DEFAULTS.voice,
       lang: setting(script.settings, "lang")?.[0] ?? DEFAULTS.lang,
       scenes,
@@ -344,6 +346,12 @@ function boundaries(scenes: SceneIR[], script: Script, motion: MotionProfile): v
   if (last && script.scenes.at(-1)!.attrs.out === undefined) last.transitionOut = "fade";
   intoAtBoundary();
   cutAtCarry();
+}
+
+/** The `kit` setting when it names a known decor kit (and isn't plain). */
+function kitOf(script: Script): string | undefined {
+  const k = script.settings.find((x) => x.key === "kit")?.args[0];
+  return k && k !== "plain" && (KITS as readonly string[]).includes(k) ? k : undefined;
 }
 
 function round2(n: number): number {

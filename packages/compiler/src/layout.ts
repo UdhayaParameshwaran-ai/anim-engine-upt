@@ -230,11 +230,40 @@ class SceneLayouter {
     else if (this.scene.attrs.compose) this.composeScene(scenePool, area);
     else this.layout(sceneLayout ?? (scenePool.length === 1 ? "center" : "row"), scenePool, area);
 
+    // The emphasized item grows (templates that don't weigh their cells themselves).
+    this.emphasize();
+
     // 3. Relative placements (may chain). Connectors are routed in result(), after any mirroring.
     this.relatives();
 
     this.checkOverlaps();
     return this.result();
+  }
+
+  /**
+   * `emphasis=first|last|<id>` for the templates that don't weigh their cells themselves: the item grows
+   * by up to 30% about its center, as far as its cell, the safe area and its neighbours allow.
+   */
+  private emphasize(): void {
+    const e = this.scene.attrs.emphasis;
+    const name = this.scene.attrs.template;
+    if (!e || !name || ["steps", "cards", "compare", "title", "timeline"].includes(name)) return;
+    const SKIP = new Set(["zone", "title", "footer", "panel", "rule", "badge", "chevron", "caption", "kicker"]);
+    const items = this.els.filter((x) => !LINK_KINDS.has(x.kind) && !SKIP.has(x.kind) && x.id !== "title" && !x.place && this.boxes.has(x.id));
+    const hero = e === "first" ? items[0] : e === "last" ? items[items.length - 1] : items.find((x) => x.id === e);
+    const b = hero && this.boxes.get(hero.id);
+    if (!hero || !b || b.w <= 0 || b.h <= 0) return;
+    const cell = this.cells.get(hero.id);
+    let k = 1.3;
+    if (cell) k = Math.min(k, cell.w / b.w, cell.h / b.h);
+    const others = items.filter((x) => x !== hero).map((x) => this.boxes.get(x.id)!);
+    const hits = (a: Box, o: Box) => a.x < o.x + o.w + 12 && o.x < a.x + a.w + 12 && a.y < o.y + o.h + 12 && o.y < a.y + a.h + 12;
+    for (; k > 1.04; k -= 0.06) {
+      const g = this.clamp({ x: b.x - (b.w * (k - 1)) / 2, y: b.y - (b.h * (k - 1)) / 2, w: b.w * k, h: b.h * k });
+      if (others.some((o) => hits(g, o))) continue;
+      this.boxes.set(hero.id, { x: Math.round(g.x), y: Math.round(g.y), w: Math.round(g.w), h: Math.round(g.h) });
+      return;
+    }
   }
 
   private result(): SceneLayout {

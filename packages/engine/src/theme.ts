@@ -8,6 +8,8 @@
  */
 export interface Theme {
   name: string;
+  /** Decor kit of the video (connector and card styles); plain or absent = the look's own. */
+  kit?: string;
   bg: string;
   fg: string;
   muted: string;

@@ -26,6 +26,8 @@ export interface VideoIR {
   theme: string;
   /** Motion personality (registry MOTIONS): how verbs move. */
   motion: string;
+  /** Decor kit (registry KITS): how connectors and cards are drawn; absent = plain. */
+  kit?: string;
   voice: string;
   lang: string;
   scenes: SceneIR[];
@@ -42,6 +44,8 @@ export interface SceneIR {
   keep: string[];
   /** Ids declared again in this scene that continue from the previous one: same element, new place. */
   carry?: string[];
+  /** `close`: opens with the camera close on the first (or emphasized) element, then pulls out. */
+  frame?: "close";
   elements: ElementIR[];
   steps: StepIR[];
 }

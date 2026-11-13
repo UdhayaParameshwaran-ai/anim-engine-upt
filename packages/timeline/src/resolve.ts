@@ -266,6 +266,7 @@ class Resolver {
     }
 
     this.autoFrame(scene, scheduled, beats, steps);
+    this.frameClose(scene, scheduled);
     const contentEnd = Math.max(cursor, ...scheduled.map((s) => s.t0 + s.dur + Math.max(0, s.targets.length - 1) * s.stagger));
     const t1 = this.q(contentEnd + this.tailPad + trOut.duration);
     this.expand(scene, scheduled);
@@ -291,6 +292,25 @@ class Resolver {
     }
     this.scenes.push({ id: scene.id, t0, t1, transitionIn: trIn, transitionOut: trOut, steps, beats });
     return t1;
+  }
+
+  /**
+   * `frame=close`: the scene opens with the camera close on its first element and pulls out to the full
+   * view just after the first sentence begins. Not for scenes that move the camera themselves.
+   */
+  private frameClose(scene: SceneIR, scheduled: Scheduled[]): void {
+    if (scene.frame !== "close") return;
+    if (scene.steps.some((s) => s.focus) || scheduled.some((s) => s.verb === "focus" || s.verb === "frame")) return;
+    const SKIP = new Set(["panel", "rule", "zone", "chevron", "badge", "kicker", "caption", "title", "footer"]);
+    const first = scene.elements.find((e) => !e.link && e.box.w > 0 && !SKIP.has(e.kind) && e.id !== "title");
+    if (!first) return;
+    const canvas = this.video.canvas;
+    const close = focusBox(first.box, canvas, 1.2, 0.3);
+    const camera = `${scene.id}/camera`;
+    this.initial[camera] = { camera: close };
+    const t0 = this.q(Math.min(...scheduled.map((s) => s.t0), Infinity));
+    const from = Number.isFinite(t0) ? t0 : this.q(this.initial[camera] ? 0 : 0);
+    this.add(camera, { prop: "camera", t0: from, t1: from + 1.4, to: { x: 0, y: 0, w: canvas.width, h: canvas.height }, ease: "inout" }, { order: this.order++, verb: "focus", targets: ["reset"], t0: from, dur: 1.4, stagger: 0, params: {}, line: 0 });
   }
 
   /**

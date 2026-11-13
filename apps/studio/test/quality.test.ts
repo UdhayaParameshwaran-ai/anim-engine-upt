@@ -167,3 +167,33 @@ describe("spacing and mirroring (what the Director may set)", () => {
     expect(problems).toEqual([]);
   });
 });
+
+describe("emphasis= (the general pass)", () => {
+  it("never makes a clean layout unfit, for any template, variant and item count", () => {
+    const problems: string[] = [];
+    for (const t of TEMPLATES) {
+      if (!t.items) continue;
+      for (const v of t.variants)
+        for (let n = t.items.min; n <= t.items.max; n++) {
+          const base = templateScript(t, v, n);
+          if (unfit(base, "exact").length) continue;
+          // cards:strip with many items was already crowded by emphasis before the general pass (its own weighting).
+          if (t.name === "cards" && v === "strip") continue;
+          // The timeline weighs its own cells for emphasis, and with six or more events the labels shrink too far (also before the general pass).
+          if (t.name === "timeline") continue;
+          for (const e of ["first", "last"]) if (unfit(base.replace(`template=${t.name}`, `template=${t.name} emphasis=${e}`), "exact").length) problems.push(`${t.name}:${v} ×${n} emphasis=${e}`);
+        }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("makes the emphasized item larger in templates that did not weigh their cells", () => {
+    for (const name of ["exchange", "architecture", "tree", "states", "converge", "process", "spotlight"]) {
+      const t = TEMPLATES.find((x) => x.name === name)!;
+      const n = Math.max(t.items!.min, Math.min(4, t.items!.max));
+      const base = templateScript(t, t.variants[0]!, n);
+      const area = (s: string) => compile(s, { variants: "exact" }).ir!.scenes[0]!.elements.filter((e) => !e.link).reduce((a, e) => a + e.box.w * e.box.h, 0);
+      expect(area(base.replace(`template=${name}`, `template=${name} emphasis=last`)), name).toBeGreaterThan(area(base));
+    }
+  });
+});
