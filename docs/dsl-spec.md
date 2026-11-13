@@ -16,6 +16,7 @@ Video ── settings (theme, voice, size, lang, fps)
 
 - Everything before the first `step` line in a scene belongs to an implicit step.
 - Elements persist for the whole scene. A new scene clears the stage, except ids listed in `keep=` (they stay as they were) and `carry=` (see below).
+- **Zoom into an element.** `in=into:<id>` on a scene: the previous scene zooms into that element of its own (about a second), dissolving as it fills the frame, and this scene starts at once. The id must be declared in the previous scene (else `fade`, NAR309). `carry=` wins when both are set.
 - **Carry.** `carry=<id,id>` on a scene continues elements from the previous scene: the scene declares them again (same id and kind), they are on screen from its first moment (never entered), and they glide from where they were to their place in the new layout (and size). The boundary is a cut; the rest of the previous scene clears away just before it. An id the previous scene didn't declare, or of another kind, is dropped (NAR309).
 - **Narration is the clock.** Each action is anchored to a word in its beat's narration. The final timing comes from TTS word timings (see the architecture doc, §7–8).
 

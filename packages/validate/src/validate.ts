@@ -315,6 +315,12 @@ class Validator {
     for (const [key, value] of Object.entries(scene.attrs)) {
       if (!(SCENE_ATTRS as readonly string[]).includes(key)) {
         this.warn(C.UnknownSceneAttr, `unknown scene attribute \`${key}\``, scene.span, { desc: "ignored", apply: () => delete scene.attrs[key] });
+      } else if (key === "in" && /^into:[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+        // A zoom into an element of the previous scene: it has to be one (a scene checked on its own has none to check).
+        const id = value.slice(5);
+        if (prevDeclared.size && !prevDeclared.has(id)) {
+          this.error(C.BadKeep, `in=into:${id}: \`${id}\` is not declared in the previous scene`, scene.span, { desc: "used `fade`", apply: () => (scene.attrs.in = "fade") });
+        }
       } else if ((key === "in" || key === "out") && !(TRANSITIONS as readonly string[]).includes(value)) {
         const near = closest(value, TRANSITIONS);
         this.error(C.UnknownTransition, `unknown transition \`${value}\` (transitions: ${TRANSITIONS.join(", ")})`, scene.span, {

@@ -160,7 +160,8 @@ export interface ResolvedScene {
   t0: Seconds;
   t1: Seconds;
   transitionIn: { type: string; duration: Seconds };
-  transitionOut: { type: string; duration: Seconds };
+  /** `into:<id>` zooms into that element: `focus` is where it is when the scene ends. */
+  transitionOut: { type: string; duration: Seconds; focus?: { x: number; y: number } };
   steps: { id?: string; t0: Seconds; t1: Seconds }[];
   beats: { t0: Seconds; t1: Seconds; speechEnd: Seconds; hold: Seconds; line: number }[];
 }

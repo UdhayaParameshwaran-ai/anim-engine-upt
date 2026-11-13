@@ -321,18 +321,28 @@ function boundaries(scenes: SceneIR[], script: Script, motion: MotionProfile): v
         scenes[i - 1]!.transitionOut = "cut";
       }
     });
+  // `in=into:<id>`: the previous scene zooms into that element, and this one starts at once.
+  const intoAtBoundary = () =>
+    scenes.forEach((s, i) => {
+      if (i > 0 && s.transitionIn.startsWith("into:")) {
+        scenes[i - 1]!.transitionOut = s.transitionIn;
+        s.transitionIn = "cut";
+      }
+    });
   if (motion.name === "standard") {
     for (const s of scenes) s.transitionIn = s.transitionIn === "auto" ? "fade" : s.transitionIn;
+    intoAtBoundary();
     cutAtCarry();
     return;
   }
   scenes.forEach((s, i) => {
     const wanted = pick(s.transitionIn, i);
-    s.transitionIn = i === 0 ? "fade" : "cut";
+    s.transitionIn = i === 0 ? "fade" : wanted.startsWith("into:") ? wanted : "cut";
     if (i > 0 && script.scenes[i - 1]!.attrs.out === undefined) scenes[i - 1]!.transitionOut = wanted;
   });
   const last = scenes.at(-1);
   if (last && script.scenes.at(-1)!.attrs.out === undefined) last.transitionOut = "fade";
+  intoAtBoundary();
   cutAtCarry();
 }
 

@@ -42,6 +42,8 @@ export interface ResolveOptions {
 const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, fade: 0.5, slide: 0.6, wipe: 0.6, iris: 0.7, zoom: 0.6, blur: 0.7, rise: 0.6 };
 /** Exit length (s) under any personality but standard, whatever the transition. */
 const EXIT = 0.6;
+/** Length (s) of a zoom into an element at a scene boundary. */
+const INTO = 1;
 const ENTER = new Set(["fade", "pop", "draw", "write", "send", "stream", "drop"]);
 
 /**
@@ -154,8 +156,10 @@ class Resolver {
     const trIn = { type: scene.transitionIn, duration: this.q((this.transitions[scene.transitionIn] ?? 0) * this.motion.durScale) };
     // Exits all last the same under a personality: appending a scene turns the last scene's
     // closing fade into a boundary transition, and its end time must not move.
-    const outBase = this.motion.name !== "standard" && scene.transitionOut !== "cut" ? EXIT : (this.transitions[scene.transitionOut] ?? 0);
-    const trOut = { type: scene.transitionOut, duration: this.q(outBase * this.motion.durScale) };
+    // `into:<id>` (zoom into an element) is always a full second-ish push, under any personality.
+    const into = scene.transitionOut.startsWith("into:");
+    const outBase = into ? INTO : this.motion.name !== "standard" && scene.transitionOut !== "cut" ? EXIT : (this.transitions[scene.transitionOut] ?? 0);
+    const trOut: ResolvedScene["transitionOut"] = { type: scene.transitionOut, duration: this.q(outBase * (into ? 1 : this.motion.durScale)) };
     const t0 = this.q(start);
     this.initScene(scene, prev);
     this.carryIn(scene, prev, t0);
@@ -277,6 +281,13 @@ class Resolver {
       // A scene that pulls out starts close: that is its camera before anything moves.
       if (out) this.initial[camera] = { camera: close };
       this.add(camera, { prop: "camera", t0, t1, to: out ? full : close, ease: "linear" }, { order: -1, verb: "focus", targets: [], t0, dur: t1 - t0, stagger: 0, params: {}, line: 0 });
+    }
+    if (into) {
+      // Where the element is when the scene ends: the zoom goes into that spot (no such element: a plain fade).
+      const id = scene.transitionOut.slice(5);
+      const el = scene.elements.find((e) => e.id === id);
+      if (el && !el.link) trOut.focus = { x: num(this.valueAt(`${scene.id}/${id}`, "x", Infinity) as number, el.box.x + el.box.w / 2), y: num(this.valueAt(`${scene.id}/${id}`, "y", Infinity) as number, el.box.y + el.box.h / 2) };
+      else trOut.type = "fade";
     }
     this.scenes.push({ id: scene.id, t0, t1, transitionIn: trIn, transitionOut: trOut, steps, beats });
     return t1;

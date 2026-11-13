@@ -39,6 +39,8 @@ interface SceneLook {
   blur: number;
   /** CSS clip-path on the scene's layers ("" = none). */
   clip: string;
+  /** Where scaling is centered (a zoom into an element); the stage center when absent. */
+  origin?: { x: number; y: number };
 }
 const SCENE_HTML_BASE = "position: absolute; inset: 0px;";
 
@@ -227,7 +229,7 @@ export class Stage {
     const sceneCss: Css = [
       ["display", active ? "" : "none"],
       ["opacity", String(round(s.opacity, 4))],
-      ["transform-origin", moved ? `${this.width / 2}px ${this.height / 2}px` : ""],
+      ["transform-origin", moved ? `${round(s.origin?.x ?? this.width / 2)}px ${round(s.origin?.y ?? this.height / 2)}px` : ""],
       ["transform", transform],
       ["filter", s.blur > 0.05 ? `blur(${round(s.blur, 2)}px)` : ""],
     ];
@@ -263,6 +265,13 @@ export class Stage {
     const apply = (type: string, k: number, leaving: boolean) => {
       if (k <= 0) return;
       const dir = leaving ? -1 : 1;
+      if (type.startsWith("into:") && leaving) {
+        // The camera pushes into the element and the scene dissolves as it fills the frame.
+        look.scale *= 1 + k * 2.2;
+        look.opacity *= 1 - clamp01((k - 0.35) / 0.65);
+        if (res.transitionOut.focus) look.origin = res.transitionOut.focus;
+        return;
+      }
       switch (type) {
         case "fade":
           look.opacity *= 1 - k;

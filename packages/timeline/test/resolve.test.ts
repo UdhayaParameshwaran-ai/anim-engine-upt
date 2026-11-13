@@ -410,3 +410,19 @@ describe("clone and merge", () => {
     expect(ev.valueAt("s/a", "x", tl.duration)).toBeCloseTo(ev.valueAt("s/c", "x", tl.duration) as number);
   });
 });
+
+describe("zoom into an element (in=into:<id>)", () => {
+  const SRC =
+    'video 1\nscene a "Stack" template=architecture\nclient = zone "Client"\nbrowser = icon:laptop "Browser"\ndb = icon:database "Database"\nl1 = arrow browser->db "SQL"\n> The {1}browser reads the {2}database.\n1 pop browser\n2 pop db then draw l1\n' +
+    'scene b "Inside" in=into:db template=steps\ns1 = icon:file "Parse"\ns2 = icon:search "Plan"\n> {1}Parse then {2}plan.\n1 pop s1\n2 pop s2\n';
+
+  it("the previous scene zooms into the element and the next one starts at once", async () => {
+    const { ir, tl } = await build(SRC);
+    expect(tl.scenes[0]!.transitionOut.type).toBe("into:db");
+    expect(tl.scenes[0]!.transitionOut.duration).toBeGreaterThanOrEqual(1);
+    expect(tl.scenes[1]!.transitionIn.type).toBe("cut");
+    const box = ir.scenes[0]!.elements.find((e) => e.id === "db")!.box;
+    expect(tl.scenes[0]!.transitionOut.focus!.x).toBeCloseTo(box.x + box.w / 2);
+    expect(tl.scenes[0]!.transitionOut.focus!.y).toBeCloseTo(box.y + box.h / 2);
+  });
+});

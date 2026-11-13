@@ -255,3 +255,13 @@ describe("carry kinds", () => {
     expect(print(r.script)).not.toContain("carry=");
   });
 });
+
+describe("zoom into an element", () => {
+  const A = 'video 1\nscene a\nx = icon:sun "Sun"\n> {1}Hi.\n1 pop x\n';
+  it("accepts in=into:<id> for an element of the previous scene, and falls back to fade for any other", () => {
+    expect(validate(parse(A + 'scene b in=into:x\ny = icon:moon "Moon"\n> {1}Next.\n1 pop y\n').script).diagnostics).toEqual([]);
+    const r = validate(parse(A + 'scene b in=into:nope\ny = icon:moon "Moon"\n> {1}Next.\n1 pop y\n').script);
+    expect(r.diagnostics.map((d) => d.code)).toEqual([C.BadKeep]);
+    expect(print(r.script)).toContain("in=fade");
+  });
+});
