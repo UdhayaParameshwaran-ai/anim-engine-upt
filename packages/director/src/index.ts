@@ -283,7 +283,9 @@ export class Director {
     // Spacing and mirroring for template scenes: now and then, never two scenes in a row.
     if (tpl) {
       const k = this.knobRand;
-      if (!this.knobbed && a.density === undefined && k() < 0.22) {
+      // A diagram written as chapters is already large and dense: it keeps its full size.
+      const chapters = scene.steps.filter((st) => st.id !== undefined).length > 1;
+      if (!this.knobbed && !chapters && a.density === undefined && k() < 0.22) {
         const airy = !NO_AIRY.has(tpl.name) && k() < 0.5;
         if (airy) set.density = "airy";
         else if (!NO_TIGHT.has(tpl.name)) set.density = "tight";

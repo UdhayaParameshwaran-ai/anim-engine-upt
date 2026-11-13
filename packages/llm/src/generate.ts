@@ -158,7 +158,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       opts.director?.recordArc(arc.open.name, arc.close.name);
       opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
     }
-    const ask = canvas ? canvasOutlinePrompt(topic, { min: 3, max: 5 }, recent) : outlinePrompt(topic, range, arc, recent);
+    const ask = canvas ? canvasOutlinePrompt(topic, { min: 4, max: 6 }, recent) : outlinePrompt(topic, range, arc, recent);
     const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
     const outline = pruneCarry(routed.text);

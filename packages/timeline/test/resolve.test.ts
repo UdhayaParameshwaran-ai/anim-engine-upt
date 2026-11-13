@@ -375,3 +375,14 @@ describe("camera for a diagram written as chapters", () => {
     expect(tl.tracks.some((t) => t.verb === "frame")).toBe(false);
   });
 });
+
+describe("camera per chapter", () => {
+  it("frames once per chapter, not once per sentence", async () => {
+    const decl = ["a", "b", "c", "d", "e", "f", "g", "h", "i"].map((x) => `${x} = icon:sun "${x}"`).join("\n");
+    const { tl } = await build(`video 1\nscene s "Grow" template=cards\n${decl}\nstep one "One"\n> {1}First one.\n1 pop a\n> {1}Then another.\n1 pop b\nstep two "Two"\n> {1}Second.\n1 pop c\n> {1}And more.\n1 pop d\n`);
+    const frames = tl.tracks.filter((t) => t.target === "s/camera" && t.verb === "frame" && t.prop === "camera");
+    // At most one framing per chapter (a chapter whose group spans the frame pulls out instead): never one per sentence.
+    expect(frames.length).toBeGreaterThanOrEqual(1);
+    expect(frames.length).toBeLessThanOrEqual(2);
+  });
+});

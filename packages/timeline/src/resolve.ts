@@ -261,7 +261,7 @@ class Resolver {
       this.note(TimelineCodes.LowPrecision, "info", `${lowPrecision} cue(s) in scene \`${scene.id}\` use interpolated word timing`, undefined, t0);
     }
 
-    this.autoFrame(scene, scheduled, beats);
+    this.autoFrame(scene, scheduled, beats, steps);
     const contentEnd = Math.max(cursor, ...scheduled.map((s) => s.t0 + s.dur + Math.max(0, s.targets.length - 1) * s.stagger));
     const t1 = this.q(contentEnd + this.tailPad + trOut.duration);
     this.expand(scene, scheduled);
@@ -288,7 +288,7 @@ class Resolver {
    * that group is a small part of the canvas, pulls out when it isn't, and
    * ends the scene on the full view.
    */
-  private autoFrame(scene: SceneIR, scheduled: Scheduled[], beats: { t0: number; t1: number }[]): void {
+  private autoFrame(scene: SceneIR, scheduled: Scheduled[], beats: { t0: number; t1: number }[], steps: { id?: string; t0: number; t1: number }[]): void {
     if (!scene.template) return;
     const BACK = new Set(["panel", "rule", "zone", "chevron", "badge", "kicker", "caption"]);
     const els = new Map(scene.elements.map((e) => [e.id, e]));
@@ -302,7 +302,9 @@ class Resolver {
       added.push({ order: this.order++, verb, targets, t0, dur: 0.9, stagger: 0, params: {}, line: 0 });
     };
     let framed = false;
-    for (const b of beats) {
+    // A diagram written as chapters keeps one framing per chapter; any other dense scene re-frames every beat.
+    const units = chapters ? steps.filter((st) => st.t1 > st.t0) : beats;
+    for (const b of units) {
       const ids = new Set<string>();
       for (const s of scheduled) {
         if (s.t0 < b.t0 - 1e-6 || s.t0 >= b.t1 - 1e-6 || ["clear", "hide", "lift"].includes(s.verb)) continue;
@@ -327,7 +329,7 @@ class Resolver {
         framed = false;
       }
     }
-    if (framed) camera("focus", ["reset"], beats[beats.length - 1]!.t1);
+    if (framed) camera("focus", ["reset"], units[units.length - 1]!.t1);
     scheduled.push(...added);
   }
 

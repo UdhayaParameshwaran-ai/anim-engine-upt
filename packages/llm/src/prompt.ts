@@ -249,7 +249,7 @@ const STORY: Record<string, string> = {
 const CANVAS_RULES = [
   "- This one scene is the whole video: a single diagram that grows chapter by chapter on one stage, and a camera follows the action. Declare EVERY element of the whole diagram first, before the first step line (the layout is solved once, for all of it, so nothing jumps).",
   '- Then one chapter per planned "# chapter:" line: a line  step <chapter-id> "Short title"  followed by that chapter\'s narration lines and actions. A chapter shows only its own part of the diagram (pop or draw the elements it adds); never hide or clear what earlier chapters showed, and never re-declare elements after a step line.',
-  "- Each chapter is 1–3 sentences and ends with something new on screen that the next chapter builds on.",
+  "- Each chapter is 2–4 sentences (one idea each, as in any scene) and ends with something new on screen that the next chapter builds on. The video should run about as long as a video of several scenes.",
 ];
 
 /** What one scene call writes: a template diagram, a grid page, or (no plan for it) anything. */
@@ -283,7 +283,7 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canv
     .join("\n");
   const sceneLine = grid ? `scene <id> "Title" grid=<layout> [mirror=true] [in=<transition>]` : `scene <id> "Title" template=${kind.template.name} [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]`;
   const rules = [
-    "- One idea per sentence, at most 25 words. 2–6 sentences per scene.",
+    canvas ? "- One idea per sentence, at most 25 words. 2–4 sentences per chapter." : "- One idea per sentence, at most 25 words. 2–6 sentences per scene.",
     "- Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).",
     "- Show an element before emphasizing or moving it.",
     "- Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.",
