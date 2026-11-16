@@ -25,6 +25,7 @@ import {
   type TemplateManifest,
 } from "@anim/registry";
 import { lengthSpec, type LengthSpec } from "./length.js";
+import { guessUseCase, playbook, useCaseCatalogue, type UseCase } from "./usecases.js";
 import { PROMPT_IDS, Slots, type PromptId } from "./prompt-slots.js";
 import { DEFAULT_MAX_WORDS, planningAdvice, styleGuide, type PromptSettings } from "./settings.js";
 
@@ -299,11 +300,11 @@ export function sceneKindOf(line: string | undefined): SceneKind {
  * scene with no planned kind gets the whole language. Pictures are the ones
  * matching the scene's words.
  */
-export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas = false, spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
-  return baseSceneSystemPrompt(kind, assets, canvas, spec, settings);
+export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas = false, spec: LengthSpec = STANDARD, settings: PromptSettings = {}, usecase?: UseCase): string {
+  return baseSceneSystemPrompt(kind, assets, canvas, spec, settings, usecase);
 }
 
-function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas: boolean, spec: LengthSpec, settings: PromptSettings): string {
+function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas: boolean, spec: LengthSpec, settings: PromptSettings, usecase?: UseCase): string {
   if ("free" in kind) return baseSystemPrompt(assets, spec, settings);
   const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const grid = "grid" in kind;
@@ -371,7 +372,7 @@ cloud = icon:cloud "Clouds"
 2 pop sea
 > The warm water rises and {1}cools into clouds.
 1 pop cloud
-
+${S.v("playbook", playbook(usecase, settings))}
 RULES
 - One idea per sentence, at most ${S.v("max_words", words)} words. ${S.v("sentences", span(canvas ? spec.chapterSentences : spec.sentences))} sentences per ${canvas ? "chapter" : "scene"}.
 - Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).
@@ -472,8 +473,12 @@ theme <look>
 motion <personality>
 scene <id> "Title" template=<template>      a diagram
 scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true to some)
+# usecase: <name>                           once, right after the motion line: what this video is (see USE CASES)
 # shape: <shape> · goal: <one line>          one comment line under each scene line; grid pages use shape: page
 <id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
+
+USE CASES (decide what the video is for, write it on the "# usecase:" line, and plan the scenes the way that use case says)
+${S.v("usecases", useCaseCatalogue())}
 
 ${S.v("style_menu", styleSection())}
 
@@ -593,6 +598,7 @@ Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS
 
 /** First pass: plan the scenes without writing narration. */
 export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic), recent: RecentUse = {}, spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
+  const guess = guessUseCase(topic);
   const advice = planningAdvice(spec, settings);
   const S = new Slots("outline.user", settings);
   // The templates the last videos leaned on (most used first): a nudge, never a rule.
@@ -607,9 +613,10 @@ ${S.v("topic", topic)}
 
 Open with ${S.v("opening", arc.open.ask)}.
 End with ${S.v("closing", arc.close.ask)}.
-${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${S.v("house_style", styleGuide(settings))}
+${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${S.v("usecase_hint", guess ? `Likely use case: ${guess.name} (change it if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
+- right after the "motion" line, one comment line "# usecase: <name>" from USE CASES
 - one "scene" line per scene (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"
 - optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
 No elements, narration or actions yet.`);
@@ -689,6 +696,7 @@ The body of the video is ONE diagram that grows chapter by chapter on a single s
 ${S.v("variety", variety + lookNote(recent))}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
+- right after the "motion" line, one comment line "# usecase: <name>" from USE CASES
 - exactly three "scene" lines, each followed by its comment line "# shape: <shape> · goal: <…>":
   1. scene intro "Title" template=title: the headline as a statement, with 1–3 pictures of the topic (shape: intro)
   2. scene main "Title" template=<the template whose picture is the whole system>: the diagram that grows (goal: what the finished diagram shows)

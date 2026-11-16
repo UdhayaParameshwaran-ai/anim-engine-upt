@@ -547,6 +547,10 @@ class Validator {
       }
     } else if (tpl.items) {
       const items = tpl.items;
+      // A placement does not turn a kind the template never shows into one of its items: icons "above" the parts of an anatomy pile up beside them.
+      for (const e of own.filter((x) => x.place && !slotNames.has(x.id) && !LINK_KINDS.has(x.kind) && x.kind !== "placeholder" && !items.accepts.includes(x.kind))) {
+        this.warn(C.OutsideTemplate, `\`${e.id}\` is ${/^[aeiou]/.test(e.kind) ? "an" : "a"} ${e.kind}, which \`${tpl.name}\` does not show (it shows ${items.accepts.join(", ")}); remove it`, e.span);
+      }
       for (const e of free) {
         if (!items.accepts.includes(e.kind) && e.kind !== "placeholder") this.error(C.TemplateSlot, `template \`${tpl.name}\` items accept ${items.accepts.join(", ")}, not \`${e.kind}\``, e.span);
       }

@@ -131,7 +131,8 @@ async function promptDefaults(server: ViteDevServer) {
   const { TEMPLATES } = await server.ssrLoadModule("@anim/registry");
   const { AssetLibrary } = await server.ssrLoadModule("@anim/registry");
   const prompts = llm.defaultPrompts(new AssetLibrary().all());
-  return { ...llm.settingsDefaults(llm.STORY_HINTS), prompts, promptInfo: llm.PROMPT_INFO, slotInfo: llm.SLOT_INFO, templates: [...TEMPLATES.map((t: { name: string }) => t.name), "grid"] };
+  const playbooks = Object.fromEntries(llm.USE_CASES.map((u: { name: string; scene: string }) => [u.name, u.scene]));
+  return { ...llm.settingsDefaults(llm.STORY_HINTS), playbooks, prompts, promptInfo: llm.PROMPT_INFO, slotInfo: llm.SLOT_INFO, templates: [...TEMPLATES.map((t: { name: string }) => t.name), "grid"] };
 }
 
 async function providers(server: ViteDevServer) {

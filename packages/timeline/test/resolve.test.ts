@@ -490,3 +490,17 @@ describe("frozen scenes", () => {
     expect(tl.tracks.some((t) => t.target === "s/camera" && t.prop === "camera")).toBe(false);
   });
 });
+
+describe("visiting a pair", () => {
+  it("releases each element of the previous pair once the next visit has moved past it", async () => {
+    const src = 'video 1\nscene s "S" template=structure\na = box "1"\nb = box "2"\nc = box "3"\nd = box "4"\n> {1}Compare one and two, {2}then two and three, {3}then three and four.\n1 pop a,b,c,d\n1 visit a,b\n2 visit b,c\n3 visit c,d\n';
+    const ir = compile(src).ir!;
+    const tl = resolve(ir, await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) }));
+    const release = (id: string) => tl.tracks.filter((t) => t.target === `s/${id}` && t.prop === "tint" && t.to === 0);
+    expect(release("a")).toHaveLength(1);
+    expect(release("b")).toHaveLength(1);
+    // The last pair stays lit until the next visit.
+    expect(release("c")).toHaveLength(0);
+    expect(release("d")).toHaveLength(0);
+  });
+});

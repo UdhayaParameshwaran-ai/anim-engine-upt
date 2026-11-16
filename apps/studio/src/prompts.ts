@@ -5,6 +5,7 @@ interface Defaults {
   maxWords: number;
   lengths: Record<string, { scenes: Range; sentences: Range; chapters: Range; advice: string; summary: string }>;
   motionHints: Record<string, string>;
+  playbooks: Record<string, string>;
   templates: string[];
   prompts: Record<string, { text: string; slots: string[] }>;
   promptInfo: Record<string, { title: string; stage: string; about: string }>;
@@ -108,7 +109,7 @@ export function promptSettings(): { value(): Values } {
   const TAB_KEYS: Record<string, string[]> = {
     wording: ["audience", "tone", "language", "notes"],
     planning: ["scenes", "planningAdvice"],
-    writing: ["maxWords", "sentences", "motionHints", "templateNotes"],
+    writing: ["maxWords", "sentences", "motionHints", "templateNotes", "playbooks"],
     prompts: ["prompts"],
   };
   const badges = () => {
@@ -297,6 +298,7 @@ export function promptSettings(): { value(): Values } {
       text("Most words per sentence", "maxWords", "One idea per sentence.", { type: "number", placeholder: String(d.maxWords) }),
       pair("Sentences per scene", "sentences", "Per chapter in a growing diagram.", spec.sentences),
       perTemplate("Motion hint", "motionHints", "What tells the model to show motion in this template. Empty is the built-in hint; a space turns it off.", Object.keys(d.motionHints), (n) => d.motionHints[n] ?? ""),
+      perTemplate("Use-case playbook", "playbooks", "How scenes are written once the plan names what the video is for (algorithm, protocol, comparison …). Empty is the built-in playbook; a space turns it off.", Object.keys(d.playbooks), (n) => d.playbooks[n] ?? ""),
       perTemplate("Template note", "templateNotes", "Extra advice for one template.", d.templates, () => "(none)"),
     );
     panes.prompts.replaceChildren(

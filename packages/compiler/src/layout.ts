@@ -488,7 +488,8 @@ class SceneLayouter {
     const items = pool.filter((e) => !named.has(e.id) && this.boxes.has(e.id) && !LINK_KINDS.has(e.kind));
     const content = this.content ?? this.safe;
     const variant = this.chosen ?? "";
-    items.forEach((e, i) => this.note(e, { hue: i }));
+    // The cells of a data structure are values of one kind, so they share one look; color is left for what happens to them (visit, mark).
+    if (tpl.name !== "structure") items.forEach((e, i) => this.note(e, { hue: i }));
     const muted = { tone: "muted" };
     // Items of one template share one label size (the smallest any of them needs).
     const labelled = pool.filter((e) => typeof this.params.get(e.id)?.labelFont === "number");
@@ -645,6 +646,8 @@ class SceneLayouter {
           const h = Math.min(a.h, b.h, Math.max(...need.map((x) => x.h)) + 150) - 20;
           for (const c of [a, b]) this.addDecor("panel", [c === a ? left : right], { box: { x: c.x + (c.w - w) / 2, y: c.y + (c.h - h) / 2, w, h } });
         }
+        // Before and after read top-left to bottom-right; a "vs" there would sit on the labels of both.
+        if (variant === "diagonal") return;
         const cx = (a.x + a.w / 2 + b.x + b.w / 2) / 2;
         const cy = (a.y + a.h / 2 + b.y + b.h / 2) / 2;
         this.addDecor("badge", [left, right], { box: { x: cx - 44, y: cy - 44, w: 88, h: 88 }, text: "vs" });

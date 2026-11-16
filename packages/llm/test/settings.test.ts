@@ -135,3 +135,74 @@ describe("motion hints", () => {
     expect(mine).not.toContain(STORY_HINTS.grid!);
   });
 });
+
+import { findUseCase, guessUseCase, outlineSystemPrompt, playbook, qualityIssues, useCaseCatalogue, useCaseOf, USE_CASES } from "../src/index.js";
+
+describe("use cases", () => {
+  it("reads the use case a plan names, and guesses one from the topic's words", () => {
+    expect(useCaseOf('video 1 "x"\ntheme blueprint\nmotion minimal\n# usecase: algorithm\nscene a "A" template=structure\n')?.name).toBe("algorithm");
+    expect(useCaseOf("video 1\n# usecase: nonsense\n")).toBeUndefined();
+    expect(useCaseOf("video 1\n")).toBeUndefined();
+    expect(guessUseCase("Explain the bubble sort")?.name).toBe("algorithm");
+    expect(guessUseCase("TCP three-way handshake")?.name).toBe("protocol");
+    expect(guessUseCase("Git merge vs rebase")?.name).toBe("comparison");
+    expect(guessUseCase("The states of a TCP connection")?.name).toBe("lifecycle");
+    expect(guessUseCase("How a rainbow forms")).toBeUndefined();
+    // "merge" and "search" alone are not algorithms.
+    expect(guessUseCase("Git merge for beginners")).toBeUndefined();
+  });
+
+  it("the planner is shown the menu and asked for the line; a scene gets only its playbook", () => {
+    const sys = outlineSystemPrompt([], undefined);
+    for (const u of USE_CASES) expect(sys).toContain(u.name);
+    expect(sys).toContain("# usecase: <name>");
+    expect(useCaseCatalogue()).toContain("Pick ONE small concrete example");
+    const ask = outlinePrompt("Explain the bubble sort", { min: 3, max: 4 });
+    expect(ask).toContain("Likely use case: algorithm");
+    expect(ask).toContain('"# usecase: <name>"');
+    expect(outlinePrompt("How a rainbow forms", { min: 3, max: 4 })).not.toContain("Likely use case");
+
+    const kind = sceneKindOf('scene s "S" template=structure');
+    const algo = sceneSystemPrompt(kind, [], false, undefined, {}, findUseCase("algorithm"));
+    expect(algo).toContain("USE CASE: algorithm");
+    expect(algo).toContain("all the way to its finished result");
+    expect(algo).not.toContain("USE CASE: protocol");
+    expect(sceneSystemPrompt(kind, [])).not.toContain("USE CASE:");
+  });
+
+  it("a person's playbook replaces the built-in one, and can be turned off", () => {
+    const uc = findUseCase("algorithm");
+    expect(playbook(uc, sanitizeSettings({ playbooks: { algorithm: "- Use 3 values only." } }))).toContain("Use 3 values only.");
+    expect(playbook(uc, sanitizeSettings({ playbooks: { algorithm: "- Use 3 values only." } }))).not.toContain("finished result");
+    expect(playbook(uc, sanitizeSettings({ playbooks: { algorithm: " " } }))).toBe("");
+    expect(playbook(undefined)).toBe("");
+  });
+
+  it("an unedited default prompt still builds the built-in one with the new slots", () => {
+    const d2 = defaultPrompts(new AssetLibrary().all());
+    expect(d2["outline.system"].slots).toContain("usecases");
+    expect(d2["scene.system"].slots).toContain("playbook");
+    expect(d2["outline.user"].slots).toContain("usecase_hint");
+    for (const id of ["usecases", "usecase_hint", "playbook"]) expect(SLOT_INFO[id], id).toBeDefined();
+  });
+
+  it("an algorithm's data scene must show the run, not one step of it", () => {
+    const H = 'video 1 "x"';
+    const sc = (actions: string) => `scene s "S" template=structure\nc1 = box "4"\nc2 = box "2"\nc3 = box "5"\n> {1}Compare, {2}swap, {3}done.\n${actions}`;
+    expect(qualityIssues(H, sc("1 pop c1,c2,c3\n2 swap c1,c2\n3 mark c3 as=ok"), "algorithm").map((q) => q.code)).toContain("Q5");
+    const long = "1 pop c1,c2,c3\n1 visit c1\n2 visit c2\n2 swap c1,c2\n3 visit c3\n3 mark c1 as=ok\n3 mark c2 as=ok\n3 mark c3 as=ok";
+    expect(qualityIssues(H, sc(long), "algorithm").map((q) => q.code)).not.toContain("Q5");
+    expect(qualityIssues(H, sc("1 pop c1,c2,c3\n2 swap c1,c2\n3 mark c3 as=ok"), "protocol").map((q) => q.code)).not.toContain("Q5");
+  });
+});
+
+describe("use case Q5: say it, show it", () => {
+  it("flags a narration that says swap when nothing swaps", () => {
+    const H = 'video 1 "x"';
+    const sc = (actions: string) => `scene s "S" template=structure\nc1 = box "4"\nc2 = box "2"\nc3 = box "5"\n> {1}Four is bigger than two, so {2}they swap places.\n${actions}`;
+    const base = "1 pop c1,c2,c3\n1 visit c1\n2 visit c2\n2 mark c1 as=ok\n2 mark c2 as=ok\n2 mark c3 as=ok";
+    const codes = (a: string) => qualityIssues(H, sc(a), "algorithm");
+    expect(codes(base).map((q) => q.message).join(" ")).toContain("never swaps");
+    expect(codes(base + "\n2 swap c1,c2").map((q) => q.message).join(" ")).not.toContain("never swaps");
+  });
+});

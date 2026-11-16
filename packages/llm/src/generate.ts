@@ -6,6 +6,7 @@ import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
 import { chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 import { detectLength, type Length } from "./length.js";
+import { guessUseCase, useCaseOf, type UseCase } from "./usecases.js";
 import { effectiveSpec, type PromptSettings } from "./settings.js";
 
 export interface GenerateOptions {
@@ -124,6 +125,8 @@ interface Ctx {
   repairs: number;
   started: number;
   trace: CallTrace[];
+  /** What the video is for (the plan's `# usecase:` line); scenes are written and checked by it. */
+  usecase?: UseCase;
 }
 
 interface CallMeta {
@@ -182,6 +185,9 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain, settings));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
     const outline = pruneCarry(routed.text);
+    const named = useCaseOf(outline);
+    ctx.usecase = named ?? guessUseCase(topic);
+    if (ctx.usecase) opts.onLog?.(`use case: ${ctx.usecase.name}${named ? "" : " (guessed from the topic; the plan named none)"}`);
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
     const plan = split(outline);
     // The scene planned with chapters is the growing diagram (its chapters become the steps it is written with).
@@ -201,7 +207,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text), settings) };
       // Only what this scene's kind needs, and the pictures that match its words.
       const planned = s.text.split("\n")[0]!;
-      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), isCanvas(s.text), spec, settings);
+      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), isCanvas(s.text), spec, settings, ctx.usecase);
       const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
       // The plan's template or grid layout is binding: a scene line that changed it gets it back.
       const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);
@@ -250,7 +256,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     repairs: ctx.repairs,
     calls: ctx.calls,
     usage: ctx.usage,
-    quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text).map((q) => `${sc.id}: ${q.message}`)),
+    quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text, ctx.usecase?.name).map((q) => `${sc.id}: ${q.message}`)),
     trace: ctx.trace,
     ms: Math.round(performance.now() - ctx.started),
   };
@@ -296,7 +302,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
     judge(last, errors, 0, "still has errors → auto-fix");
     return current;
   }
-  const issues = qualityIssues(header, current);
+  const issues = qualityIssues(header, current, ctx.usecase?.name);
   if (!qualityOn || !issues.length) {
     judge(last, errors, issues.length, "valid");
     return current;
@@ -306,7 +312,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
   ctx.opts.onLog?.(`improving scene:\n${report}`);
   const better = await ask(current, report, "quality");
   const after = checkScene(header, better.text);
-  const left = qualityIssues(header, better.text).length;
+  const left = qualityIssues(header, better.text, ctx.usecase?.name).length;
   if (after.errors || left >= issues.length) {
     judge(better.trace, after, left, after.errors ? "rejected: introduced errors" : "rejected: no better");
     ctx.opts.onLog?.("the improvement didn't help; keeping the previous version");

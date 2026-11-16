@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -25,7 +25,7 @@ const STORY_TEMPLATES = new Set(["exchange", "states", "structure", "tree", "git
 /** Verbs that show something happening, not only appearing. */
 const STORY_VERBS = new Set(["send", "stream", "visit", "mark", "shake", "drop", "lift", "swap", "move", "frame", "focus", "set", "count", "strike", "clone", "merge"]);
 
-export function qualityIssues(header: string, sceneText: string): QualityIssue[] {
+export function qualityIssues(header: string, sceneText: string, usecase?: string): QualityIssue[] {
   const offset = header.split("\n").length;
   const { script, diagnostics } = compile(`${header}\n${sceneText}\n`);
   const scene = script.scenes[0];
@@ -61,6 +61,18 @@ export function qualityIssues(header: string, sceneText: string): QualityIssue[]
     if (verbs.length && !verbs.some((v) => STORY_VERBS.has(v))) {
       const hint = tpl === "exchange" ? "show each message with send (a packet travels along it)" : tpl === "structure" ? "operate on the cells (drop, lift, swap, visit, mark)" : tpl === "compare" ? "visit each side as it is described, then mark the better one ok or strike the weaker" : tpl === "code" ? "visit each line as it is explained (or strike an old line and mark the new one ok)" : "move through it with visit (a ring follows the item being described) and mark";
       issues.push({ code: "Q4", message: `scene \`${scene.id}\` only makes things appear; show what happens: ${hint}` });
+    }
+  }
+  // Q5: an algorithm's data scene that shows a step or two of the run and stops.
+  if (usecase === "algorithm" && tpl === "structure") {
+    const OPS = new Set(["swap", "visit", "mark", "drop", "lift", "set", "strike", "move"]);
+    const verbs = verbsOf(scene);
+    const ops = verbs.filter((v) => OPS.has(v)).length;
+    if (ops < 6) issues.push({ code: "Q5", message: `scene \`${scene.id}\` shows only ${ops} step(s) of the run; run the example all the way to the finished result: every compare (visit) and swap, then mark the finished values ok` });
+    // Every move the narration names must happen on screen.
+    const spoken = scene.steps.flatMap((st) => st.beats.flatMap((b) => (b.type === "speech" ? [b.text] : []))).join(" ");
+    if (/\bswap(s|ped|ping)?\b/i.test(spoken) && !verbs.includes("swap")) {
+      issues.push({ code: "Q5", message: `scene \`${scene.id}\` says things swap but never swaps them; do each swap on screen with swap <a>,<b> right after the visit that compares them` });
     }
   }
   // Q4 for number pages: a stat or gauge that only appears, when it could count up.

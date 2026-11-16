@@ -24,4 +24,5 @@ export { qualityIssues, qualityReport, type QualityIssue } from "./quality.js";
 export { detectLength, isLength, LENGTH_SPECS, LENGTHS, lengthForMinutes, lengthSpec, type Length, type LengthSpec } from "./length.js";
 export { DEFAULT_MAX_WORDS, effectiveSpec, planningAdvice, sanitizeSettings, settingsDefaults, styleGuide, type PromptSettings } from "./settings.js";
 export { isPromptId, PROMPT_IDS, PROMPT_INFO, SLOT_INFO, Slots, unknownSlots, type PromptId } from "./prompt-slots.js";
+export { findUseCase, guessUseCase, playbook, USE_CASES, useCaseCatalogue, useCaseOf, type UseCase } from "./usecases.js";
 export { ReplayClient, type ReplayOptions } from "./replay.js";

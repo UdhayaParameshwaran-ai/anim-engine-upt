@@ -33,6 +33,8 @@ export interface PromptSettings {
   motionHints?: Record<string, string>;
   /** Extra advice per template name, added after its card. */
   templateNotes?: Record<string, string>;
+  /** The scene-writing playbook of a use case (algorithm, protocol, …), replacing the built-in one ("" turns it off). */
+  playbooks?: Record<string, string>;
 
   // 4. Whole prompts: the person's own version of a prompt, with its {{slots}}. Unset = the built-in text.
   prompts?: Partial<Record<PromptId, string>>;
@@ -90,6 +92,7 @@ export function sanitizeSettings(raw: unknown): PromptSettings {
   if (Number.isFinite(words) && words >= 5) out.maxWords = Math.min(words, LIMITS.words);
   set("sentences", range(r.sentences, LIMITS.sentences));
   set("motionHints", byName(r.motionHints));
+  set("playbooks", byName(r.playbooks));
   const notes = byName(r.templateNotes);
   if (notes) {
     for (const k of Object.keys(notes)) if (!notes[k]) delete notes[k];

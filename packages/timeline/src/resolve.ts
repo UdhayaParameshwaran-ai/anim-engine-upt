@@ -88,8 +88,8 @@ class Resolver {
   private readonly minDuration: number;
   private readonly minEmphasis: number;
   private readonly transitions: Record<string, number>;
-  /** The element each scene's "you are here" ring is on (see `visit`). */
-  private readonly visiting = new Map<string, string>();
+  /** The elements each scene's "you are here" ring is on (see `visit`): one, or the pair being compared. */
+  private readonly visiting = new Map<string, string[]>();
 
   private readonly tracks: Tween[] = [];
   private readonly byKey = new Map<string, Tween[]>();
@@ -573,13 +573,17 @@ class Resolver {
         continue;
       }
       if (s.verb === "visit" || s.verb === "mark") {
-        // One ring of "you are here": a visit releases the previous one (unless it was marked since).
-        const id = s.targets[0]!;
-        const cur = this.visiting.get(scene.id);
+        // One ring of "you are here" (on several targets when a pair is visited): a visit releases the previous one (unless it was marked since).
+        const ids = s.targets.filter((t) => t !== "*");
+        const cur = this.visiting.get(scene.id) ?? [];
         if (s.verb === "visit") {
-          if (cur && cur !== id) this.add(`${scene.id}/${cur}`, { prop: "tint", t0: s.t0, t1: s.t0 + 0.3, to: 0, ease: "out", meta: { color: "accent", style: "glow" } }, s);
-          this.visiting.set(scene.id, id);
-        } else if (cur === id) this.visiting.delete(scene.id);
+          for (const c of cur) if (!ids.includes(c)) this.add(`${scene.id}/${c}`, { prop: "tint", t0: s.t0, t1: s.t0 + 0.3, to: 0, ease: "out", meta: { color: "accent", style: "glow" } }, s);
+          this.visiting.set(scene.id, ids);
+        } else {
+          const left = cur.filter((c) => !ids.includes(c));
+          if (left.length) this.visiting.set(scene.id, left);
+          else this.visiting.delete(scene.id);
+        }
       }
       const targets = s.verb === "clear" || s.targets.includes("*") ? [...visible] : s.targets;
       targets.forEach((id, k) => {
