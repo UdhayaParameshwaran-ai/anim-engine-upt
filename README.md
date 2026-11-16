@@ -70,7 +70,7 @@ pnpm check examples/photosynthesis.txt          # diagnostics
 pnpm check my-script.txt --fixed --ir           # auto-fixed script + IR
 pnpm check my-script.txt --timeline=tl.json     # mock TTS + resolved timeline
 pnpm studio                                     # http://localhost:5199
-pnpm render examples/cells.txt -o out/cells.mp4 # export MP4 (--voice=kokoro|beeps --speed=1 --workers=N --from=s --to=s --jpeg)
+pnpm render examples/cells.txt -o out/cells.mp4 # export MP4 (--voice=piper|kokoro|beeps --speed=1 --workers=N --from=s --to=s --jpeg)
 ```
 
 Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmpeg from `$FFMPEG_PATH`, the system `PATH`, or the bundled `ffmpeg-static` build.
@@ -85,7 +85,7 @@ Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmp
 - **Inspector:** shows the current scene, step, beat and word, each element's values, and the tween driving it. Click to jump to the source.
 - **Bounds overlay** (O): shows each element's current box and id, following the camera.
 
-The Studio and the renderer narrate with the local Kokoro voice by default. **Piper** (`ANIM_TTS=piper`, `--voice=piper`) is about 4x faster with a plainer voice; it needs the Piper binary and a voice in `.cache/piper` (`piper/piper.exe` from the [Piper releases](https://github.com/rhasspy/piper/releases) and `en_US-lessac-medium.onnx` + `.onnx.json` from [piper-voices](https://huggingface.co/rhasspy/piper-voices)). **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
+The Studio and the renderer narrate with the local Piper voice by default. **Kokoro** (`ANIM_TTS=kokoro`, `--voice=kokoro`) sounds better but is about 4x slower. Piper needs the Piper binary and a voice in `.cache/piper` (`piper/piper.exe` from the [Piper releases](https://github.com/rhasspy/piper/releases) and `en_US-lessac-medium.onnx` + `.onnx.json` from [piper-voices](https://huggingface.co/rhasspy/piper-voices)). **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
 
 ## Looks and motion
 
