@@ -401,3 +401,38 @@ describe("software & tech templates", () => {
     expect(el(s, "n1").box.x).toBeGreaterThan(el(s, "code").box.x + el(s, "code").box.w);
   });
 });
+
+describe("gitgraph commits", () => {
+  it("draws a commit declared as an icon as a dot", () => {
+    const v = ir(`video 1 "G"
+
+scene g "History" template=gitgraph
+main = zone "main"
+c1 = icon:flag "init"
+c2 = icon:key "login"
+l1 = line c1->c2
+> The {1}commits.
+1 pop c1,c2 then draw l1
+`);
+    expect(el(v, "g", "c1").kind).toBe("circle");
+    expect(el(v, "g", "c2").kind).toBe("circle");
+  });
+});
+
+describe("gitgraph extras", () => {
+  it("puts a commit no link touches beside the others, not on the first", () => {
+    const v = compile(`video 1 "G"
+
+scene g "History" template=gitgraph
+main = zone "main"
+c1 = circle "init"
+c2 = circle "login"
+note = circle "Snapshot"
+l1 = line c1->c2
+> The {1}commits.
+1 pop c1,c2,note then draw l1
+`).ir!; // the stray note draws a warning by design
+    const x = (id: string) => el(v, "g", id).box.x;
+    expect(x("note")).toBeGreaterThan(x("c2"));
+  });
+});

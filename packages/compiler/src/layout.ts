@@ -1209,6 +1209,15 @@ class SceneLayouter {
     const links = this.els.filter((e) => LINK_KINDS.has(e.kind) && e.link && ids.has(e.link.from) && ids.has(e.link.to)).map((e) => e.link!);
     const col = new Map(commits.map((e) => [e.id, 0]));
     for (let pass = 0; pass < commits.length; pass++) for (const l of links) col.set(l.to, Math.max(col.get(l.to)!, col.get(l.from)! + 1));
+    // A commit no link touches (an extra note) goes after the previous commit of its lane, not on top of the first.
+    const linked = new Set(links.flatMap((l) => [l.from, l.to]));
+    for (const lane of lanes) {
+      let prev = -1;
+      for (const c of lane.commits) {
+        if (!linked.has(c.id)) col.set(c.id, prev + 1);
+        prev = Math.max(prev, col.get(c.id)!);
+      }
+    }
     const cols = Math.max(1, ...[...col.values()].map((c) => c + 1));
     const labelW = 220;
     const rows = colCells({ ...content, x: content.x + labelW, w: content.w - labelW }, Math.max(1, lanes.length), this.gap * 0.4);
@@ -1220,7 +1229,8 @@ class SceneLayouter {
         this.note(lane.zone, { lane: 1, hue: i });
       }
       for (const c of lane.commits) {
-        this.cellAt(c, { x: content.x + labelW + col.get(c.id)! * step + step * 0.15, y: row.y + row.h * 0.12, w: step * 0.7, h: row.h * 0.76 });
+        const cw = Math.min(step * 0.7, 130); // as wide as a dot and its label, so a link ends at the dot
+        this.cellAt(c, { x: content.x + labelW + col.get(c.id)! * step + (step - cw) / 2, y: row.y + row.h * 0.12, w: cw, h: row.h * 0.76 });
         this.note(c, { dot: 1 });
         (this.laneOf ??= new Map()).set(c.id, i);
       }

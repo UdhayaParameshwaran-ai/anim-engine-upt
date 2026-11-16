@@ -68,12 +68,12 @@ subtitle = text "How plants make food from light"
   },
   compare: {
     shape: "compare",
-    useWhen: "exactly two things are contrasted: A vs B, before/after, problem/solution",
+    useWhen: "exactly two things are contrasted: A vs B, before/after, problem/solution. Each side says what makes it different: a box with a short sentence (left = box \"GET: data travels in the URL\"), not a bare icon, unless the picture is the contrast",
     avoidWhen: "three or more things → cards or hub",
     variants: {
-      side: { when: "two things of equal weight, side by side" },
+      side: { when: "two things of equal weight, side by side (GET vs POST, SQL vs NoSQL: any two parallel things)" },
       stacked: { when: "two wide things (long text, charts) one above the other" },
-      diagonal: { when: "a before → after or problem → solution contrast" },
+      diagonal: { when: "only a true before → after or problem → solution change over time, never two parallel things" },
       asymmetric: { when: "one side matters more (set emphasis=left|right)" },
     },
     example: `scene cells "Two kinds of cell" template=compare

@@ -265,3 +265,23 @@ describe("zoom into an element", () => {
     expect(print(r.script)).toContain("in=fade");
   });
 });
+
+describe("gitgraph strays", () => {
+  it("warns about a commit no line joins", () => {
+    const src = `video 1 "G"
+
+scene g "History" template=gitgraph
+main = zone "main"
+c1 = circle "init"
+c2 = circle "login"
+note = icon:camera "Snapshot"
+l1 = line c1->c2
+> The {1}commits and a {2}note.
+1 pop c1,c2 then draw l1
+2 pop note
+`;
+    const r = validate(parse(src).script, {});
+    expect(r.diagnostics.some((d) => d.message.includes("`note` is not joined"))).toBe(true);
+    expect(r.diagnostics.some((d) => d.message.includes("`c1` is not joined"))).toBe(false);
+  });
+});

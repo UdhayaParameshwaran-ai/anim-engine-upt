@@ -46,6 +46,10 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
     const carry = carryAttr.filter((id) => declares.has(id));
     const keep = [...keepAttr, ...carryAttr.filter((id) => !declares.has(id) && !keepAttr.includes(id))];
     const kept = new Map(keep.filter((id) => prevBoxes.has(id)).map((id) => [id, prevBoxes.get(id)!]));
+    // A commit is a dot with its label: an icon, box or node declared as a commit would draw a big glyph over the lines.
+    if (scene.attrs.template === "gitgraph") {
+      for (const st of scene.steps) for (const e of st.elements) if (["icon", "asset", "box", "node"].includes(e.kind)) Object.assign(e, { kind: "circle", name: undefined, version: undefined });
+    }
     const layout = layoutScene(scene, ctx, kept);
     diagnostics.push(...layout.diagnostics);
 

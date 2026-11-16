@@ -532,6 +532,13 @@ class Validator {
       }
     }
     const free = own.filter((e) => !slotNames.has(e.id) && !e.place && !LINK_KINDS.has(e.kind));
+    if (tpl.name === "gitgraph") {
+      // Every dot is a commit on the history: one no line touches is a stray note (a "Snapshot" label), which would sit among the commits.
+      const joined = new Set(own.filter((e) => LINK_KINDS.has(e.kind) && e.link).flatMap((e) => [e.link!.from, e.link!.to]));
+      for (const e of free.filter((e) => e.kind !== "zone" && !joined.has(e.id))) {
+        this.warn(C.OutsideTemplate, `\`${e.id}\` is not joined to any commit; every item here is a commit, so join it with a line or remove it`, e.span);
+      }
+    }
     if (tpl.graph) {
       const nodes = own.filter((e) => e.kind === "node");
       if (nodes.length > tpl.graph.maxNodes) this.error(C.TemplateSlot, `template \`${tpl.name}\` holds at most ${tpl.graph.maxNodes} nodes`, scene.span);

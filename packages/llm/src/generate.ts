@@ -305,6 +305,8 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
   return better.text;
 }
 
+const REPAIRED_WARNINGS = new Set(["NAR411"]);
+
 /**
  * Compiles a scene with the video header and no auto-fix. Returns the
  * number of errors and warnings, and a report (errors and warnings) with
@@ -315,7 +317,8 @@ export function checkScene(header: string, sceneText: string): { errors: number;
   const { diagnostics } = compile(`${header}\n${sceneText}\n`, { autofix: false });
   // keep= refers to other scenes, which aren't present when a scene is checked alone.
   const relevant = diagnostics.filter((d) => d.code !== "NAR309" && d.span.line > offset);
-  const errorCodes = relevant.filter((d) => d.severity === "error").map((d) => d.code);
+  // A warning that degrades the picture (an element that fits no slot lands in a tiny row of clutter) is repaired like an error.
+  const errorCodes = relevant.filter((d) => d.severity === "error" || REPAIRED_WARNINGS.has(d.code)).map((d) => d.code);
   const shifted = relevant.map((d) => ({ ...d, span: { ...d.span, line: d.span.line - offset } }));
   return { errors: errorCodes.length, warnings: relevant.length - errorCodes.length, report: report(shifted), errorCodes };
 }

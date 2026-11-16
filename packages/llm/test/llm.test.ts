@@ -29,6 +29,7 @@ import {
   canvasOutlinePrompt,
   chosenCanvas,
   bindCarry,
+  checkScene,
   pruneCarry,
   sceneSystemPrompt,
   shapeTable,
@@ -824,5 +825,16 @@ describe("choosing between one diagram and scenes", () => {
     const ask = canvasChoicePrompt("How TCP connections change state");
     expect(ask).toContain("Topic: How TCP connections change state");
     expect(ask).toContain("When unsure, answer scenes");
+  });
+});
+
+describe("extras that fit no slot", () => {
+  const header = ["video 1", "theme paper", ""].join("\n");
+  const scene = ["scene s \"Two\" template=compare", "title = title \"A or B\"", "left = box \"A: one thing\"", "right = box \"B: another\"", "extra = icon:users \"Extra\"", "> {1}A and {2}B and {3}extra.", "1 fade left", "2 fade right", "3 pop extra", ""].join("\n");
+
+  it("is repaired like an error, so the picture is not cluttered", () => {
+    const r = checkScene(header, scene);
+    expect(r.errorCodes).toContain("NAR411");
+    expect(r.errors).toBeGreaterThan(0);
   });
 });

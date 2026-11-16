@@ -329,6 +329,12 @@ describe("auto camera", () => {
     const own = await build(`video 1\nscene s "Many" template=cards\n${items}\n> {1}First is here.\n1 pop c1\n1 focus c1\n`);
     expect(own.tl.tracks.some((t) => t.verb === "frame")).toBe(false);
   });
+
+  it("never crops an anatomy bar with a close-up", async () => {
+    const parts = Array.from({ length: 6 }, (_, i) => [`p${i + 1} = box "Part ${i + 1}"`, `n${i + 1} = label "n${i + 1}" @below:p${i + 1}`].join("\n")).join("\n");
+    const { tl } = await build(["video 1", 'scene s "Bar" template=anatomy', parts, "> {1}First.", "1 fade p1", "> {1}Second.", "1 fade p2", ""].join("\n"));
+    expect(tl.tracks.some((t) => t.verb === "frame")).toBe(false);
+  });
 });
 
 describe("carried elements", () => {
@@ -438,8 +444,49 @@ describe("frame=close", () => {
     expect((ev.valueAt("s/camera", "camera", tl.duration) as { w: number }).w).toBe(1920);
   });
 
+  it("still opens close when the scene's own frame line comes later", async () => {
+    const { tl } = await build(SRC + "end frame a,b\n");
+    const ev = createEvaluator(tl);
+    expect((ev.valueAt("s/camera", "camera", 0) as { w: number }).w).toBeLessThan(1920 * 0.75);
+  });
+
   it("leaves a scene that moves the camera itself alone", async () => {
     const { tl } = await build(SRC.replace("1 pop a\n", "1 pop a\n1 focus b\n").replace("1 focus b", "").replace("scene s", "scene s").replace("\n1 pop a\n", "\n1 pop a\n"));
     expect(tl.tracks.some((t) => t.target === "s/camera" && t.verb === "focus" && t.prop === "camera")).toBe(true);
+  });
+});
+
+describe("camera drift in chapters", () => {
+  const decl = ["a", "b", "c", "d", "e", "f", "g", "h", "i"].map((x) => `${x} = icon:sun "${x}"`).join("\n");
+  const SRC = `video 1\nscene s "Grow" template=cards\n${decl}\nstep one "One"\n> {1}First there is a longer sentence that takes a while to say aloud, with a second part to it.\n1 pop a\nstep two "Two"\n> {1}Then another long sentence that also takes a good while to say, so the picture should not freeze.\n1 pop b\n`;
+
+  it("creeps in slowly for the rest of each chapter, ending before the next move", async () => {
+    const { tl } = await build(SRC);
+    const moves = tl.tracks.filter((t) => t.target === "s/camera" && t.prop === "camera");
+    const drifts = moves.filter((t) => t.ease === "linear" && t.verb !== undefined && t.t1 - t.t0 > 0.6);
+    expect(drifts.length).toBeGreaterThanOrEqual(2);
+    for (const d of drifts) {
+      const from = d.from as { w: number };
+      const to = d.to as { w: number };
+      expect(to.w / from.w).toBeCloseTo(0.96, 1);
+      // Nothing else starts inside a drift.
+      expect(moves.some((m) => m !== d && m.t0 > d.t0 + 1e-6 && m.t0 < d.t1 - 1e-6)).toBe(false);
+    }
+  });
+});
+
+describe("frozen scenes", () => {
+  const long = "Then a long sentence follows that takes quite a while to say aloud, so that nothing on the screen changes for several seconds at all.";
+  const src = (motion: string) => ["video 1", `motion ${motion}`, 'scene s "Quiet" template=cards', 'a = icon:sun "A"', 'b = icon:moon "B"', "> {1}Both are here.", "1 pop a,b", `> ${long}`, `> ${long}`, ""].join("\n");
+
+  it("gives a push to a scene that would sit frozen, even without a profile push", async () => {
+    const { tl } = await build(src("minimal"));
+    expect(tl.tracks.some((t) => t.target === "s/camera" && t.prop === "camera")).toBe(true);
+  });
+
+  it("leaves a scene alone when it keeps moving", async () => {
+    const busy = ["video 1", "motion minimal", 'scene s "Busy" template=cards', 'a = icon:sun "A"', 'b = icon:moon "B"', "> {1}Both are {2}here.", "1 pop a", "2 pop b", ""].join("\n");
+    const { tl } = await build(busy);
+    expect(tl.tracks.some((t) => t.target === "s/camera" && t.prop === "camera")).toBe(false);
   });
 });

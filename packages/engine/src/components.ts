@@ -132,6 +132,8 @@ export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${
           const t = text(doc, inst, el.texts[0], 28, w, h * 0.4, theme, { inner: true });
           t.setAttribute("transform", `translate(0 ${round(-h * 0.12 + r + 34)})`);
           t.setAttribute("font-family", theme.mono);
+          // A halo keeps the lines that run to a commit out of its label.
+          Object.entries({ stroke: theme.bg, "stroke-width": "9", "stroke-linejoin": "round", "paint-order": "stroke" }).forEach(([k, v]) => t.setAttribute(k, v));
           g.append(t);
         }
         break;
@@ -226,7 +228,9 @@ export function fitText(content: string, font: number, maxW: number, maxH: numbe
   for (let i = 0; i < 40; i++) {
     const perLine = Math.max(1, Math.floor(maxW / (charW * f)));
     const lines = wrap(content, perLine);
-    if (lines.length * f * 1.25 <= maxH || f < 10) return { lines, font: f };
+    // An unbreakable word (a token, a long path) wider than a line shrinks the text too, not only height.
+    const widest = Math.max(...lines.map((l) => l.replace(/[[\]]/g, "").length));
+    if ((lines.length * f * 1.25 <= maxH && widest <= perLine) || f < 10) return { lines, font: f };
     f *= 0.94;
   }
   return { lines: wrap(content, Math.max(1, Math.floor(maxW / (charW * f)))), font: f };
@@ -530,7 +534,7 @@ function connector(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR,
   g.append(c.token);
   if (el.texts[0]) {
     const row = el.params.route === "row";
-    c.label = svg(doc, "text", { "text-anchor": "middle", "font-size": row ? 30 : FONT.edge!, "font-family": row ? theme.mono : theme.font, fill: theme.muted, stroke: "none", "paint-order": "stroke" }) as SVGTextElement;
+    c.label = svg(doc, "text", { "text-anchor": "middle", "font-size": row ? 30 : FONT.edge!, "font-family": row ? theme.mono : theme.font, fill: theme.muted, stroke: theme.bg, "stroke-width": 9, "stroke-linejoin": "round", "paint-order": "stroke" }) as SVGTextElement; // the halo keeps lines and borders out of the text
     c.label.textContent = el.texts[0];
     inst.innerText.push(c.label);
     g.append(c.label);

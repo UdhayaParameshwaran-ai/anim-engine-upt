@@ -273,9 +273,11 @@ class Resolver {
     // A slow camera move keeps a held frame alive, unless the script moves the camera itself:
     // in on one scene, back out on the next, so consecutive scenes don't move alike.
     const camera = `${scene.id}/camera`;
-    if (this.motion.push > 0 && !this.byKey.get(`${camera}\u0000camera`)?.length) {
+    // A motion profile without a push still moves a scene that would otherwise sit frozen for seconds (gentler than any profile's own).
+    const push = this.motion.push > 0 ? this.motion.push : this.longestStill(scene.id, t0, t1 - trOut.duration) > 3 ? 0.03 : 0;
+    if (push > 0 && !this.byKey.get(`${camera}\u0000camera`)?.length) {
       const { width, height } = this.video.canvas;
-      const k = this.motion.push;
+      const k = push;
       const full = { x: 0, y: 0, w: width, h: height };
       const close = { x: (width * k) / 2, y: (height * k) / 2, w: width * (1 - k), h: height * (1 - k) };
       const out = this.scenes.length % 2 === 1;
@@ -294,13 +296,41 @@ class Resolver {
     return t1;
   }
 
+  /** The longest stretch (seconds) of the scene's time in which none of its elements is being tweened. */
+  private longestStill(sceneId: string, t0: number, t1: number): number {
+    const spans: [number, number][] = [];
+    for (const [key, list] of this.byKey) {
+      if (!key.startsWith(`${sceneId}/`)) continue;
+      for (const tw of list) if (tw.t1 > tw.t0) spans.push([tw.t0, tw.t1]);
+    }
+    spans.sort((a, b) => a[0] - b[0]);
+    let cursor = t0;
+    let gap = 0;
+    for (const [a, b] of spans) {
+      gap = Math.max(gap, a - cursor);
+      cursor = Math.max(cursor, b);
+    }
+    return Math.max(gap, t1 - cursor);
+  }
+
+  /** A slow push of 4% after a camera move that sets `drift` (seconds), ending before the next move. */
+  private cameraDrift(target: string, box: Box, s: Scheduled): void {
+    const len = Number(s.params.drift ?? 0);
+    if (!(len > 0.6)) return;
+    const k = 0.04;
+    const to = { x: box.x + (box.w * k) / 2, y: box.y + (box.h * k) / 2, w: box.w * (1 - k), h: box.h * (1 - k) };
+    this.add(target, { prop: "camera", t0: s.t0 + s.dur, t1: s.t0 + s.dur + len, to, ease: "linear" }, s);
+  }
+
   /**
    * `frame=close`: the scene opens with the camera close on its first element and pulls out to the full
    * view just after the first sentence begins. Not for scenes that move the camera themselves.
    */
   private frameClose(scene: SceneIR, scheduled: Scheduled[]): void {
     if (scene.frame !== "close") return;
-    if (scene.steps.some((s) => s.focus) || scheduled.some((s) => s.verb === "focus" || s.verb === "frame")) return;
+    // Camera lines of the scene's own take over only when one comes at the start; a later one (a closing frame) follows the opening.
+    const start = Math.min(...scheduled.map((s) => s.t0), Infinity);
+    if (scene.steps.some((s) => s.focus) || scheduled.some((s) => (s.verb === "focus" || s.verb === "frame") && s.t0 <= start + 0.6)) return;
     const SKIP = new Set(["panel", "rule", "zone", "chevron", "badge", "kicker", "caption", "title", "footer"]);
     const first = scene.elements.find((e) => !e.link && e.box.w > 0 && !SKIP.has(e.kind) && e.id !== "title");
     if (!first) return;
@@ -320,7 +350,8 @@ class Resolver {
    * ends the scene on the full view.
    */
   private autoFrame(scene: SceneIR, scheduled: Scheduled[], beats: { t0: number; t1: number }[], steps: { id?: string; t0: number; t1: number }[]): void {
-    if (!scene.template) return;
+    // An anatomy bar spans the whole width, so any close-up would cut its neighbouring parts at the frame edge.
+    if (!scene.template || scene.template === "anatomy") return;
     const BACK = new Set(["panel", "rule", "zone", "chevron", "badge", "kicker", "caption"]);
     const els = new Map(scene.elements.map((e) => [e.id, e]));
     // A scene written as chapters (several steps) is one diagram that grows: the camera follows it from 5 things on.
@@ -329,8 +360,9 @@ class Resolver {
     if (scene.steps.some((s) => s.focus) || scheduled.some((s) => s.verb === "focus" || s.verb === "frame")) return;
     const { width, height } = this.video.canvas;
     const added: Scheduled[] = [];
-    const camera = (verb: "frame" | "focus", targets: string[], t0: number): void => {
-      added.push({ order: this.order++, verb, targets, t0, dur: 0.9, stagger: 0, params: {}, line: 0 });
+    // In a diagram written as chapters the camera keeps creeping in for the rest of the chapter, so a long sentence never sits on a frozen frame.
+    const camera = (verb: "frame" | "focus", targets: string[], t0: number, drift = 0): void => {
+      added.push({ order: this.order++, verb, targets, t0, dur: 0.9, stagger: 0, params: drift > 0.6 ? { drift } : {}, line: 0 });
     };
     let framed = false;
     // A diagram written as chapters keeps one framing per chapter; any other dense scene re-frames every beat.
@@ -353,10 +385,10 @@ class Resolver {
       const w = Math.max(...boxes.map((x) => x.x + x.w)) - Math.min(...boxes.map((x) => x.x));
       const h = Math.max(...boxes.map((x) => x.y + x.h)) - Math.min(...boxes.map((x) => x.y));
       if ((w * h) / (width * height) < 0.4) {
-        camera("frame", [...ids], b.t0);
+        camera("frame", [...ids], b.t0, chapters ? b.t1 - b.t0 - 0.95 : 0);
         framed = true;
-      } else if (framed) {
-        camera("focus", ["reset"], b.t0);
+      } else if (framed || chapters) {
+        camera("focus", ["reset"], b.t0, chapters ? b.t1 - b.t0 - 0.95 : 0);
         framed = false;
       }
     }
@@ -462,6 +494,7 @@ class Resolver {
         const box = id === "reset" ? { x: 0, y: 0, w: canvas.width, h: canvas.height } : focusBox(this.currentBox(scene, elements.get(id), s.t0), canvas);
         const camEase = String(s.params.ease ?? "inout");
         this.add(target, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: box, ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
+        this.cameraDrift(target, box, s);
         continue;
       }
       if (s.verb === "frame") {
@@ -473,7 +506,9 @@ class Resolver {
         const x1 = Math.max(...boxes.map((b) => b.x + b.w));
         const y1 = Math.max(...boxes.map((b) => b.y + b.h));
         const camEase = String(s.params.ease ?? "inout");
-        this.add(`${scene.id}/camera`, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.5, 0.5), ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
+        const framed = focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.5, 0.5);
+        this.add(`${scene.id}/camera`, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: framed, ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
+        this.cameraDrift(`${scene.id}/camera`, framed, s);
         continue;
       }
       if (s.verb === "clone" && s.targets.length >= 2) {
