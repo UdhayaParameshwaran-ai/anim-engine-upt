@@ -24,6 +24,10 @@ import {
   type Shape,
   type TemplateManifest,
 } from "@anim/registry";
+import { lengthAdvice, lengthSpec, type LengthSpec } from "./length.js";
+
+const STANDARD = lengthSpec("standard");
+const span = (r: { min: number; max: number }) => `${r.min}–${r.max}`;
 
 /**
  * Picks the assets most relevant to a topic: words of the text matched
@@ -148,7 +152,7 @@ e2 = n1 -> n3 "theory"
 2 draw e2 then pop n3`;
 
 /** The system prompt: the whole language, generated from the registry. */
-export function systemPrompt(assets: AssetManifest[]): string {
+export function systemPrompt(assets: AssetManifest[], spec: LengthSpec = STANDARD): string {
   const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const templates = TEMPLATES.map((t) => {
     const slots = t.slots.map((s) => `${s.name}${s.required ? "" : "?"}`).join(",");
@@ -183,7 +187,7 @@ HOW TIMING WORKS
 - Several action lines on one anchor run together; "then" runs the next verb after the previous.
 
 RULES
-- One idea per sentence, at most 25 words. 2–6 sentences per scene.
+- One idea per sentence, at most 25 words. ${span(spec.sentences)} sentences per scene.
 - Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).
 - Show an element before emphasizing or moving it. Draw connectors after (or together with) their endpoints.
 - Templates draw their own structure, each part appearing with its item: hub spokes, cycle arrows, step numbers and the arrows between steps, card panels, the "vs" of a compare, the timeline axis, spotlight leader lines, and the arrows of converge, diverge and process. Declare only the items and show them; declare a connector yourself only in template=flow, in a scene without a template, or to put a label on it.
@@ -246,10 +250,10 @@ const STORY: Record<string, string> = {
 };
 
 /** Extra rules when the scene is the whole video: one diagram that grows, chapter by chapter. */
-const CANVAS_RULES = [
+const canvasRules = (spec: LengthSpec) => [
   "- This one scene is the whole video: a single diagram that grows chapter by chapter on one stage, and a camera follows the action. Declare EVERY element of the whole diagram first, before the first step line (the layout is solved once, for all of it, so nothing jumps).",
   '- Then one chapter per planned "# chapter:" line: a line  step <chapter-id> "Short title"  followed by that chapter\'s narration lines and actions. A chapter shows only its own part of the diagram (pop or draw the elements it adds); never hide or clear what earlier chapters showed, and never re-declare elements after a step line.',
-  "- Each chapter is 2–4 sentences (one idea each, as in any scene) and ends with something new on screen that the next chapter builds on. The video should run about as long as a video of several scenes.",
+  `- Each chapter is ${span(spec.chapterSentences)} sentences (one idea each, as in any scene) and ends with something new on screen that the next chapter builds on. The video should run about as long as a video of several scenes.`,
 ];
 
 /** What one scene call writes: a template diagram, a grid page, or (no plan for it) anything. */
@@ -272,8 +276,8 @@ export function sceneKindOf(line: string | undefined): SceneKind {
  * scene with no planned kind gets the whole language. Pictures are the ones
  * matching the scene's words.
  */
-export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas = false): string {
-  if ("free" in kind) return systemPrompt(assets);
+export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas = false, spec: LengthSpec = STANDARD): string {
+  if ("free" in kind) return systemPrompt(assets, spec);
   const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const grid = "grid" in kind;
   const flow = !grid && kind.template.name === "flow";
@@ -283,7 +287,7 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canv
     .join("\n");
   const sceneLine = grid ? `scene <id> "Title" grid=<layout> [mirror=true] [in=<transition>]` : `scene <id> "Title" template=${kind.template.name} [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]`;
   const rules = [
-    canvas ? "- One idea per sentence, at most 25 words. 2–4 sentences per chapter." : "- One idea per sentence, at most 25 words. 2–6 sentences per scene.",
+    canvas ? `- One idea per sentence, at most 25 words. ${span(spec.chapterSentences)} sentences per chapter.` : `- One idea per sentence, at most 25 words. ${span(spec.sentences)} sentences per scene.`,
     "- Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).",
     "- Show an element before emphasizing or moving it.",
     "- Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.",
@@ -309,7 +313,7 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canv
     ...(!grid && kind.template.name === "anatomy" ? ['- Every part is a box with its exact text: p1 = box "https://". Name each part with a label placed under it: n1 = label "protocol" @below:p1 (variant=stacked: @right-of:p1). Show a part and its name together.'] : []),
     ...(!grid && kind.template.name === "structure" ? ["- Each value is a box: c1 = box \"42\". Every box is a value cell, so never make a box or icon for an operation (push, pop, insert) or a target: show an operation by popping in, hiding or moving cells, and name a target with a label @above:<cell>. A pointer is a label placed above a cell: p = label \"i\" @above:c1; move it with: move p @above:c3."] : []),
     ...(!grid && STORY[kind.template.name] ? [STORY[kind.template.name]!] : []),
-    ...(canvas ? CANVAS_RULES : []),
+    ...(canvas ? canvasRules(spec) : []),
     "- Use only the pictures listed under PICTURES, exactly as written. For anything else use box \"Label\" or text.",
     "- Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …",
     "- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.",
@@ -541,7 +545,8 @@ Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS
 }
 
 /** First pass: plan the scenes without writing narration. */
-export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic), recent: RecentUse = {}): string {
+export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic), recent: RecentUse = {}, spec: LengthSpec = STANDARD): string {
+  const advice = lengthAdvice(spec);
   // The templates the last videos leaned on (most used first): a nudge, never a rule.
   const counts = new Map<string, number>();
   for (const t of recent.templates ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
@@ -554,7 +559,7 @@ ${topic}
 
 Open with ${arc.open.ask}.
 End with ${arc.close.ask}.
-${variety}
+${variety}${advice ? `${advice}\n` : ""}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"

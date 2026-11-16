@@ -133,6 +133,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
   const provider = url.searchParams.get("provider") ?? "auto";
   const model = url.searchParams.get("model")?.trim() || undefined;
   const domain = url.searchParams.get("domain") === "tech" ? "tech" : undefined;
+  const length = llm.isLength(url.searchParams.get("length")) ? url.searchParams.get("length") : undefined;
   const tts = ttsOf(url);
   // "canvas": planned like an outline, written as one growing diagram.
   // "auto": a short call decides between one diagram and several scenes.
@@ -175,6 +176,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
       client,
       mode,
       ...(domain && { domain }),
+      ...(length && { length }),
       ...(canvas && { canvas }),
       ...(director && { director }),
       onLog: (m: string) => send("log", m),

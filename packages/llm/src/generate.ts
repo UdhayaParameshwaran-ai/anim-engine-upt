@@ -5,13 +5,17 @@ import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from 
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
 import { CANVAS_CHOICE_SYSTEM, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
+import { detectLength, lengthSpec, type Length } from "./length.js";
 
 export interface GenerateOptions {
   client: LlmClient;
   assets?: AssetLibrary;
   /** "outline": plan, then write scenes in parallel. "single": one streamed pass. */
   mode?: "outline" | "single";
+  /** Exact scene range; wins over `length`. */
   scenes?: { min: number; max: number };
+  /** short | standard | long | deep: scenes, sentences and chapters together. Default: what the topic asks for in words, else standard. */
+  length?: Length;
   /** LLM repair attempts per scene before falling back to auto-fix. */
   maxRepairs?: number;
   /** Scenes written/repaired at once; default the client's limit, else 3. */
@@ -143,8 +147,11 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
   const relevant = assets.all();
   const ctx: Ctx = inherited
     ? { ...inherited, opts }
-    : { opts, system: systemPrompt(relevant), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0, started: performance.now(), trace: [] };
-  const range = opts.scenes ?? { min: 2, max: 4 };
+    : { opts, system: systemPrompt(relevant, lengthSpec(opts.length ?? detectLength(topic))), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0, started: performance.now(), trace: [] };
+  const length = opts.length ?? detectLength(topic);
+  const spec = lengthSpec(length);
+  const range = opts.scenes ?? spec.scenes;
+  if (length) opts.onLog?.(`length: ${spec.name} (${range.min}–${range.max} scenes)${opts.length ? "" : " · from the topic"}`);
   let header = "";
   // The look is set on the header, before the first scene plays; scenes are arranged as they arrive.
   const direct = (h: string) => (opts.director ? opts.director.header(h).trim() : h);
@@ -167,7 +174,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       opts.director?.recordArc(arc.open.name, arc.close.name);
       opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
     }
-    const ask = canvas ? canvasOutlinePrompt(topic, { min: 4, max: 6 }, recent) : outlinePrompt(topic, range, arc, recent);
+    const ask = canvas ? canvasOutlinePrompt(topic, spec.chapters, recent) : outlinePrompt(topic, range, arc, recent, spec);
     const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
     const outline = pruneCarry(routed.text);
@@ -190,7 +197,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text)) };
       // Only what this scene's kind needs, and the pictures that match its words.
       const planned = s.text.split("\n")[0]!;
-      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), isCanvas(s.text));
+      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), isCanvas(s.text), spec);
       const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
       // The plan's template or grid layout is binding: a scene line that changed it gets it back.
       const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);

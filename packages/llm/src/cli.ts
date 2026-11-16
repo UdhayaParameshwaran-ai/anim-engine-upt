@@ -4,11 +4,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { report } from "@anim/compiler";
 import { clientFromEnv, type ProviderName } from "./client.js";
+import { isLength } from "./length.js";
 import { generate, type CallTrace } from "./generate.js";
 
 /**
  *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|azure|gemini|groq|claude[,..]] [--model=<id>]
- *            [--single] [--scenes=2-4] [--domain=tech] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
+ *            [--single] [--scenes=2-4] [--length=short|standard|long|deep] [--domain=tech] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -22,7 +23,13 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 
 const slug = topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "video";
 const out = oi >= 0 ? args[oi + 1]! : `out/${slug}.txt`;
-const [min, max] = (value("scenes") ?? "2-4").split("-").map(Number);
+const scenesArg = value("scenes");
+const [min, max] = (scenesArg ?? "").split("-").map(Number);
+const length = value("length");
+if (length && !isLength(length)) {
+  console.error(`--length must be short, standard, long or deep (got ${length})`);
+  process.exit(2);
+}
 let client;
 try {
   client = clientFromEnv({
@@ -49,7 +56,9 @@ const result = await generate(topic, {
   ...(value("domain") === "tech" && { domain: "tech" as const }),
   ...(args.includes("--canvas") && { canvas: true }),
   ...(value("canvas") === "auto" && { canvas: "auto" as const }),
-  scenes: { min: min ?? 2, max: max ?? min ?? 4 },
+  ...(length && isLength(length) && { length }),
+  // An explicit --scenes wins over the length preset.
+  ...(scenesArg && min && { scenes: { min, max: max ?? min } }),
   onScene: (_, i) => console.error(`  scene ${i + 1} ready`),
   onLog: (m) => verbose && console.error(`  ${m.replace(/\n/g, "\n    ")}`),
 });

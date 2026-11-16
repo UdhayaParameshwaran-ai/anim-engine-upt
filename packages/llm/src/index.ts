@@ -21,4 +21,5 @@ export { ClaudeCodeClient, claudeCliAvailable, flatten, type ClaudeCodeOptions }
 export { bindCarry, checkScene, clean, generate, keepPlanned, routeOutline, split, tidyOutline, type CallKind, type CallTrace, type GenerateOptions, type GenerateResult } from "./generate.js";
 export { CANVAS_CHOICE_SYSTEM, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, CLOSINGS, DOMAINS, type Domain, fullPrompt, narrationOf, OPENINGS, outlinePrompt, outlineSystemPrompt, pictureList, pictureQuery, pruneCarry, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, shapeTable, storyArc, systemPrompt, templateCard, type ArcPart, type SceneKind, type StoryArc } from "./prompt.js";
 export { qualityIssues, qualityReport, type QualityIssue } from "./quality.js";
+export { detectLength, isLength, LENGTH_SPECS, LENGTHS, lengthForMinutes, lengthSpec, type Length, type LengthSpec } from "./length.js";
 export { ReplayClient, type ReplayOptions } from "./replay.js";
