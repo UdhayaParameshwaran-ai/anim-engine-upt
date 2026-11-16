@@ -84,19 +84,19 @@ const NEED_OK = `scene need "Needs" template=steps
 sun = icon:sun "Light"
 water = icon:droplet "Water"
 > Plants need {1}light and {2}water.
-1 pop sun
-2 pop water`;
+1 pop sun then visit sun
+2 pop water then visit water`;
 const LEAF_BROKEN = `Here is the scene:
 scene leaf "Leaf" template=spotlight
 main = asset:leaf
 > Look closely at {1 the leaf}.
 1 draw mian
-3 pulse main`;
+3 visit main`;
 const LEAF_OK = `scene leaf "Leaf" template=spotlight
 main = asset:leaf
 > Look closely at {1 the leaf}.
 1 draw main
-end pulse main`;
+end visit main`;
 
 // ---------------------------------------------------------------- client ---
 
@@ -433,7 +433,7 @@ describe("generation fixes from the traced run", () => {
 
   it("flags valid but weak scenes", () => {
     const boxes = 'scene a "A" template=compare\nleft = box "Light in"\nright = box "Light out"\n> Light goes {1}in and {2}out.\n1 fade left\n2 fade right';
-    expect(qualityIssues(HEADER, boxes).map((q) => q.code)).toEqual(["Q1"]);
+    expect(qualityIssues(HEADER, boxes).map((q) => q.code)).toEqual(["Q1", "Q4"]);
     const quote = 'scene q "Q" grid=L1-01\ns1 = quote "The sky is on fire." "— Atmospheric Scientist"\n> As one {1}scientist said.\n1 draw s1';
     expect(qualityIssues(HEADER, quote)).toMatchObject([{ code: "Q3", line: 2 }]);
     const missing = 'scene m "M" layout row\nx = asset:zzqqxx "Thing"\ny = icon:sun "Sun"\n> A {1}thing and the {2}sun.\n1 fade x\n2 pop y';
@@ -454,7 +454,7 @@ describe("generation fixes from the traced run", () => {
 
     const same = await generate("plants", { client: new ScriptedLlm(answer(weak)) });
     expect(same.script).toContain('box "Light"');
-    expect(same.quality).toHaveLength(1);
+    expect(same.quality).toHaveLength(2);
 
     const off = new ScriptedLlm(answer(NEED_OK));
     await generate("plants", { client: off, qualityRepairs: false });
@@ -548,8 +548,8 @@ sun = icon:sun "Light"
 water = icon:droplet "Water"
 a1 = arrow sun->water
 > Plants need light and then they need water.
-1 pop sun
-2 draw a1 then pop water`;
+1 pop sun then visit sun
+2 draw a1 then pop water then visit water`;
     const llm = new ScriptedLlm((last) => (last.startsWith("Plan a narrated") ? OUTLINE : last.includes('Write scene "need"') ? UNMARKED : last.includes('Write scene "leaf"') ? LEAF_OK : "x"));
     const r = await generate("plants", { client: llm });
     expect(r.ok).toBe(true);
@@ -728,7 +728,7 @@ describe("variety budget", () => {
     const entry = d.entry();
     expect(entry.arc).toEqual({ open: "question", close: "takeaway" });
     const next = new Director({ topic: "tcp", history: [{ ...entry, layouts: ["exchange:lanes", "L2-08", "tree:down"] }] });
-    expect(next.recent()).toEqual({ open: ["question"], close: ["takeaway"], templates: ["exchange", "tree"] });
+    expect(next.recent()).toMatchObject({ open: ["question"], close: ["takeaway"], templates: ["exchange", "tree"] });
   });
 
   it("the outline asks for other templates when recent videos leaned on some", () => {
@@ -836,5 +836,23 @@ describe("extras that fit no slot", () => {
     const r = checkScene(header, scene);
     expect(r.errorCodes).toContain("NAR411");
     expect(r.errors).toBeGreaterThan(0);
+  });
+});
+
+describe("quality Q4 beyond the story templates", () => {
+  const HEADER = 'video 1 "Plants"';
+  const body = (tpl: string, actions: string) => `scene a "A" template=${tpl}\na = icon:sun "Light"\nb = icon:droplet "Water"\nc = icon:leaf "Leaf"\n> {1}Light, {2}water, {3}leaf.\n${actions}`;
+  it("asks for motion in any diagram that only shows things appearing, but not in a title", () => {
+    for (const tpl of ["steps", "cycle", "timeline", "cards", "hub", "process", "stack"]) {
+      expect(qualityIssues(HEADER, body(tpl, "1 pop a\n2 pop b\n3 pop c")).map((q) => q.code), tpl).toContain("Q4");
+      expect(qualityIssues(HEADER, body(tpl, "1 pop a then visit a\n2 pop b\n3 pop c")).map((q) => q.code), tpl).not.toContain("Q4");
+    }
+    expect(qualityIssues(HEADER, body("title", "1 pop a\n2 pop b\n3 pop c")).map((q) => q.code)).not.toContain("Q4");
+  });
+
+  it("asks a number page to count its numbers", () => {
+    const page = (actions: string) => `scene n "N" grid=L1-02\ns = stat "95%" "of users"\n> {1}Ninety five percent.\n${actions}`;
+    expect(qualityIssues(HEADER, page("1 fade s")).map((q) => q.code)).toContain("Q4");
+    expect(qualityIssues(HEADER, page('1 fade s then count s from=0 to=95 suffix="%"')).map((q) => q.code)).not.toContain("Q4");
   });
 });

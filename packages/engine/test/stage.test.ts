@@ -468,3 +468,74 @@ describe("decor kits", () => {
     expect(soft.getAttribute("data-dash")).toBe("0.002 0.022");
   });
 });
+
+describe("code panels", () => {
+  async function stageOf(src: string): Promise<{ stage: Stage; tl: ResolvedTimeline }> {
+    const ir = compile(src).ir!;
+    const speech = await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) });
+    const tl = resolve(ir, speech);
+    return { stage: new Stage(container, ir, tl, { autoFit: false }), tl };
+  }
+  const SRC = (code: string, extra = "", actions = "1 fade code\n") => `video 1\nscene s "Code" template=code\ncode = ${code}${extra}\n> {1}One, {2}two, {3}three.\n${actions}`;
+  const LONG = 'code "a = 1\\nb = 2\\nc = 3\\nd = 4"';
+  const bar = (stage: Stage, i: number) => Number(node(stage, "s", "code").querySelectorAll("[data-part]")[i]!.querySelector("[data-bar]")!.getAttribute("opacity"));
+  const partOpacity = (stage: Stage, i: number) => Number((node(stage, "s", "code").querySelectorAll("[data-part]")[i] as SVGElement).style.opacity || 1);
+
+  it("picks a look that suits the snippet unless one is named", async () => {
+    const el = async (src: string) => (await stageOf(src)).stage;
+    const fill = async (src: string) => node(await el(src), "s", "code").querySelector("rect")!.getAttribute("fill");
+    expect(await fill(SRC('terminal "$ ls\\nfile"'))).toBe("#080b08");
+    expect(await fill(SRC(LONG, " lang=py", "1 fade code\n"))).toBe("#0f1623");
+    expect(await fill(SRC(LONG, " lang=py look=light"))).toBe("#fbfbfc");
+    // A config file gets a tab with its file name; a few lines get a card without a title bar.
+    expect(node(await el(SRC(LONG, " lang=yaml")), "s", "code").textContent).toContain("main.yaml");
+    expect(node(await el(SRC(LONG, " lang=yaml file=ci.yml")), "s", "code").textContent).toContain("ci.yml");
+    expect(node(await el(SRC('code "a = 1\\nb = 2"', " lang=py")), "s", "code").querySelectorAll("circle")).toHaveLength(0);
+    expect(node(await el(SRC(LONG, " lang=py")), "s", "code").querySelectorAll("circle")).toHaveLength(3);
+  });
+
+  it("crosses a line out in red and signs it; a line marked ok gets a green plus", async () => {
+    const { stage, tl } = await stageOf(SRC(LONG, " lang=py", "1 fade code then strike code.2\n2 mark code.3 as=ok\n"));
+    const tw = tl.tracks.find((t) => t.target === "s/code.2" && t.prop === "strike")!;
+    expect(tw).toBeDefined();
+    stage.render(tw.t1 + 0.1);
+    const parts = node(stage, "s", "code").querySelectorAll("[data-part]");
+    expect(parts[1]!.querySelector("[data-sign]")!.textContent).toBe("−");
+    expect(Number(parts[1]!.querySelector("[data-strike]")!.getAttribute("width"))).toBeGreaterThan(20);
+    const ok = tl.tracks.find((t) => t.target === "s/code.3" && t.prop === "tint")!;
+    stage.render(ok.t1 + 0.1);
+    expect(parts[2]!.querySelector("[data-sign]")!.textContent).toBe("+");
+    expect(bar(stage, 2)).toBeGreaterThan(0.2);
+  });
+
+  it("lights one line at a time: visiting the next releases the last", async () => {
+    const { stage, tl } = await stageOf(SRC(LONG, " lang=py", "1 fade code\n1 visit code.1\n2 visit code.3\n"));
+    const second = tl.tracks.find((t) => t.target === "s/code.3" && t.prop === "tint" && t.to === 1)!;
+    stage.render(second.t1 + 0.4);
+    expect(bar(stage, 0)).toBeLessThan(0.02);
+    expect(bar(stage, 2)).toBeGreaterThan(0.2);
+    expect(node(stage, "s", "code").querySelectorAll("[data-part]")[2]!.querySelector("[data-sign]")!.textContent).toBe("▶");
+  });
+
+  it("a walk-through keeps the other lines dim", async () => {
+    const { stage, tl } = await stageOf(SRC(LONG, " lang=py anim=walk", "1 fade code then visit code.2\n"));
+    const v = tl.tracks.find((t) => t.target === "s/code.2" && t.prop === "tint")!;
+    stage.render(v.t1 + 0.2);
+    expect(partOpacity(stage, 1)).toBeCloseTo(1, 1);
+    expect(partOpacity(stage, 0)).toBeLessThan(0.5);
+  });
+
+  it("types with a caret after the last typed character, or brings whole lines in with anim=lines", async () => {
+    const typed = await stageOf(SRC('code "ab cd"', " lang=py", "1 write code.1\n"));
+    const w = typed.tl.tracks.find((t) => t.target === "s/code.1" && t.prop === "reveal")!;
+    typed.stage.render((w.t0 + w.t1) / 2);
+    const part = node(typed.stage, "s", "code").querySelector("[data-part]")!;
+    expect(Number(part.querySelector("[data-caret]")!.getAttribute("opacity"))).toBeGreaterThan(0.5);
+    const whole = await stageOf(SRC('code "ab cd"', " lang=py anim=lines", "1 write code.1\n"));
+    const w2 = whole.tl.tracks.find((t) => t.target === "s/code.1" && t.prop === "reveal")!;
+    whole.stage.render(w2.t0 + (w2.t1 - w2.t0) * 0.3);
+    const shown = [...node(whole.stage, "s", "code").querySelectorAll("[data-part] tspan")].filter((t) => (t as SVGElement).style.opacity === "1");
+    expect(shown.length).toBe(4);
+    expect(node(whole.stage, "s", "code").querySelector("[data-caret]")!.getAttribute("opacity")).toBe("0");
+  });
+});

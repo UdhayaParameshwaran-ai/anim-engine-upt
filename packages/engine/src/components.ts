@@ -392,67 +392,126 @@ function art(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme
   }
 }
 
-/** Fixed colors of code panels: the same dark editor in every look, so code always reads as code. */
-const CODE = { bg: "#0f1623", bar: "#1a2333", text: "#e6edf3", muted: "#7d8590", keyword: "#ff7b72", string: "#a5d6ff", number: "#79c0ff", comment: "#8b949e", fn: "#d2a8ff", prompt: "#7ee787", output: "#b1bac4" };
+/** The colors of a code panel. Dark is the editor of every look; light and terminal are the other two. */
+interface CodePalette {
+  bg: string;
+  bar: string;
+  text: string;
+  muted: string;
+  keyword: string;
+  string: string;
+  number: string;
+  comment: string;
+  fn: string;
+  prompt: string;
+  output: string;
+  edge: string;
+}
+const DARK: CodePalette = { bg: "#0f1623", bar: "#1a2333", text: "#e6edf3", muted: "#7d8590", keyword: "#ff7b72", string: "#a5d6ff", number: "#79c0ff", comment: "#8b949e", fn: "#d2a8ff", prompt: "#7ee787", output: "#9da7b3", edge: "#27324a" };
+const LIGHT: CodePalette = { bg: "#fbfbfc", bar: "#eceef2", text: "#24292f", muted: "#8c959f", keyword: "#cf222e", string: "#0a3069", number: "#0550ae", comment: "#6e7781", fn: "#8250df", prompt: "#1a7f37", output: "#57606a", edge: "#d0d7de" };
+const TERM: CodePalette = { ...DARK, bg: "#080b08", bar: "#141a14", text: "#d8f3dc", muted: "#6b8f72", output: "#9db8a3", edge: "#1f2a1f" };
 const KEYWORDS = new Set(
   "const let var function return if else for while do switch case break continue new class extends import export from default async await try catch finally throw typeof instanceof in of yield def lambda pass elif not and or is None True False self print select from where join on group by order having insert into values update set delete create table index primary key foreign references as limit offset distinct null true false public private static void int string bool fn let mut impl struct enum match use mod pub get post put patch".split(" "),
 );
 
+export type CodeLook = "window" | "tabs" | "card" | "light" | "terminal";
+const CONFIG_LANGS = new Set(["yaml", "yml", "json", "toml", "ini", "dockerfile", "env", "xml", "html", "css"]);
+
+/** Which of the five panels a snippet gets: its own look=, else what suits it (a terminal, a config file, a few lines, a program). */
+export function codeLook(el: ElementIR, lineCount: number): CodeLook {
+  const set = String(el.params.look ?? "");
+  if (set === "window" || set === "tabs" || set === "card" || set === "light" || set === "terminal") return set;
+  if (el.kind === "terminal") return "terminal";
+  if (CONFIG_LANGS.has(String(el.params.lang ?? "").toLowerCase())) return "tabs";
+  return lineCount <= 3 ? "card" : "window";
+}
+
 /** Splits one line of code into colored tokens (strings, comments, numbers, keywords, calls, the rest). */
-function tokens(line: string, terminal: boolean): { text: string; color: string }[] {
+function tokens(line: string, terminal: boolean, pal: CodePalette): { text: string; color: string }[] {
   if (terminal) {
-    if (line.startsWith("$ ")) return [{ text: "$ ", color: CODE.prompt }, { text: line.slice(2), color: CODE.text }];
-    return [{ text: line, color: CODE.output }];
+    if (line.startsWith("$ ")) return [{ text: "$ ", color: pal.prompt }, { text: line.slice(2), color: pal.text }];
+    return [{ text: line, color: pal.output }];
   }
   const out: { text: string; color: string }[] = [];
   const re = /(\/\/.*$|#.*$|--.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()|([A-Za-z_][A-Za-z0-9_]*)|(\s+|.)/g;
   for (const m of line.matchAll(re)) {
     const [t, comment, str, num, call, word] = m;
-    const color = comment ? CODE.comment : str ? CODE.string : num ? CODE.number : call ? CODE.fn : word && KEYWORDS.has(word.toLowerCase()) ? CODE.keyword : CODE.text;
+    const color = comment ? pal.comment : str ? pal.string : num ? pal.number : call ? pal.fn : word && KEYWORDS.has(word.toLowerCase()) ? pal.keyword : pal.text;
     out.push({ text: t, color });
   }
   return out;
 }
 
 /**
- * A code or terminal panel: a dark editor with a title bar, line numbers
- * (code) or a prompt (terminal). Each line is a part (`code.3`) with a
- * highlight bar behind it; characters reveal in order for `write`.
+ * A code or terminal panel in one of five looks (window, tabs, card, light, terminal). Each line is a part
+ * (`code.3`) with a bar behind it, a sign in the gutter (+ added, − removed, ▶ current), a strike-through and
+ * a caret; the stage drives them: `write` types, `visit` lights one line, `mark` leaves a status, `strike` crosses out.
  */
 function codePanel(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme: Theme): void {
   const { w, h } = el.box;
   const terminal = el.kind === "terminal";
   const lines = (el.texts[0] ?? "").split("\n");
-  const barH = 44;
-  const padX = terminal ? 28 : 72;
+  const look = codeLook(el, lines.length);
+  const pal = look === "light" ? LIGHT : look === "terminal" ? TERM : DARK;
+  const barH = look === "card" ? 0 : look === "terminal" ? 40 : 44;
+  const numbered = !terminal && look !== "card";
+  const padX = terminal ? 28 : numbered ? 72 : 36;
   const longest = Math.max(8, ...lines.map((l) => l.length));
-  const font = Math.max(14, Math.min(40, (h - barH - 36) / (lines.length * 1.55), (w - padX - 28) / (longest * 0.6)));
+  const top0 = barH ? 18 : 30;
+  const font = Math.max(14, Math.min(40, (h - barH - top0 - 18) / (lines.length * 1.55), (w - padX - 28) / (longest * 0.6)));
   const lh = font * 1.55;
+  const cw = font * 0.6;
   const radius = Math.min(theme.radius + 6, 18);
-  g.append(svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: radius, fill: CODE.bg, stroke: "none" }));
-  g.append(svg(doc, "path", { d: `M${round(-w / 2)} ${round(-h / 2 + barH)}V${round(-h / 2 + radius)}a${radius} ${radius} 0 0 1 ${radius} ${-radius}H${round(w / 2 - radius)}a${radius} ${radius} 0 0 1 ${radius} ${radius}V${round(-h / 2 + barH)}Z`, fill: CODE.bar, stroke: "none" }));
-  ["#ff5f57", "#febc2e", "#28c840"].forEach((c, i) => g.append(svg(doc, "circle", { cx: round(-w / 2 + 26 + i * 22), cy: round(-h / 2 + barH / 2), r: 6.5, fill: c, stroke: "none" })));
+  const mono = theme.mono;
+  g.append(svg(doc, "rect", { x: -w / 2, y: -h / 2, width: w, height: h, rx: radius, fill: pal.bg, stroke: look === "light" || look === "card" ? pal.edge : "none", "stroke-width": 2 }));
+  const label = (txt: string, attrs: Record<string, string | number>) => {
+    const t = svg(doc, "text", { "font-size": 18, "font-family": mono, fill: pal.muted, stroke: "none", ...attrs });
+    t.textContent = txt;
+    g.append(t);
+  };
+  if (barH) {
+    g.append(svg(doc, "path", { d: `M${round(-w / 2)} ${round(-h / 2 + barH)}V${round(-h / 2 + radius)}a${radius} ${radius} 0 0 1 ${radius} ${-radius}H${round(w / 2 - radius)}a${radius} ${radius} 0 0 1 ${radius} ${radius}V${round(-h / 2 + barH)}Z`, fill: pal.bar, stroke: "none" }));
+  }
   const tag = terminal ? "terminal" : String(el.params.lang ?? "") || "code";
-  const tagText = svg(doc, "text", { x: round(w / 2 - 20), y: round(-h / 2 + barH / 2 + 6), "text-anchor": "end", "font-size": 18, "font-family": theme.mono, fill: CODE.muted, stroke: "none" });
-  tagText.textContent = tag;
-  g.append(tagText);
-  const top = -h / 2 + barH + 18;
+  if (look === "window" || look === "light") {
+    ["#ff5f57", "#febc2e", "#28c840"].forEach((c, i) => g.append(svg(doc, "circle", { cx: round(-w / 2 + 26 + i * 22), cy: round(-h / 2 + barH / 2), r: 6.5, fill: c, stroke: "none" })));
+    label(tag, { x: round(w / 2 - 20), y: round(-h / 2 + barH / 2 + 6), "text-anchor": "end" });
+  } else if (look === "terminal") {
+    ["#3a463c", "#3a463c", "#3a463c"].forEach((c, i) => g.append(svg(doc, "circle", { cx: round(-w / 2 + 26 + i * 22), cy: round(-h / 2 + barH / 2), r: 6, fill: c, stroke: "none" })));
+    label("bash", { x: 0, y: round(-h / 2 + barH / 2 + 6), "text-anchor": "middle" });
+  } else if (look === "tabs") {
+    const file = String(el.params.file ?? "") || `main.${String(el.params.lang ?? "") || "txt"}`;
+    const tabW = Math.min(w - 40, 40 + file.length * 11);
+    g.append(svg(doc, "path", { d: `M${round(-w / 2 + 14)} ${round(-h / 2 + barH)}V${round(-h / 2 + 12)}a8 8 0 0 1 8 -8H${round(-w / 2 + 14 + tabW - 8)}a8 8 0 0 1 8 8V${round(-h / 2 + barH)}Z`, fill: pal.bg, stroke: "none" }));
+    g.append(svg(doc, "rect", { x: round(-w / 2 + 14), y: round(-h / 2 + 4), width: tabW, height: 3, rx: 1.5, fill: theme.accent, stroke: "none" }));
+    label(file, { x: round(-w / 2 + 30), y: round(-h / 2 + barH / 2 + 8), fill: pal.text });
+  } else {
+    // card: no title bar, just the language in a corner
+    label(tag, { x: round(w / 2 - 20), y: round(-h / 2 + 30), "text-anchor": "end" });
+  }
+  if (look === "tabs") g.append(svg(doc, "rect", { x: round(-w / 2 + padX - 10), y: round(-h / 2 + barH), width: 1.5, height: round(h - barH), fill: pal.edge, stroke: "none" }));
+  const top = -h / 2 + barH + top0;
+  const anim = String(el.params.anim ?? "type");
   lines.forEach((line, i) => {
     const y = top + i * lh;
-    const part = svg<SVGGElement>(doc, "g", { "data-part": String(i + 1) });
+    const part = svg<SVGGElement>(doc, "g", { "data-part": String(i + 1), "data-anim": anim, "data-dark": pal === LIGHT ? "0" : "1", "data-x0": round(-w / 2 + padX), "data-cw": round(cw, 3), "data-len": line.length });
     const bar = svg(doc, "rect", { x: round(-w / 2 + 6), y: round(y), width: round(w - 12), height: round(lh), rx: 6, fill: theme.accent, stroke: "none", opacity: 0, "data-bar": "" });
     part.append(bar);
-    if (!terminal) {
-      const num = svg(doc, "text", { x: round(-w / 2 + padX - 22), y: round(y + lh * 0.7), "text-anchor": "end", "font-size": round(font * 0.8), "font-family": theme.mono, fill: CODE.muted, stroke: "none" });
+    // The sign in the gutter: + for a line added, − for one removed, ▶ for the line being talked about.
+    const sign = svg(doc, "text", { x: round(-w / 2 + 17), y: round(y + lh * 0.7), "text-anchor": "middle", "font-size": round(font * 0.7), "font-family": mono, fill: pal.muted, stroke: "none", opacity: 0, "data-sign": "" });
+    part.append(sign);
+    if (numbered) {
+      const num = svg(doc, "text", { x: round(-w / 2 + padX - 22), y: round(y + lh * 0.7), "text-anchor": "end", "font-size": round(font * 0.8), "font-family": mono, fill: pal.muted, stroke: "none" });
       num.textContent = String(i + 1);
       part.append(num);
     }
-    const t = svg(doc, "text", { x: round(-w / 2 + padX), y: round(y + lh * 0.7), "font-size": round(font), "font-family": theme.mono, stroke: "none", "xml:space": "preserve" });
+    const t = svg(doc, "text", { x: round(-w / 2 + padX), y: round(y + lh * 0.7), "font-size": round(font), "font-family": mono, stroke: "none", "xml:space": "preserve" });
     t.setAttribute("style", "white-space: pre");
     const chars: Element[] = [];
-    for (const tok of tokens(line, terminal)) {
+    let col = 0;
+    for (const tok of tokens(line, terminal, pal)) {
       for (const ch of tok.text) {
-        const c = svg(doc, "tspan", { fill: tok.color });
+        const c = svg(doc, "tspan", { fill: tok.color, "data-i": col++ });
         c.textContent = ch;
         t.append(c);
         if (ch !== " ") {
@@ -462,6 +521,8 @@ function codePanel(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR,
       }
     }
     part.append(t);
+    part.append(svg(doc, "rect", { x: round(-w / 2 + padX), y: round(y + lh * 0.52), width: 0, height: 3, rx: 1.5, fill: pal.keyword, stroke: "none", opacity: 0, "data-strike": "" }));
+    part.append(svg(doc, "rect", { x: round(-w / 2 + padX), y: round(y + lh * 0.16), width: round(font * 0.12, 2), height: round(font * 1.1), fill: pal.text, stroke: "none", opacity: 0, "data-caret": "" }));
     inst.lines.push(chars);
     addPart(inst, String(i + 1), part);
     g.append(part);

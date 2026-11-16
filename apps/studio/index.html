@@ -38,54 +38,11 @@
           <form id="gen-form" class="composer">
             <textarea id="topic" rows="3" placeholder="How vaccines train the immune system…" aria-label="Topic"></textarea>
             <div class="composer-bar">
-              <div class="chips">
-                <label class="chip" title="LLM provider">
-                  <select id="provider" aria-label="Provider">
-                    <option value="auto">Auto</option>
-                    <option value="openrouter">OpenRouter</option>
-                    <option value="azure">Azure</option>
-                    <option value="gemini">Gemini</option>
-                    <option value="groq">Groq</option>
-                    <option value="claude" title="Your Claude subscription, through the Claude Code CLI">Claude (subscription)</option>
-                    <option value="replay">Replay</option>
-                  </select>
-                </label>
-                <label class="chip" id="model-row" title="Model for this provider" hidden>
-                  <select id="model" aria-label="Model"></select>
-                </label>
-                <label class="chip" title="Subject area: its own templates are preferred">
-                  <select id="domain" aria-label="Domain">
-                    <option value="">General</option>
-                    <option value="tech">Software &amp; tech</option>
-                  </select>
-                </label>
-                <label class="chip" title="Length: scenes and sentences. Auto reads it from the topic (\"a long video\", \"5 minutes\").">
-                  <select id="length" aria-label="Length">
-                    <option value="">Length: auto</option>
-                    <option value="short">Short (&lt;1 min)</option>
-                    <option value="standard">Standard (1–2 min)</option>
-                    <option value="long">Long (~3 min)</option>
-                    <option value="deep">Deep (5+ min)</option>
-                  </select>
-                </label>
-                <label class="chip" title="Outline: plan first, then write each scene. Single: one pass.">
-                  <select id="mode" aria-label="Mode">
-                    <option value="outline">Outline</option>
-                    <option value="single">Single pass</option>
-                    <option value="canvas">One diagram</option>
-                    <option value="auto">Auto: diagram or scenes</option>
-                  </select>
-                </label>
-                <label class="chip" title="Who picks the look, motion and layouts">
-                  <select id="style" aria-label="Style">
-                    <option value="director">Fresh style</option>
-                    <option value="llm">LLM style</option>
-                  </select>
-                </label>
-                <label class="chip" id="replay-row" title="Example script to replay" hidden>
-                  <select id="replay-example" aria-label="Example"></select>
-                </label>
-              </div>
+              <button type="button" class="settings-btn" id="prompts-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings-panel" title="Provider, length, video shape, wording and prompts">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M19 6h1M4 12h3M13 12h7M4 18h11M21 18h-1" /><circle cx="16" cy="6" r="2.2" /><circle cx="10" cy="12" r="2.2" /><circle cx="18" cy="18" r="2.2" /></svg>
+                <span>Settings</span><span id="prompts-dot" class="dot" title="Some settings are changed" hidden></span>
+              </button>
+              <span class="grow"></span>
               <button id="stop" type="button" class="icon-btn round" title="Stop" aria-label="Stop" hidden>
                 <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" /></svg>
               </button>
@@ -119,8 +76,8 @@
               <label class="setting" title="Narration voice">
                 <span>Voice</span>
                 <select id="tts">
-                  <option value="kokoro">Kokoro (best voice)</option>
                   <option value="piper">Piper (fast)</option>
+                  <option value="kokoro">Kokoro (best voice)</option>
                   <option value="beeps">Beeps (instant)</option>
                 </select>
               </label>
@@ -182,6 +139,81 @@
         </div>
       </section>
     </main>
+
+    <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+    <aside id="settings-panel" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+      <header class="sheet-head">
+        <div>
+          <h2 id="sheet-title">Settings</h2>
+          <p>Applies to the next video you generate.</p>
+        </div>
+        <button type="button" id="sheet-close" class="icon-btn" title="Close (Esc)" aria-label="Close settings">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </header>
+      <nav class="sheet-tabs" role="tablist" aria-label="Settings sections">
+        <button type="button" role="tab" data-sheet-tab="video" aria-selected="true">Video<i hidden></i></button>
+        <button type="button" role="tab" data-sheet-tab="wording" aria-selected="false">Wording<i hidden></i></button>
+        <button type="button" role="tab" data-sheet-tab="planning" aria-selected="false">Length &amp; plan<i hidden></i></button>
+        <button type="button" role="tab" data-sheet-tab="writing" aria-selected="false">Scene writing<i hidden></i></button>
+        <button type="button" role="tab" data-sheet-tab="prompts" aria-selected="false">Prompts<i hidden></i></button>
+      </nav>
+      <div class="sheet-body">
+        <section class="sheet-pane" data-pane="video">
+          <p class="sheet-intro">Which model writes the video, what it is about, how long it runs and how it looks.</p>
+              <div class="sgrid">
+                <label class="sfield"><span>Provider</span>
+                  <select id="provider" aria-label="Provider">
+                    <option value="auto">Auto</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="azure">Azure</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="groq">Groq</option>
+                    <option value="claude" title="Your Claude subscription, through the Claude Code CLI">Claude (subscription)</option>
+                    <option value="replay">Replay</option>
+                  </select>
+                </label>
+                <label class="sfield" id="model-row" hidden><span>Model</span>
+                  <select id="model" aria-label="Model"></select>
+                </label>
+                <label class="sfield" id="replay-row" hidden><span>Example to replay</span>
+                  <select id="replay-example" aria-label="Example"></select>
+                </label>
+                <label class="sfield" title="Its own templates are preferred"><span>Subject area</span>
+                  <select id="domain" aria-label="Domain">
+                    <option value="">General</option>
+                    <option value="tech">Software &amp; tech</option>
+                  </select>
+                </label>
+                <label class="sfield" title="Scenes and sentences. Auto reads it from the topic (&quot;a long video&quot;, &quot;5 minutes&quot;)."><span>Length</span>
+                  <select id="length" aria-label="Length">
+                    <option value="">Auto (from the topic)</option>
+                    <option value="short">Short (under 1 min)</option>
+                    <option value="standard">Standard (1–2 min)</option>
+                    <option value="long">Long (about 3 min)</option>
+                    <option value="deep">Deep (5+ min)</option>
+                  </select>
+                </label>
+                <label class="sfield" title="Outline: plan the scenes, then write each one with its own call. One diagram: one diagram that grows chapter by chapter."><span>Video shape</span>
+                  <select id="mode" aria-label="Mode">
+                    <option value="outline">Outline: separate scenes</option>
+                    <option value="canvas">One growing diagram</option>
+                    <option value="auto">Auto: the model chooses</option>
+                  </select>
+                </label>
+              </div>
+
+        </section>
+        <section class="sheet-pane" id="pane-wording" data-pane="wording" hidden></section>
+        <section class="sheet-pane" id="pane-planning" data-pane="planning" hidden></section>
+        <section class="sheet-pane" id="pane-writing" data-pane="writing" hidden></section>
+        <section class="sheet-pane" id="pane-prompts" data-pane="prompts" hidden></section>
+      </div>
+      <footer class="sheet-foot">
+        <button type="button" id="sheet-reset" class="btn-quiet">Reset wording, planning and prompts</button>
+        <button type="button" id="sheet-done" class="btn-main">Done</button>
+      </footer>
+    </aside>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

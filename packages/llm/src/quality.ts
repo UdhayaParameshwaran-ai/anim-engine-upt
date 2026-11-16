@@ -21,7 +21,7 @@ const FRAME = new Set(["title", "footer", "arrow", "line", "edge"]);
 const VAGUE = /^\W*(an?\s+)?(unknown|anonymous|someone|expert|scientist|researcher|atmospheric scientist|professor|doctor|teacher|historian|author|source)s?\W*$/i;
 
 /** Templates whose subject is something that happens (messages, state changes, operations), not just things that exist. */
-const STORY_TEMPLATES = new Set(["exchange", "states", "structure", "tree", "gitgraph"]);
+const STORY_TEMPLATES = new Set(["exchange", "states", "structure", "tree", "gitgraph", "architecture", "steps", "flow", "stack", "cycle", "timeline", "process", "anatomy", "compare", "cards", "hub", "converge", "diverge", "spotlight", "code"]);
 /** Verbs that show something happening, not only appearing. */
 const STORY_VERBS = new Set(["send", "stream", "visit", "mark", "shake", "drop", "lift", "swap", "move", "frame", "focus", "set", "count", "strike", "clone", "merge"]);
 
@@ -59,11 +59,19 @@ export function qualityIssues(header: string, sceneText: string): QualityIssue[]
   if (tpl && STORY_TEMPLATES.has(tpl)) {
     const verbs = scene.steps.flatMap((st) => st.beats.flatMap((b) => b.actions.flatMap((a) => a.calls.map((c) => c.verb))));
     if (verbs.length && !verbs.some((v) => STORY_VERBS.has(v))) {
-      const hint = tpl === "exchange" ? "show each message with send (a packet travels along it)" : tpl === "structure" ? "operate on the cells (drop, lift, swap, visit, mark)" : "move through it with visit and mark";
+      const hint = tpl === "exchange" ? "show each message with send (a packet travels along it)" : tpl === "structure" ? "operate on the cells (drop, lift, swap, visit, mark)" : tpl === "compare" ? "visit each side as it is described, then mark the better one ok or strike the weaker" : tpl === "code" ? "visit each line as it is explained (or strike an old line and mark the new one ok)" : "move through it with visit (a ring follows the item being described) and mark";
       issues.push({ code: "Q4", message: `scene \`${scene.id}\` only makes things appear; show what happens: ${hint}` });
     }
   }
+  // Q4 for number pages: a stat or gauge that only appears, when it could count up.
+  if (scene.attrs.grid && !verbsOf(scene).some((v) => STORY_VERBS.has(v)) && elements.some((e) => ["stat", "multistat", "gauge", "progress"].includes(e.kind))) {
+    issues.push({ code: "Q4", message: `scene \`${scene.id}\` only makes things appear; let the numbers move: count a stat from=0 to=<value> (suffix="%" or prefix="$")` });
+  }
   return issues;
+}
+
+function verbsOf(scene: { steps: { beats: { actions: { calls: { verb: string }[] }[] }[] }[] }): string[] {
+  return scene.steps.flatMap((st) => st.beats.flatMap((b) => b.actions.flatMap((a) => a.calls.map((c) => c.verb))));
 }
 
 /** Issues as report lines, matching the diagnostic format used in repair prompts. */

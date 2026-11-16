@@ -39,6 +39,9 @@ export interface Recent {
   close: string[];
   /** Diagram templates of the last few videos, one entry per scene. */
   templates: string[];
+  /** Looks and motions of the last few videos, so the planner can pick differently. */
+  looks: string[];
+  motions: string[];
 }
 
 export interface DirectOptions {
@@ -48,8 +51,11 @@ export interface DirectOptions {
   history?: HistoryEntry[];
   /** Choices the user fixed (brand kit, "make it playful"); never changed. */
   lock?: Partial<Pick<StyleChoice, "theme" | "motion" | "kit">>;
-  /** Keep a look/motion the script already names unless it was used recently. Default true. */
-  respectScript?: boolean;
+  /**
+   * Keep a look/motion the script already names: true unless it was used recently (the default),
+   * "always" even then (the LLM chooses look and motion; the Director only fills in what it left out).
+   */
+  respectScript?: boolean | "always";
 }
 
 type Weights = Record<string, number>;
@@ -195,7 +201,7 @@ export class Director {
     // Look: the user's lock, else the script's own choice if it isn't recent, else the mood's pick.
     const scriptLook = setting("theme");
     let theme = opts.lock?.theme;
-    if (!theme && respect && scriptLook && ALL_LOOKS.has(scriptLook) && !recent(3).some((h) => h.theme === scriptLook)) theme = scriptLook;
+    if (!theme && respect && scriptLook && ALL_LOOKS.has(scriptLook) && (respect === "always" || !recent(3).some((h) => h.theme === scriptLook))) theme = scriptLook;
     if (!theme) {
       const w: Weights = {};
       for (const t of THEMES) w[t] = (mood.looks[t] ?? 0.15) * novelty((h) => h.theme === t, history);
@@ -204,7 +210,7 @@ export class Director {
 
     const scriptMotion = setting("motion");
     let motion = opts.lock?.motion;
-    if (!motion && respect && scriptMotion && ALL_MOTIONS.has(scriptMotion) && !recent(2).some((h) => h.motion === scriptMotion)) motion = scriptMotion;
+    if (!motion && respect && scriptMotion && ALL_MOTIONS.has(scriptMotion) && (respect === "always" || !recent(2).some((h) => h.motion === scriptMotion))) motion = scriptMotion;
     if (!motion) {
       const w: Weights = {};
       for (const m of ALL_MOTIONS) w[m] = (mood.motions[m] ?? 0.2) * (PAIRS[theme]?.[m] ?? 1) * novelty((h) => h.motion === m, history);
@@ -265,6 +271,8 @@ export class Director {
       open: last.flatMap((h) => (h.arc ? [h.arc.open] : [])),
       close: last.flatMap((h) => (h.arc ? [h.arc.close] : [])),
       templates: last.flatMap((h) => h.layouts.filter((l) => /^[a-z]/.test(l)).map((l) => l.split(":")[0]!)),
+      looks: last.map((h) => h.theme),
+      motions: last.map((h) => h.motion),
     };
   }
 

@@ -81,8 +81,8 @@ title = title "Plant vs animal cells"
 left = asset:cell.plant "Plant cell"
 right = asset:cell.animal "Animal cell"
 > {1}A plant cell has a wall; {2}an animal cell does not.
-1 write title then fade left
-2 fade right`,
+1 write title then fade left then visit left
+2 fade right then visit right`,
   },
   steps: {
     shape: "sequence",
@@ -103,9 +103,9 @@ s1 = icon:droplet "Water the seed"
 s2 = icon:sprout "It sprouts"
 s3 = asset:tree "It grows"
 > {1}Water the seed, {2}it sprouts, {3}and it grows.
-1 write title then pop s1
-2 pop s2
-3 pop s3`,
+1 write title then pop s1 then visit s1
+2 pop s2 then visit s2
+3 pop s3 then visit s3 then mark s3 as=ok`,
   },
   cycle: {
     shape: "loop",
@@ -121,9 +121,9 @@ c1 = icon:sun "Evaporation"
 c2 = icon:cloud "Condensation"
 c3 = icon:droplet "Rain"
 > {1}Water rises, {2}forms clouds {3}and falls again.
-1 fade center then pop c1
-2 pop c2
-3 pop c3`,
+1 fade center then pop c1 then visit c1
+2 pop c2 then visit c2
+3 pop c3 then visit c3`,
   },
   flow: {
     shape: "graph",
@@ -141,9 +141,9 @@ n3 = node "Keep working"
 e1 = n1 -> n2 "yes"
 e2 = n1 -> n3 "no"
 > {1}If you are hungry, {2}eat; {3}otherwise keep working.
-1 pop n1
-2 draw e1 then pop n2
-3 draw e2 then pop n3`,
+1 pop n1 then visit n1
+2 draw e1 then pop n2 then visit n2
+3 draw e2 then pop n3 then visit n3`,
   },
   timeline: {
     shape: "timeline",
@@ -159,9 +159,9 @@ t1 = box "1796 · First vaccine"
 t2 = box "1955 · Polio vaccine"
 t3 = box "2020 · mRNA vaccines"
 > {1}The first vaccine came in 1796, {2}polio in 1955, {3}mRNA in 2020.
-1 pop t1
-2 pop t2
-3 pop t3`,
+1 pop t1 then visit t1
+2 pop t2 then visit t2
+3 pop t3 then visit t3`,
   },
   hub: {
     shape: "hub",
@@ -178,9 +178,9 @@ h2 = icon:database "Data"
 h3 = icon:user "Users"
 > {1}A cloud app needs {2}servers, {3}data {4}and users.
 1 pop center
-2 pop h1
-3 pop h2
-4 pop h3`,
+2 pop h1 then visit h1
+3 pop h2 then visit h2
+4 pop h3 then visit h3`,
   },
   cards: {
     shape: "collection",
@@ -198,9 +198,9 @@ g2 = icon:wind "Wind"
 g3 = icon:droplet "Hydro"
 > {1}Clean energy comes from {2}the sun, {3}wind {4}and water.
 1 write title
-2 pop g1
-3 pop g2
-4 pop g3`,
+2 pop g1 then visit g1
+3 pop g2 then visit g2
+4 pop g3 then visit g3`,
   },
   spotlight: {
     shape: "focus",
@@ -217,8 +217,8 @@ l1 = label "Atria"
 l2 = label "Ventricles"
 > {1}The heart has {2}two atria {3}and two ventricles.
 1 fade main
-2 write l1
-3 write l2`,
+2 write l1 then visit l1
+3 write l2 then visit l2`,
   },
   converge: {
     shape: "many-to-one",
@@ -235,8 +235,8 @@ i1 = icon:sun "Sunlight"
 i2 = icon:droplet "Water"
 > {1}A leaf needs {2}sunlight {3}and water.
 1 fade result
-2 pop i1
-3 pop i2`,
+2 pop i1 then visit i1
+3 pop i2 then visit i2 then mark result as=ok`,
   },
   diverge: {
     shape: "one-to-many",
@@ -253,8 +253,8 @@ o1 = icon:bolt "Energy"
 o2 = asset:tree "Growth"
 > {1}Glucose gives the plant {2}energy {3}and growth.
 1 fade source
-2 pop o1
-3 pop o2`,
+2 pop o1 then visit o1
+3 pop o2 then visit o2`,
   },
   process: {
     shape: "transform",
@@ -271,8 +271,8 @@ i2 = icon:droplet "Water"
 process = asset:leaf "Photosynthesis"
 o1 = icon:cube "Glucose"
 > {1}Light and water enter the leaf {2}and come out as glucose.
-1 pop i1,i2 /0.2 then fade process
-2 pop o1`,
+1 pop i1,i2 /0.2 then fade process then visit process
+2 pop o1 then mark o1 as=ok`,
   },
 
   // ------------------------------------------------- software & tech concepts
@@ -344,10 +344,10 @@ http = box "HTTP"
 tcp = box "TCP"
 ip = box "IP"
 > Your {1}app talks HTTP, which {2}rides on TCP.
-1 fade app then fade http
-2 fade tcp
+1 fade app then fade http then visit http
+2 fade tcp then visit tcp
 > And TCP is carried by {1}IP across the internet.
-1 fade ip`,
+1 fade ip then visit ip`,
   },
   structure: {
     shape: "structure",
@@ -472,11 +472,11 @@ n2 = label "domain" @below:p2
 n3 = label "path" @below:p3
 n4 = label "query" @below:p4
 > A URL starts with the {1}protocol and the {2}domain.
-1 fade p1 then fade n1
-2 fade p2 then fade n2
+1 fade p1 then fade n1 then visit p1
+2 fade p2 then fade n2 then visit p2
 > Then comes the {1}path and the {2}query.
-1 fade p3 then fade n3
-2 fade p4 then fade n4`,
+1 fade p3 then fade n3 then visit p3
+2 fade p4 then fade n4 then visit p4`,
   },
   code: {
     shape: "code",
@@ -492,10 +492,10 @@ code = code "const res = await fetch(url);\\nconst data = await res.json();\\nsh
 n1 = label "Ask the server"
 n2 = label "Read the JSON reply"
 > First we {1}ask the server for data.
-1 write code.1 then fade n1
+1 write code.1 then fade n1 then visit code.1
 > Then we {1}read its JSON reply.
-1 write code.2 then fade n2
+1 write code.2 then fade n2 then visit code.2
 > And {1}show the items on screen.
-1 write code.3 then highlight code.3`,
+1 write code.3 then visit code.3`,
   },
 };

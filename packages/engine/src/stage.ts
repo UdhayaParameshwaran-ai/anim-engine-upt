@@ -248,7 +248,7 @@ export class Stage {
       const props = state.get(target) ?? {};
       this.applyElement(inst, target, props);
       for (const [part, nodes] of inst.parts) {
-        const pp = state.get(`${target}.${part}`);
+        const pp = state.get(`${target}.${part}`) ?? (inst.el.params.anim === "walk" ? {} : undefined);
         if (pp) this.applyPart(nodes, `${target}.${part}`, pp);
       }
     }
@@ -411,19 +411,74 @@ export class Stage {
     inst.chars.forEach((n, i) => ((n as SVGElement).style.opacity = i < shown ? "1" : "0"));
   }
 
+  /**
+   * One line of code. A bar behind it is the status (the current line, added, removed); a sign in the gutter says which
+   * (▶, +, −); `write` types the characters with a caret (or, in anim=lines, brings the whole line in); `strike` crosses
+   * it out; and in anim=walk every line is dim until it is the one being talked about.
+   */
+  private codeLine(n: SVGElement, bar: Element, target: string, p: Props, tint: number, c: string): void {
+    const anim = n.getAttribute("data-anim") ?? "type";
+    const reveal = num(p.reveal, 1);
+    const strike = num(p.strike, 0);
+    const meta = this.tintMeta(target);
+    // The editor is dark in most looks whatever the page is, so its status colors are fixed bright ones there; a light editor uses the look's own.
+    const dark = n.getAttribute("data-dark") === "1";
+    const paint = (name: string, fixed: string) => (dark ? fixed : color(this.theme, name));
+    const red = paint("warn", "#ff7b72");
+    const lit = meta.color === "good" ? paint("good", "#3fb950") : meta.color === "warn" ? red : meta.color === "muted" ? paint("muted", "#8b949e") : paint("accent", "#58a6ff");
+    const status = strike > 0.01 && tint < 0.5 ? red : lit;
+    bar.setAttribute("opacity", String(round(strike > 0.01 && tint < 0.5 ? strike * 0.22 : tint * 0.32, 3)));
+    bar.setAttribute("fill", status);
+
+    const chars = [...n.querySelectorAll("tspan")].filter((t) => t.textContent !== " ");
+    const lineMode = anim === "lines";
+    const shown = lineMode ? (reveal > 0.001 ? chars.length : 0) : Math.floor(chars.length * reveal + 1e-9);
+    chars.forEach((t, i) => ((t as SVGElement).style.opacity = i < shown ? "1" : "0"));
+
+    const sign = n.querySelector("[data-sign]");
+    if (sign) {
+      const added = meta.color === "good" && tint > 0.3;
+      const here = meta.color === "accent" && tint > 0.3;
+      const removed = strike > 0.3;
+      sign.textContent = removed ? "−" : added ? "+" : here ? "▶" : "";
+      sign.setAttribute("fill", removed ? red : lit);
+      sign.setAttribute("opacity", String(round(Math.max(removed ? strike : 0, added || here ? tint : 0), 3)));
+    }
+
+    const x0 = Number(n.getAttribute("data-x0") ?? 0);
+    const cw = Number(n.getAttribute("data-cw") ?? 10);
+    const len = Number(n.getAttribute("data-len") ?? 0);
+    const line = n.querySelector("[data-strike]");
+    if (line) {
+      line.setAttribute("width", String(round(len * cw * strike, 2)));
+      line.setAttribute("opacity", String(round(strike > 0.01 ? 0.9 : 0, 3)));
+    }
+    const caret = n.querySelector("[data-caret]");
+    if (caret) {
+      const typing = !lineMode && reveal > 0.001 && reveal < 0.999 && num(p.opacity, 1) > 0.5;
+      // The caret sits after the last typed character, spaces counted (the column is kept on each character).
+      const last = shown > 0 ? chars[shown - 1] : undefined;
+      const col = last ? Number(last.getAttribute("data-i") ?? shown - 1) + 1 : 0;
+      caret.setAttribute("x", String(round(x0 + col * cw, 2)));
+      caret.setAttribute("opacity", typing ? "0.85" : "0");
+    }
+
+    // A walk-through keeps every line dim until it is the current one; a line brought in whole slides in from the left.
+    const dim = anim === "walk" ? 0.38 + 0.62 * Math.max(tint, strike > 0.01 ? 0.5 : 0) : 1;
+    const slide = lineMode && reveal < 1 ? (1 - Math.min(1, reveal * 1.5)) * -28 : 0;
+    css(n, this.baseStyle.get(n) ?? "", [
+      ["opacity", String(round(num(p.opacity, 1) * dim * (lineMode ? Math.min(1, reveal * 1.5) : 1), 4))],
+      ["transform", slide ? `translateX(${round(slide, 2)}px)` : ""],
+    ]);
+  }
+
   private applyPart(nodes: Element[], target: string, p: Props): void {
     const tint = num(p.tint, 0);
     const c = color(this.theme, this.tintMeta(target).color);
     for (const n of nodes) {
       const bar = n.querySelector?.("[data-bar]");
       if (bar) {
-        // A line of code: a bar behind it marks the highlight; `write` types its characters.
-        bar.setAttribute("opacity", String(round(tint * 0.32, 3)));
-        bar.setAttribute("fill", c);
-        const chars = [...n.querySelectorAll("tspan")].filter((t) => t.textContent !== " ");
-        const shown = Math.floor(chars.length * num(p.reveal, 1) + 1e-9);
-        chars.forEach((t, i) => ((t as SVGElement).style.opacity = i < shown ? "1" : "0"));
-        css(n as SVGElement, this.baseStyle.get(n) ?? "", [["opacity", String(round(num(p.opacity, 1), 4))]]);
+        this.codeLine(n as SVGElement, bar, target, p, tint, c);
         continue;
       }
       if (n.tagName.toLowerCase() === "tspan") {

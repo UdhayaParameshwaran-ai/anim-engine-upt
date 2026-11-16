@@ -21,6 +21,8 @@ export interface PrimitiveContext {
   params: Record<string, string | number | boolean>;
   /** The element, or undefined for parts/camera. */
   el: ElementIR | undefined;
+  /** The target is a part of an element (a line of code, a list item). */
+  part?: boolean;
   /** Current value of a property of this target at t0. */
   cur: (prop: Prop) => Value | undefined;
   canvas: { width: number; height: number };
@@ -231,7 +233,7 @@ export const PRIMITIVES: Record<string, Primitive> = {
 
   /** A line is struck through the element, which dims: wrong, rejected, removed. */
   strike: (c) => {
-    if (!c.el || c.el.link) return [];
+    if (c.el?.link || (!c.el && !c.part)) return [];
     return [
       { prop: "strike", t0: c.t0, t1: end(c), from: 0, to: 1, ease: "out" },
       { prop: "opacity", t0: c.t0, t1: end(c), to: 0.55, ease: "out" },

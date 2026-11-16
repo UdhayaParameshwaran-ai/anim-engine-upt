@@ -6,7 +6,10 @@ import { renderInspector } from "./inspector.js";
 import { Overlay } from "./overlay.js";
 import { TimelinePanel } from "./timeline-panel.js";
 import { CallsPanel, type CallTrace } from "./calls.js";
+import { promptSettings as createPromptSettings } from "./prompts.js";
 import { $, escape } from "./util.js";
+
+const promptSettings = createPromptSettings();
 
 interface BuildResult {
   ok: boolean;
@@ -265,12 +268,14 @@ function log(text: string, cls = ""): void {
   genLog.scrollTop = genLog.scrollHeight;
 }
 
-function startGeneration(): void {
+async function startGeneration(): Promise<void> {
   stopGeneration();
   teardown();
   panel.clear();
   genLog.innerHTML = "";
   if (provider.value !== "replay") callsPanel.start();
+  // Prompt settings can be long, so they go ahead as a POST and the stream names them.
+  const settingsId = await fetch("/api/settings", { method: "POST", body: JSON.stringify(promptSettings.value()) }).then((r) => r.json()).then((j: { id: string }) => j.id).catch(() => "");
   const q = new URLSearchParams({
     topic: $<HTMLTextAreaElement>("topic").value,
     provider: provider.value,
@@ -278,7 +283,7 @@ function startGeneration(): void {
     mode: $<HTMLSelectElement>("mode").value,
     domain: $<HTMLSelectElement>("domain").value,
     length: $<HTMLSelectElement>("length").value,
-    style: $<HTMLSelectElement>("style").value,
+    settingsId,
     example: replayExample.value,
     ...Object.fromEntries(style()),
   });

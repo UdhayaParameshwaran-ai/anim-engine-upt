@@ -574,7 +574,7 @@ class Resolver {
       }
       if (s.verb === "visit" || s.verb === "mark") {
         // One ring of "you are here": a visit releases the previous one (unless it was marked since).
-        const id = s.targets[0]!.split(".")[0]!;
+        const id = s.targets[0]!;
         const cur = this.visiting.get(scene.id);
         if (s.verb === "visit") {
           if (cur && cur !== id) this.add(`${scene.id}/${cur}`, { prop: "tint", t0: s.t0, t1: s.t0 + 0.3, to: 0, ease: "out", meta: { color: "accent", style: "glow" } }, s);
@@ -607,6 +607,7 @@ class Resolver {
           dur: s.dur,
           params: s.params,
           el: isPart ? undefined : elements.get(base),
+          part: isPart,
           cur: (p) => this.valueAt(target, p, t0),
           canvas,
           ...(s.dest && { dest: s.dest }),

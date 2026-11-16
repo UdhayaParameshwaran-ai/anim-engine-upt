@@ -137,3 +137,32 @@ describe("decor kit", () => {
     expect(direct(src, { topic: "dns", lock: { kit: "bold" } }).script).toMatch(/^kit bold$/m);
   });
 });
+
+describe("the model's look and motion", () => {
+  const src = 'video 1 "x"\ntheme chalk\nmotion minimal\n\nscene a "A" template=steps\ns1 = box "One"\ns2 = box "Two"\ns3 = box "Three"\n> Hello.\n1 pop s1\n';
+  const used: HistoryEntry = { theme: "chalk", motion: "minimal", kit: "plain", layouts: [], at: 1 } as HistoryEntry;
+
+  it("a look used last time is swapped out by default", () => {
+    const r = direct(src, { topic: "dns", history: [used, used, used] });
+    expect(`${r.choice.theme}/${r.choice.motion}`).not.toBe("chalk/minimal");
+  });
+
+  it("with respectScript always, the model's look and motion stay", () => {
+    const r = direct(src, { topic: "dns", history: [used, used, used], respectScript: "always" });
+    expect(r.choice.theme).toBe("chalk");
+    expect(r.choice.motion).toBe("minimal");
+  });
+
+  it("fills in what the model left out", () => {
+    const r = direct(src.replace(/theme chalk\nmotion minimal\n/, ""), { topic: "dns", history: [], respectScript: "always" });
+    expect(r.choice.theme).toBeTruthy();
+    expect(r.choice.motion).toBeTruthy();
+  });
+
+  it("the planner is told what recent videos looked like", async () => {
+    const { Director } = await import("../src/index.js");
+    const d = new Director({ topic: "dns", history: [used] });
+    expect(d.recent().looks).toEqual(["chalk"]);
+    expect(d.recent().motions).toEqual(["minimal"]);
+  });
+});

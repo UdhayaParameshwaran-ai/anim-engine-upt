@@ -32,6 +32,8 @@ function api(): Plugin {
           if (url.pathname === "/api/examples") return json(res, readdirSync(examples).filter((f) => f.endsWith(".txt")));
           if (url.pathname === "/api/source") return send(res, "text/plain; charset=utf-8", readFileSync(join(examples, basename(url.searchParams.get("file") ?? "")), "utf8"));
           if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), ttsOf(url), url.searchParams.get("variants") === "exact" ? "exact" : "fit"));
+          if (url.pathname === "/api/settings" && req.method === "POST") return json(res, stashSettings(await body(req)));
+          if (url.pathname === "/api/prompt-defaults") return json(res, await promptDefaults(server));
           if (url.pathname === "/api/providers") return json(res, await providers(server));
           if (url.pathname === "/api/generate") return await generateStream(server, url, req, res);
           if (url.pathname.startsWith("/audio/")) return send(res, "audio/wav", readFileSync(join(ttsDir, basename(url.pathname))));
@@ -52,10 +54,10 @@ function api(): Plugin {
 /** Voice plus look/motion overrides ("" keeps what the script says). */
 type Tts = { name: "kokoro" | "piper" | "beeps"; speed: number; style: Record<string, string> };
 
-/** Narration voice: "kokoro" (local neural TTS, best quality), "piper" (local, ~4x faster) or "beeps" (instant mock that ticks on every word). */
+/** Narration voice: "piper" (local, ~4x faster, the default), "kokoro" (local neural TTS, best quality) or "beeps" (instant mock that ticks on every word). */
 function defaultTts(): Tts["name"] {
   const v = process.env.ANIM_TTS;
-  return v === "beeps" || v === "piper" ? v : "kokoro";
+  return v === "beeps" || v === "kokoro" ? v : "piper";
 }
 
 function ttsOf(url: URL): Tts {
@@ -104,6 +106,34 @@ async function build(server: ViteDevServer, source: string, tts: Tts, variants: 
   return { ok: true, diagnostics, ir: compiled.ir, timeline };
 }
 
+/**
+ * Prompt settings can hold whole prompts, too long for a URL: the page posts them first and the
+ * generate request names them by id. Kept for an hour.
+ */
+const stash = new Map<string, { settings: unknown; at: number }>();
+function stashSettings(raw: string): { id: string } {
+  const now = Date.now();
+  for (const [k, v] of stash) if (now - v.at > 3_600_000) stash.delete(k);
+  const id = Math.random().toString(36).slice(2, 10);
+  let settings: unknown = {};
+  try {
+    settings = JSON.parse(raw);
+  } catch {
+    /* an unreadable body is the defaults */
+  }
+  stash.set(id, { settings, at: now });
+  return { id };
+}
+
+/** What each prompt setting is when the person leaves it alone, for the Studio's settings panel. */
+async function promptDefaults(server: ViteDevServer) {
+  const llm = await server.ssrLoadModule("@anim/llm");
+  const { TEMPLATES } = await server.ssrLoadModule("@anim/registry");
+  const { AssetLibrary } = await server.ssrLoadModule("@anim/registry");
+  const prompts = llm.defaultPrompts(new AssetLibrary().all());
+  return { ...llm.settingsDefaults(llm.STORY_HINTS), prompts, promptInfo: llm.PROMPT_INFO, slotInfo: llm.SLOT_INFO, templates: [...TEMPLATES.map((t: { name: string }) => t.name), "grid"] };
+}
+
 async function providers(server: ViteDevServer) {
   const { THEMES, THEME_SUMMARIES, MOTIONS } = await server.ssrLoadModule("@anim/registry");
   const { configuredProviders, modelChoices } = await server.ssrLoadModule("@anim/llm");
@@ -133,12 +163,19 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
   const provider = url.searchParams.get("provider") ?? "auto";
   const model = url.searchParams.get("model")?.trim() || undefined;
   const domain = url.searchParams.get("domain") === "tech" ? "tech" : undefined;
+  let settings: unknown = {};
+  try {
+    settings = llm.sanitizeSettings(stash.get(url.searchParams.get("settingsId") ?? "")?.settings ?? {});
+  } catch {
+    settings = {};
+  }
   const length = llm.isLength(url.searchParams.get("length")) ? url.searchParams.get("length") : undefined;
   const tts = ttsOf(url);
   // "canvas": planned like an outline, written as one growing diagram.
   // "auto": a short call decides between one diagram and several scenes.
   const canvas: boolean | "auto" = url.searchParams.get("mode") === "auto" ? "auto" : url.searchParams.get("mode") === "canvas";
-  let mode = url.searchParams.get("mode") === "single" ? "single" : "outline";
+  // Every scene is written by its own call; "single" is only how a replayed script is played back.
+  let mode = "outline";
 
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
   let closed = false;
@@ -159,11 +196,11 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     if (!topic && provider !== "replay") throw new Error("enter a topic");
     send("log", `generating with ${client.name} (${mode})`);
 
-    // The style director gives each video a fresh look, remembering what this Studio user already saw.
+    // The model chooses look and motion; the director arranges scenes and fills in what the model left out.
     // Look/Motion picks in the Script tab act as locks.
     const { Director, StyleHistory } = await server.ssrLoadModule("@anim/director");
     const store = new StyleHistory(join(repo, ".cache", "style-history.json"));
-    const director = url.searchParams.get("style") === "llm" ? undefined : new Director({ topic: topic || "replay", history: await store.get("studio"), lock: tts.style });
+    const director = new Director({ topic: topic || "replay", history: await store.get("studio"), lock: tts.style, respectScript: "always" });
     const styleLine = () => {
       const c = director!.choice;
       return `style: ${c.theme} · ${c.motion} (mood: ${c.mood})`;
@@ -177,6 +214,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
       mode,
       ...(domain && { domain }),
       ...(length && { length }),
+      settings,
       ...(canvas && { canvas }),
       ...(director && { director }),
       onLog: (m: string) => send("log", m),
@@ -195,7 +233,7 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     });
     await chain;
     if (director && result.ok) await store.add("studio", director.entry());
-    const traceFile = saveTrace(topic || "replay", client.name, mode, result);
+    const traceFile = saveTrace(topic || "replay", client.name, mode, result, settings);
     const built = await build(server, result.script, tts);
     send("done", {
       ...built,
@@ -210,12 +248,12 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
 }
 
 /** Keeps every generation's call trace (prompts, replies, timings, tokens) in out/traces/ for later inspection. */
-function saveTrace(topic: string, provider: string, mode: string, result: { trace: unknown[]; usage: unknown; ms: number; ok: boolean; script: string }): string {
+function saveTrace(topic: string, provider: string, mode: string, result: { trace: unknown[]; usage: unknown; ms: number; ok: boolean; script: string }, settings: unknown = {}): string {
   const dir = join(repo, "out", "traces");
   mkdirSync(dir, { recursive: true });
   const slug = topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "video";
   const file = join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${slug}.json`);
-  writeFileSync(file, JSON.stringify({ topic, provider, mode, ok: result.ok, ms: result.ms, usage: result.usage, calls: result.trace, script: result.script }, null, 2));
+  writeFileSync(file, JSON.stringify({ topic, provider, mode, settings, ok: result.ok, ms: result.ms, usage: result.usage, calls: result.trace, script: result.script }, null, 2));
   return relative(repo, file).replace(/\\/g, "/");
 }
 

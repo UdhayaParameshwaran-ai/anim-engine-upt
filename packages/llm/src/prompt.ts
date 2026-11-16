@@ -24,7 +24,9 @@ import {
   type Shape,
   type TemplateManifest,
 } from "@anim/registry";
-import { lengthAdvice, lengthSpec, type LengthSpec } from "./length.js";
+import { lengthSpec, type LengthSpec } from "./length.js";
+import { PROMPT_IDS, Slots, type PromptId } from "./prompt-slots.js";
+import { DEFAULT_MAX_WORDS, planningAdvice, styleGuide, type PromptSettings } from "./settings.js";
 
 const STANDARD = lengthSpec("standard");
 const span = (r: { min: number; max: number }) => `${r.min}–${r.max}`;
@@ -152,7 +154,11 @@ e2 = n1 -> n3 "theory"
 2 draw e2 then pop n3`;
 
 /** The system prompt: the whole language, generated from the registry. */
-export function systemPrompt(assets: AssetManifest[], spec: LengthSpec = STANDARD): string {
+export function systemPrompt(assets: AssetManifest[], spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
+  return baseSystemPrompt(assets, spec, settings);
+}
+
+function baseSystemPrompt(assets: AssetManifest[], spec: LengthSpec, settings: PromptSettings): string {
   const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const templates = TEMPLATES.map((t) => {
     const slots = t.slots.map((s) => `${s.name}${s.required ? "" : "?"}`).join(",");
@@ -164,8 +170,9 @@ export function systemPrompt(assets: AssetManifest[], spec: LengthSpec = STANDAR
     .map((c) => `  ${(c.named === "required" ? `${c.kind}:<name>` : c.kind).padEnd(13)} ${c.summary}`)
     .join("\n");
   const catalog = pictureList(assets);
+  const S = new Slots("single.system", settings);
 
-  return `You write Narrascript: a line-based script language for narrated 2D explainer videos.
+  return S.done(`You write Narrascript: a line-based script language for narrated 2D explainer videos.
 Reply with Narrascript only — no prose, no markdown fences.
 
 STATEMENTS (one per line; the first word decides the type)
@@ -187,13 +194,13 @@ HOW TIMING WORKS
 - Several action lines on one anchor run together; "then" runs the next verb after the previous.
 
 RULES
-- One idea per sentence, at most 25 words. ${span(spec.sentences)} sentences per scene.
+- One idea per sentence, at most ${S.v("max_words", settings.maxWords ?? DEFAULT_MAX_WORDS)} words. ${S.v("sentences", span(spec.sentences))} sentences per scene.
 - Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).
 - Show an element before emphasizing or moving it. Draw connectors after (or together with) their endpoints.
 - Templates draw their own structure, each part appearing with its item: hub spokes, cycle arrows, step numbers and the arrows between steps, card panels, the "vs" of a compare, the timeline axis, spotlight leader lines, and the arrows of converge, diverge and process. Declare only the items and show them; declare a connector yourself only in template=flow, in a scene without a template, or to put a label on it.
 - Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.
 - Prefer a template. Element ids that equal slot names fill those slots; other elements fill items in order.
-- No template fits? compose=<pattern> arranges 2–6 elements by intent (${COMPOSE_PATTERNS.join("|")}); emphasis=<id> names the hero. An element called title keeps the top band.
+- No template fits? compose=<pattern> arranges 2–6 elements by intent (${S.v("compose_patterns", COMPOSE_PATTERNS.join("|"))}); emphasis=<id> names the hero. An element called title keeps the top band.
 - Use only the pictures listed under PICTURES, exactly as written. For anything else use box "Label" or text.
 - Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …
 - Connectors join two declared ids with "->" and no spaces: a1 = arrow sun->leaf (never "arrow sun to leaf").
@@ -208,26 +215,26 @@ QUALITY
 - Each scene adds something new: don't repeat what other scenes cover.
 
 VERBS
-${verbs}
+${S.v("verbs", verbs)}
 ARGS: 0.8 duration · fit (= length of the span cue) · +0.2 delay · /0.15 stagger · until=<cue> · ease=in|out|inout|spring · color=accent|warn|good|cool|muted · move needs @slot or @right-of:<id> · write sync=true reveals words as spoken
 
-${styleSection()}
+${S.v("style_menu", styleSection())}
 
 TEMPLATES (variant=: usually leave it out; the engine picks the arrangement that fits the content)
-${templates}
-LAYOUTS (only when no template): ${LAYOUTS.join(" ")}
-SLOT HINTS: @${SLOTS.join(" @")} · relative: ${RELATIONS.map((r) => `@${r}:<id>`).join(" ")}
+${S.v("templates", templates)}
+LAYOUTS (only when no template): ${S.v("layouts", LAYOUTS.join(" "))}
+SLOT HINTS: ${S.v("slot_hints", `@${SLOTS.join(" @")} · relative: ${RELATIONS.map((r) => `@${r}:<id>`).join(" ")}`)}
 
 ELEMENT KINDS
-${kinds}
+${S.v("element_kinds", kinds)}
 
-${gridSection()}
+${S.v("grid_elements", gridSection())}
 
 PICTURES
-${catalog}
+${S.v("pictures", catalog)}
 
 EXAMPLE
-${EXAMPLE}`;
+${S.v("example", EXAMPLE)}${S.v("house_style", styleGuide(settings))}`);
 }
 
 /** Templates whose links are declared by the script (messages, connections) rather than drawn by the template. */
@@ -245,9 +252,25 @@ const STORY: Record<string, string> = {
   structure: "- Operate on the cells: drop c4 to push onto a stack, lift c4 to pop, swap c1,c2 to sort, visit c3 to move a search to a cell, mark c3 as=ok when found, strike c2 to cross out a rejected value, merge c1,c2,c3 to combine cells into the last one.",
   stack: "- Move data through the layers: send a packet along an arrow between layers, mark a layer as=fail where it breaks, drop a new layer onto the stack.",
   flow: "- Follow the path: visit n1, visit n2, … along the route the data takes; mark the end node as=ok|fail.",
-  steps: "- Let something travel through the stages: visit step1, then step2 … so the viewer follows one item, and mark the stage that fails as=fail.",
-  gitgraph: "- Build the history in order: draw each commit after the previous one, visit the current commit, and mark the merge commit as=ok.",
+  steps: "- Let one item travel through the stages: as each stage appears, visit it (1 pop a then visit a; 2 pop b then visit b …), so the ring moves along the sequence; mark a stage that fails as=fail and the last one as=ok.",
+  gitgraph: "- Walk the history in order: pop each commit and draw the line to it, then visit that commit (the ring follows the latest commit); mark the merge commit as=ok, and shake a commit where there is a conflict.",
+  title: "- Keep the opening calm: write the title, fade the subtitle, pop the pictures; pulse the main picture once on the key word, nothing more.",
+  compare: "- Make the contrast move: pop one side, then the other; when the narration decides, mark the better side as=ok and strike the weaker one; pulse the side being described.",
+  cycle: "- Go round the loop: after each step appears, visit it (the ring moves c1 → c2 → c3), and visit the first one again when the cycle closes; pulse the step being named.",
+  timeline: "- Move along the time axis: pop each event and visit it as the narration reaches its date (the ring travels forward); mark the turning point as=ok.",
+  hub: "- Show what the centre does: pop the centre, then each spoke; pulse the centre once all the spokes are in; mark a spoke as=ok or as=fail when the narration judges it.",
+  cards: "- Make the cards compete: pop each in turn; pulse the card being named, mark the best as=ok and strike one that is ruled out.",
+  spotlight: "- Point at the parts: write each label while you pulse the main picture, and highlight the label being spoken, so the eye follows the narration.",
+  converge: "- Bring the inputs together: pop each input in turn; when the last one is in, pulse the result (or mark it as=ok) to show they combine; count the result if it holds a number.",
+  diverge: "- Spread out the outputs: fade the source, pop each output and pulse the source as it appears, so each output reads as coming from it; mark the main output as=ok.",
+  process: "- Follow the transformation: pop the inputs, then pop the process and visit it while it works, then pop the output and mark it as=ok (visit only after the process is shown).",
+  anatomy: "- Walk along the parts: as each part and its name appear, visit that part (the ring moves from one part to the next); highlight the part being named.",
+  code: "- Pick the code animation that fits what the scene does. Explaining code that is already written: put anim=walk on the code element, then visit code.1, visit code.3 … (one line is lit with a ▶, the rest stay dim). Building code up: write code.1, write code.2 … (typed, with a caret). Fixing code: keep the old and the new line, strike code.2 (old, crossed out in red) and mark code.3 as=ok (new, green +). A config or data file: look=tabs file=\"ci.yml\" anim=lines, and write code.N brings each line in whole. Commands: use terminal, write the command line and fade its output line. look=light suits a bright page; three lines or fewer show as a small card. Vary this from one video to the next: do not walk every snippet.",
+  grid: "- Let the numbers move: count a stat from=0 to=<value> (suffix=\"%\", prefix=\"$\"); pulse a chart bar (<id>.3) when it is named; highlight list items one at a time (<id>.2); mark a checklist item as=ok or strike a rejected one. Show each element first.",
 };
+
+/** The built-in story-motion hint of each template (what a person's own hint replaces). */
+export const STORY_HINTS: Readonly<Record<string, string>> = STORY;
 
 /** Extra rules when the scene is the whole video: one diagram that grows, chapter by chapter. */
 const canvasRules = (spec: LengthSpec) => [
@@ -276,8 +299,12 @@ export function sceneKindOf(line: string | undefined): SceneKind {
  * scene with no planned kind gets the whole language. Pictures are the ones
  * matching the scene's words.
  */
-export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas = false, spec: LengthSpec = STANDARD): string {
-  if ("free" in kind) return systemPrompt(assets, spec);
+export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas = false, spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
+  return baseSceneSystemPrompt(kind, assets, canvas, spec, settings);
+}
+
+function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas: boolean, spec: LengthSpec, settings: PromptSettings): string {
+  if ("free" in kind) return baseSystemPrompt(assets, spec, settings);
   const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const grid = "grid" in kind;
   const flow = !grid && kind.template.name === "flow";
@@ -286,12 +313,12 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canv
     .map((c) => `  ${(c.named === "required" ? `${c.kind}:<name>` : c.kind).padEnd(13)} ${c.summary}`)
     .join("\n");
   const sceneLine = grid ? `scene <id> "Title" grid=<layout> [mirror=true] [in=<transition>]` : `scene <id> "Title" template=${kind.template.name} [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]`;
+  const words = settings.maxWords ?? DEFAULT_MAX_WORDS;
+  const key = grid ? "grid" : kind.template.name;
+  const hint = settings.motionHints?.[key] ?? STORY[key];
+  const note = settings.templateNotes?.[key];
+  // What is specific to this template; the rules every scene shares are written out in the prompt itself.
   const rules = [
-    canvas ? `- One idea per sentence, at most 25 words. ${span(spec.chapterSentences)} sentences per chapter.` : `- One idea per sentence, at most 25 words. ${span(spec.sentences)} sentences per scene.`,
-    "- Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).",
-    "- Show an element before emphasizing or moving it.",
-    "- Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.",
-    "- Keep the scene line's template= or grid= exactly as planned.",
     ...(grid
       ? []
       : flow
@@ -312,20 +339,17 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canv
     ...(!grid && kind.template.name === "code" ? ['- Code and terminal text is one quoted string with \\n between lines: code "a = 1\\nprint(a)" lang=py. Keep the real indentation of the code: spaces right after \\n ("def f(x):\\n    return x"). Lines are parts: write code.2 types line 2, highlight code.2 marks it.'] : []),
     ...(!grid && kind.template.name === "anatomy" ? ['- Every part is a box with its exact text: p1 = box "https://". Name each part with a label placed under it: n1 = label "protocol" @below:p1 (variant=stacked: @right-of:p1). Show a part and its name together.'] : []),
     ...(!grid && kind.template.name === "structure" ? ["- Each value is a box: c1 = box \"42\". Every box is a value cell, so never make a box or icon for an operation (push, pop, insert) or a target: show an operation by popping in, hiding or moving cells, and name a target with a label @above:<cell>. A pointer is a label placed above a cell: p = label \"i\" @above:c1; move it with: move p @above:c3."] : []),
-    ...(!grid && STORY[kind.template.name] ? [STORY[kind.template.name]!] : []),
+    ...(hint ? [hint] : []),
+    ...(note ? [`- For this template: ${note.replace(/\n+/g, " ")}`] : []),
     ...(canvas ? canvasRules(spec) : []),
-    "- Use only the pictures listed under PICTURES, exactly as written. For anything else use box \"Label\" or text.",
-    "- Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …",
-    "- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.",
-    "- Cue ids restart at 1 on every \"> \" line, and the actions under a line anchor only on that line's cues.",
-    "- Every action number under a sentence needs its {n} marker in that sentence: \"1 pop a\" needs {1} in the line above.",
   ];
-  return `You write one scene of Narrascript: a line-based script language for narrated 2D explainer videos.
+  const S = new Slots("scene.system", settings);
+  return S.done(`You write one scene of Narrascript: a line-based script language for narrated 2D explainer videos.
 Reply with Narrascript only — no prose, no markdown fences.
 
 STATEMENTS (one per line; the first word decides the type)
-${sceneLine}
-<id> = <kind>[:<name>] ["text"] [key=value]   declares an element (hidden until an action shows it)${flow ? `\n<id> = <a> -> <b> ["label"]          edge between two nodes` : ""}
+${S.v("scene_line", sceneLine)}
+<id> = <kind>[:<name>] ["text"] [key=value]   declares an element (hidden until an action shows it)${S.v("edge_line", flow ? `\n<id> = <a> -> <b> ["label"]          edge between two nodes` : "")}
 > Narration with {1}point cues and {2 span cues}.
 <anchor> <verb> <targets> [args] [then <verb> <targets> [args]]
 wait <seconds>
@@ -349,7 +373,17 @@ cloud = icon:cloud "Clouds"
 1 pop cloud
 
 RULES
-${rules.join("\n")}
+- One idea per sentence, at most ${S.v("max_words", words)} words. ${S.v("sentences", span(canvas ? spec.chapterSentences : spec.sentences))} sentences per ${canvas ? "chapter" : "scene"}.
+- Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).
+- Show an element before emphasizing or moving it.
+- Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.
+- Keep the scene line's template= or grid= exactly as planned.
+${S.v("template_rules", rules.join("\n"))}
+- Use only the pictures listed under PICTURES, exactly as written. For anything else use box "Label" or text.
+- Parts in parentheses can be targeted as <id>.<part>; list items and chart bars as <id>.1, <id>.2 …
+- fit and until= need a span cue {n some words}; on a point cue {n} use a duration or nothing.
+- Cue ids restart at 1 on every "> " line, and the actions under a line anchor only on that line's cues.
+- Every action number under a sentence needs its {n} marker in that sentence: "1 pop a" needs {1} in the line above.
 
 QUALITY
 - Show, don't label: give each thing the picture that means it (icon:sun "Sunlight", icon:gavel "Law"), and a different picture for each thing in a scene. Never reuse one icon for unrelated ideas. Use box only for abstract ideas no listed picture fits.
@@ -357,13 +391,13 @@ QUALITY
 - Never invent quotes or attributions. Quote only real, famous people with words they actually said; otherwise use callout or body.
 
 VERBS
-${verbs}
+${S.v("verbs", verbs)}
 ARGS: 0.8 duration · fit (= length of the span cue) · +0.2 delay · /0.15 stagger · until=<cue> · ease=in|out|inout|spring · color=accent|warn|good|cool|muted · write sync=true reveals words as spoken
 
-${grid ? gridPageSection(kind.grid) : `ELEMENT KINDS\n${kinds}`}
+${S.v("elements", grid ? gridPageSection(kind.grid) : `ELEMENT KINDS\n${kinds}`)}
 
 PICTURES
-${pictureList(assets)}`;
+${S.v("pictures", pictureList(assets))}${S.v("house_style", styleGuide(settings))}`);
 }
 
 /** What writing a grid page needs: the page rules, and the elements that fit some slot of its layout, with an example page. */
@@ -419,7 +453,8 @@ ${elements}`;
  * System prompt for the outline pass: only what planning needs (scene
  * types, themes, the asset names), about a fifth of the full prompt.
  */
-export function outlineSystemPrompt(assets: AssetManifest[], domain?: Domain): string {
+export function outlineSystemPrompt(assets: AssetManifest[], domain?: Domain, settings: PromptSettings = {}): string {
+  const S = new Slots("outline.system", settings);
   // Each layout with its slot sizes, and each page element with the smallest slot it needs:
   // enough to plan a page whose content fits.
   const mode = frameMode("title", false);
@@ -428,7 +463,7 @@ export function outlineSystemPrompt(assets: AssetManifest[], domain?: Domain): s
   const elements = GRID_ELEMENTS.filter((e) => !seen.has(e.kind) && seen.add(e.kind))
     .map((e) => `${e.kind} ${e.minW}×${e.minH}`)
     .join(" · ");
-  return `You plan narrated 2D explainer videos written in Narrascript, a line-based script language.
+  return S.done(`You plan narrated 2D explainer videos written in Narrascript, a line-based script language.
 Reply with Narrascript lines only — no prose, no markdown fences.
 
 LINES
@@ -440,26 +475,26 @@ scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true 
 # shape: <shape> · goal: <one line>          one comment line under each scene line; grid pages use shape: page
 <id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
 
-${styleSection()}
+${S.v("style_menu", styleSection())}
 
 SCENE SHAPES → TEMPLATES (diagrams). First decide the shape of what the scene explains, then take a template of that shape.
-${shapeTable(domain)}
+${S.v("shape_table", shapeTable(domain))}
 
 GRID LAYOUTS (editorial pages: each slot's size; one element per slot)
-${layouts}
-PAGE ELEMENTS (the smallest slot each needs): ${elements}
+${S.v("layouts", layouts)}
+PAGE ELEMENTS (the smallest slot each needs): ${S.v("page_elements", elements)}
 Plan a page only when its content fits the slots: one element per slot, each slot at least its element's size, at least one chart, stat, body, bullets, quote, table or similar, and at most one icon.
 
-PICTURES: ${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons of everyday things (people, places, money, law, science, nature, weather, technology, transport, food, tools). The scene writer picks them; plan scenes around things that can be pictured.
+PICTURES: ${S.v("pictures", `${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons`)} of everyday things (people, places, money, law, science, nature, weather, technology, transport, food, tools). The scene writer picks them; plan scenes around things that can be pictured.
 
-${domain ? `${DOMAINS[domain].plan}\n\n` : ""}PLANNING RULES
+${S.v("domain_plan", domain ? `${DOMAINS[domain].plan}\n\n` : "")}PLANNING RULES
 - Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
 - Every scene brings new items: never show the same things in two scenes (say it once, with the best-fitting template).
 - Diagrams: label the scene's shape, then write the template shown after → for that shape (template=<template name>, never the shape name). Check its "not if".
 - Open and end the video the way the request asks. template=title is only ever the first scene.
 - Grid pages (shape: page) are for numbers, quotes, bullet text, charts and tables, with at most one icon. Several pictures of equal weight → template=cards.
 - Vary scene types across the video; mirror=true on some grid pages. Leave variant= out: the engine picks the arrangement that fits.
-- Plan only facts you are sure of.`;
+- Plan only facts you are sure of.${S.v("house_style", styleGuide(settings))}`);
 }
 
 /** One way to open or end a video, as the plan request words it. */
@@ -496,6 +531,18 @@ export interface RecentUse {
   open?: string[];
   close?: string[];
   templates?: string[];
+  looks?: string[];
+  motions?: string[];
+}
+
+/** One line for the planner: the looks and motions of the last videos, so it picks others when they fit equally well. */
+function lookNote(recent: RecentUse): string {
+  const looks = [...new Set(recent.looks ?? [])];
+  const motions = [...new Set(recent.motions ?? [])];
+  if (!looks.length && !motions.length) return "";
+  return `
+The viewer's recent videos used the looks ${looks.join(", ") || "-"} and the motions ${motions.join(", ") || "-"}. Choose a different look and motion where another fits the topic equally well.
+`;
 }
 
 /** Newest use rules a name out; older ones count less and less (1 = never used). */
@@ -545,8 +592,9 @@ Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS
 }
 
 /** First pass: plan the scenes without writing narration. */
-export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic), recent: RecentUse = {}, spec: LengthSpec = STANDARD): string {
-  const advice = lengthAdvice(spec);
+export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic), recent: RecentUse = {}, spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
+  const advice = planningAdvice(spec, settings);
+  const S = new Slots("outline.user", settings);
   // The templates the last videos leaned on (most used first): a nudge, never a rule.
   const counts = new Map<string, number>();
   for (const t of recent.templates ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
@@ -554,24 +602,25 @@ export function outlinePrompt(topic: string, scenes: { min: number; max: number 
   const variety = often.length ? `
 The viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefer others where they fit the idea equally well.
 ` : "";
-  return `Plan a narrated explainer video about:
-${topic}
+  return S.done(`Plan a narrated explainer video about:
+${S.v("topic", topic)}
 
-Open with ${arc.open.ask}.
-End with ${arc.close.ask}.
-${variety}${advice ? `${advice}\n` : ""}
+Open with ${S.v("opening", arc.open.ask)}.
+End with ${S.v("closing", arc.close.ask)}.
+${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
-- one "scene" line per scene (${scenes.min}–${scenes.max} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"
+- one "scene" line per scene (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"
 - optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
-No elements, narration or actions yet.`;
+No elements, narration or actions yet.`);
 }
 
 /**
  * Second pass: one complete scene, written against the whole outline and,
  * when earlier scenes are already written, what they say.
  */
-export function scenePrompt(outline: string, sceneId: string, earlier = "", canvas = false): string {
+export function scenePrompt(outline: string, sceneId: string, earlier = "", canvas = false, settings: PromptSettings = {}): string {
+  const S = new Slots("scene.user", settings);
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
   const plan = castPlan(outline);
   const here = plan.carry.get(sceneId) ?? [];
@@ -587,28 +636,34 @@ export function scenePrompt(outline: string, sceneId: string, earlier = "", canv
   const tpl = line ? findTemplate(/\btemplate=(\S+)/.exec(line)?.[1] ?? "") : undefined;
   const grid = line ? gridCard(/\bgrid=(\S+)/.exec(line)?.[1] ?? "") : undefined;
   const card = tpl ? `\n\n${templateCard(tpl)}` : grid ? `\n\n${grid}` : "";
-  return `Video outline:
-${outline}${said}${card}${castBlock}${carried}
+  return S.done(`Video outline:
+${S.v("outline", outline)}${S.v("earlier_scenes", said)}${S.v("template_card", card)}${S.v("recurring", castBlock)}${S.v("carried", carried)}
 
-${canvas
+${S.v("task", canvas
     ? `Write scene "${sceneId}" in full: its scene line, ALL element declarations, then one step per "# chapter:" line with its narration lines (with cues) and actions.
 Output only this scene, starting with its "scene" line.`
     : `Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
 Cover only this scene's goal; other scenes cover the rest.
-Output only this scene, starting with its "scene" line.`}`;
+Output only this scene, starting with its "scene" line.`)}`);
 }
 
 /** The system prompt of the call that decides between one growing diagram and several scenes. */
 export const CANVAS_CHOICE_SYSTEM = "You decide how a narrated explainer video about a software topic is best shown. Reply with one word.";
 
 /** Asks whether a topic is one system that a single growing diagram can walk through, or needs several different pictures. */
-export function canvasChoicePrompt(topic: string): string {
-  return `Topic: ${topic}
+export function canvasChoicePrompt(topic: string, settings: PromptSettings = {}): string {
+  const S = new Slots("choose.user", settings);
+  return S.done(`Topic: ${S.v("topic", topic)}
 
 Answer "diagram" if the topic is ONE system or process whose parts build on each other, so a single diagram can grow while the narration walks through it: the path of a request through servers, a protocol's states, a hierarchy, a pipeline, a branching history, an architecture.
 Answer "scenes" if explaining it needs several different pictures: a comparison of two things, a concept with unrelated parts, a data format or the anatomy of something, a how-to with code, history, advice, a list of separate ideas.
 A diagram needs at least four things that interact or follow one another. When unsure, answer scenes: it is the safer choice.
-Reply with one word: diagram or scenes.`;
+Reply with one word: diagram or scenes.`);
+}
+
+/** The system prompt of that call: the person's version, or the built-in one. */
+export function chooseSystemPrompt(settings: PromptSettings = {}): string {
+  return new Slots("choose.system", settings).done(CANVAS_CHOICE_SYSTEM);
 }
 
 /** True when the reply chose one growing diagram. */
@@ -621,24 +676,25 @@ export function chosenCanvas(reply: string): boolean {
  * Planning for a video that is one growing diagram: a single scene whose template draws the whole
  * system, and the chapters that build it up (each becomes a step of that scene).
  */
-export function canvasOutlinePrompt(topic: string, chapters: { min: number; max: number }, recent: RecentUse = {}): string {
+export function canvasOutlinePrompt(topic: string, chapters: { min: number; max: number }, recent: RecentUse = {}, settings: PromptSettings = {}): string {
   const counts = new Map<string, number>();
   for (const t of recent.templates ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
   const often = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t);
   const variety = often.length ? `\nThe viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefer others where they fit equally well.\n` : "";
-  return `Plan a narrated explainer video about:
-${topic}
+  const S = new Slots("canvas.outline", settings);
+  return S.done(`Plan a narrated explainer video about:
+${S.v("topic", topic)}
 
 The body of the video is ONE diagram that grows chapter by chapter on a single stage, with a camera that follows the action: not separate slides. A short title scene opens it and a short closing page ends it.
-${variety}
+${S.v("variety", variety + lookNote(recent))}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - exactly three "scene" lines, each followed by its comment line "# shape: <shape> · goal: <…>":
   1. scene intro "Title" template=title: the headline as a statement, with 1–3 pictures of the topic (shape: intro)
   2. scene main "Title" template=<the template whose picture is the whole system>: the diagram that grows (goal: what the finished diagram shows)
   3. scene recap "Title" grid=L2-08: the one idea to remember (shape: page)
-- right after scene main's comment line, ${chapters.min}–${chapters.max} comment lines, in order: "# chapter: <id> · <what this chapter adds to the diagram and what it says>"
-No elements, narration or actions yet.`;
+- right after scene main's comment line, ${S.v("chapters", `${chapters.min}–${chapters.max}`)} comment lines, in order: "# chapter: <id> · <what this chapter adds to the diagram and what it says>"
+No elements, narration or actions yet.`);
 }
 
 /** The narration of written scenes, without cues: the context later scenes need. */
@@ -656,15 +712,17 @@ export function narrationOf(scenes: string[]): string {
 }
 
 /** Single pass: the whole script at once (also used for streaming). */
-export function fullPrompt(topic: string, scenes: { min: number; max: number }): string {
-  return `Write a complete narrated explainer video (${scenes.min}–${scenes.max} scenes) about:
-${topic}
+export function fullPrompt(topic: string, scenes: { min: number; max: number }, settings: PromptSettings = {}): string {
+  const S = new Slots("single.user", settings);
+  return S.done(`Write a complete narrated explainer video (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes) about:
+${S.v("topic", topic)}
 
-Start with the "video 1" line.`;
+Start with the "video 1" line.`);
 }
 
 /** Repair: the failing scene plus compact diagnostics with scene-relative line numbers. */
-export function repairPrompt(sceneText: string, diagnostics: string, kind: "errors" | "quality" = "errors"): string {
+export function repairPrompt(sceneText: string, diagnostics: string, kind: "errors" | "quality" = "errors", settings: PromptSettings = {}): string {
+  const S = new Slots(kind === "errors" ? "repair" : "improve", settings);
   const numbered = sceneText
     .split("\n")
     .map((l, i) => `${String(i + 1).padStart(3)}| ${l}`)
@@ -673,12 +731,12 @@ export function repairPrompt(sceneText: string, diagnostics: string, kind: "erro
     kind === "errors"
       ? "This scene has errors. Fix every error and reply with the corrected scene only (no line numbers)."
       : "This scene is valid but has quality problems. Fix them, keep everything else that works, and reply with the improved scene only (no line numbers).";
-  return `${ask}
+  return S.done(`${ask}
 
-${numbered}
+${S.v("scene", numbered)}
 
 ${kind === "errors" ? "Errors" : "Problems"}:
-${diagnostics}`;
+${S.v("diagnostics", diagnostics)}`);
 }
 
 /**
@@ -823,4 +881,25 @@ export function gridCard(code: string): string | undefined {
 Exactly ${rects.length} content element${rects.length > 1 ? "s" : ""}, declared in slot order (also the animation order); add title = title "…" for the header. No @placements.
 ${slots.join("\n")}
 Rules: at least one primary or flex element (chart, stat, body, bullets, quote, table, …); at most 1 icon, 1 callout, 2 charts; no element kind twice except stat and charts. Pictures of several things belong in template=cards, not on a grid page.`;
+}
+
+/**
+ * Every editable prompt as it is without edits, with the parts the program generates left as {{slots}}:
+ * what the Studio shows as the default of each prompt, to edit or to come back to.
+ */
+export function defaultPrompts(assets: AssetManifest[], domain?: Domain): Record<PromptId, { text: string; slots: string[] }> {
+  const tokens: PromptSettings = { tokens: true };
+  const kind = sceneKindOf('scene s "S" template=exchange');
+  const text: Record<PromptId, string> = {
+    "outline.system": outlineSystemPrompt(assets, domain, tokens),
+    "outline.user": outlinePrompt("", { min: 2, max: 4 }, undefined, {}, undefined, tokens),
+    "canvas.outline": canvasOutlinePrompt("", { min: 4, max: 6 }, {}, tokens),
+    "choose.system": chooseSystemPrompt(tokens),
+    "choose.user": canvasChoicePrompt("", tokens),
+    "scene.system": sceneSystemPrompt(kind, assets, false, undefined, tokens),
+    "scene.user": scenePrompt("", "s", "", false, tokens),
+    repair: repairPrompt("", "", "errors", tokens),
+    improve: repairPrompt("", "", "quality", tokens),
+  };
+  return Object.fromEntries(PROMPT_IDS.map((id) => [id, { text: text[id], slots: [...new Set([...text[id].matchAll(/\{\{([a-z0-9_]+)\}\}/g)].map((m) => m[1]!))] }])) as Record<PromptId, { text: string; slots: string[] }>;
 }

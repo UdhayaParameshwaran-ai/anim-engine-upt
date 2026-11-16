@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { report } from "@anim/compiler";
 import { clientFromEnv, type ProviderName } from "./client.js";
 import { isLength } from "./length.js";
+import { sanitizeSettings } from "./settings.js";
 import { generate, type CallTrace } from "./generate.js";
 
 /**
  *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|azure|gemini|groq|claude[,..]] [--model=<id>]
- *            [--single] [--scenes=2-4] [--length=short|standard|long|deep] [--domain=tech] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
+ *            [--single] [--scenes=2-4] [--length=short|standard|long|deep] [--settings=prompts.json] [--domain=tech] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -40,12 +41,14 @@ try {
   console.error(e instanceof Error ? e.message : String(e));
   process.exit(2);
 }
+const settingsFile = value("settings");
+const settings = settingsFile ? sanitizeSettings(JSON.parse(readFileSync(settingsFile, "utf8"))) : {};
 const verbose = args.includes("--verbose");
 
 // A fresh look per video, remembering past ones (`--style=llm` keeps the LLM's own style lines).
 const { Director, StyleHistory } = await import("@anim/director");
 const store = new StyleHistory(".cache/style-history.json");
-const director = value("style") === "llm" ? undefined : new Director({ topic, history: await store.get("cli") });
+const director = value("style") === "llm" ? undefined : new Director({ topic, history: await store.get("cli"), respectScript: "always" });
 
 console.error(`generating with ${client.name}…`);
 const started = performance.now();
@@ -57,6 +60,7 @@ const result = await generate(topic, {
   ...(args.includes("--canvas") && { canvas: true }),
   ...(value("canvas") === "auto" && { canvas: "auto" as const }),
   ...(length && isLength(length) && { length }),
+  ...(settingsFile && { settings }),
   // An explicit --scenes wins over the length preset.
   ...(scenesArg && min && { scenes: { min, max: max ?? min } }),
   onScene: (_, i) => console.error(`  scene ${i + 1} ready`),
