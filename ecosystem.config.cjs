@@ -9,6 +9,8 @@ module.exports = {
       script: "node_modules/vite/bin/vite.js",
       args: "--config apps/studio/vite.config.ts",
       autorestart: true,
+      // No live reload for the hosted Studio: restart it (pm2 restart animation-studio) after a git pull.
+      env: { ANIM_HMR: "off" },
     },
   ],
 };

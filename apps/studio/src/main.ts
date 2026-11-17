@@ -7,9 +7,22 @@ import { Overlay } from "./overlay.js";
 import { TimelinePanel } from "./timeline-panel.js";
 import { CallsPanel, type CallTrace } from "./calls.js";
 import { promptSettings as createPromptSettings } from "./prompts.js";
+import { history as createHistory } from "./history.js";
 import { $, escape } from "./util.js";
 
 const promptSettings = createPromptSettings();
+/** Saved scripts: "Open in Script" puts one in the editor, ready to build. */
+const savedScripts = createHistory({
+  open(script) {
+    editor.value = script;
+    showTab("script");
+    void build();
+  },
+});
+$<HTMLButtonElement>("script-history").addEventListener("click", () => {
+  showTab("generate");
+  savedScripts.show(true);
+});
 
 interface BuildResult {
   ok: boolean;
@@ -273,6 +286,7 @@ async function startGeneration(): Promise<void> {
   teardown();
   panel.clear();
   genLog.innerHTML = "";
+  savedScripts.show(false); // the log is what a new generation writes to
   if (provider.value !== "replay") callsPanel.start();
   // Prompt settings can be long, so they go ahead as a POST and the stream names them.
   const settingsId = await fetch("/api/settings", { method: "POST", body: JSON.stringify(promptSettings.value()) }).then((r) => r.json()).then((j: { id: string }) => j.id).catch(() => "");
@@ -314,6 +328,7 @@ async function startGeneration(): Promise<void> {
     const d: BuildResult & { script: string; generated: boolean; stats: { calls: number; repairs: number; usage: { prompt: number; completion: number }; seconds: number; traceFile?: string } } = json(e);
     finishStream(es);
     callsPanel.finish(d.stats.traceFile);
+    void savedScripts.refresh();
     then(async () => {
       editor.value = d.script;
       showDiagnostics(d.diagnostics);
@@ -512,7 +527,7 @@ void init();
 // ------------------------------------------------------------- API keys ---
 const keyInputs = [...document.querySelectorAll<HTMLInputElement>("input[data-key]")];
 const showKeyHints = (hints: Record<string, string>) => {
-  for (const el of document.querySelectorAll<HTMLElement>("[data-state]")) {
+  for (const el of document.querySelectorAll<HTMLElement>(".key-state[data-state]")) {
     const h = hints[el.dataset.state!];
     el.textContent = h ? `Saved (${h})` : "Not set";
     el.classList.toggle("on", Boolean(h));

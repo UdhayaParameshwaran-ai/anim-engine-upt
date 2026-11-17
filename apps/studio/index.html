@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Anim Studio</title>
+    <script>
+      // Set the saved (or system) theme before the first paint, so a reload never flashes the other one.
+      // Same rule as main.ts: light unless the person chose dark, or has no choice and their system is dark.
+      try {
+        var t = localStorage.getItem("anim-studio-theme");
+        document.documentElement.dataset.theme = t === "dark" || t === "light" ? t : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -42,6 +50,10 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M19 6h1M4 12h3M13 12h7M4 18h11M21 18h-1" /><circle cx="16" cy="6" r="2.2" /><circle cx="10" cy="12" r="2.2" /><circle cx="18" cy="18" r="2.2" /></svg>
                 <span>Settings</span><span id="prompts-dot" class="dot" title="Some settings are changed" hidden></span>
               </button>
+              <button type="button" class="settings-btn" id="history-btn" aria-pressed="false" aria-controls="history" title="Every script you generated, to copy or build later">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4.5v4h4M12 7.5V12l3 2" /></svg>
+                <span>History</span>
+              </button>
               <span class="grow"></span>
               <button id="stop" type="button" class="icon-btn round" title="Stop" aria-label="Stop" hidden>
                 <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" /></svg>
@@ -53,6 +65,10 @@
           </form>
           <p id="keys" class="hint"></p>
           <ol id="gen-log" class="log" aria-label="Generation log"></ol>
+          <section id="history" class="history" hidden aria-label="Generated scripts">
+            <div class="history-head"><h2>History</h2><span id="history-count" class="hint"></span></div>
+            <ul id="history-list" class="history-list"></ul>
+          </section>
         </section>
 
         <section id="tab-script" class="tab on">
@@ -63,6 +79,7 @@
                 <select id="examples" aria-label="Example script"></select>
               </label>
               <button id="build" class="btn primary" title="Build (Ctrl+Enter)">Build</button>
+              <button id="script-history" class="btn" title="Scripts you generated before">History</button>
             </div>
             <div class="settings">
               <label class="setting" title="Overrides the script's theme">

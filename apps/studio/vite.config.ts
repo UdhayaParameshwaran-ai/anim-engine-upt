@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { basename, join, relative } from "node:path";
@@ -40,6 +40,7 @@ function api(): Plugin {
           if (url.pathname === "/api/keys" && req.method === "POST") return json(res, saveKeys(await body(req)));
           if (url.pathname === "/api/keys") return json(res, keyHints());
           if (url.pathname === "/api/providers") return json(res, await providers(server));
+          if (url.pathname === "/api/history") return json(res, historyApi(req.method ?? "GET", url.searchParams.get("id")));
           if (url.pathname === "/api/generate") return await generateStream(server, url, req, res);
           if (url.pathname.startsWith("/audio/")) return send(res, "audio/wav", readFileSync(join(ttsDir, basename(url.pathname))));
           if (url.pathname.startsWith("/fonts/")) {
@@ -240,6 +241,9 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     await chain;
     if (director && result.ok) await store.add("studio", director.entry());
     const traceFile = saveTrace(topic || "replay", client.name, mode, result, settings);
+    if (provider !== "replay" && result.script.trim()) {
+      saveHistory({ topic, provider: client.name, ...(length && { length }), ok: result.ok, seconds: (performance.now() - started) / 1000 }, result.script);
+    }
     const built = await build(server, result.script, tts);
     send("done", {
       ...built,
@@ -251,6 +255,75 @@ async function generateStream(server: ViteDevServer, url: URL, req: IncomingMess
     send("fail", { error: e instanceof Error ? e.message : String(e) });
   }
   res.end();
+}
+
+/**
+ * History of generated scripts, so a person can come back later, copy one and build it. One JSON file per
+ * generation in .cache/history/, newest 200 kept. Shared by everyone who uses this Studio.
+ */
+const historyDir = join(repo, ".cache", "history");
+const HISTORY_KEEP = 200;
+interface HistoryMeta {
+  id: string;
+  at: string;
+  topic: string;
+  provider: string;
+  length?: string;
+  ok: boolean;
+  seconds: number;
+  scenes: number;
+}
+const historyId = (id: string | null): string | undefined => (id && /^[a-z0-9-]{8,80}$/.test(id) ? id : undefined);
+
+function saveHistory(meta: Omit<HistoryMeta, "id" | "at" | "scenes">, script: string): void {
+  mkdirSync(historyDir, { recursive: true });
+  const at = new Date().toISOString();
+  const id = `${at.replace(/[^0-9]/g, "")}-${Math.random().toString(36).slice(2, 8)}`;
+  const entry: HistoryMeta & { script: string } = { id, at, ...meta, scenes: (script.match(/^scene\s/gm) ?? []).length, script };
+  writeFileSync(join(historyDir, `${id}.json`), JSON.stringify(entry, null, 2));
+  for (const old of readdirSync(historyDir).filter((f) => f.endsWith(".json")).sort().reverse().slice(HISTORY_KEEP)) rmSync(join(historyDir, old), { force: true });
+}
+
+/** The first time history is opened, scripts from earlier generations (the saved call traces) are brought in. */
+function backfillHistory(): void {
+  const traces = join(repo, "out", "traces");
+  if (!existsSync(traces)) return;
+  mkdirSync(historyDir, { recursive: true });
+  for (const f of readdirSync(traces).filter((f) => f.endsWith(".json")).sort().slice(-HISTORY_KEEP)) {
+    try {
+      const t = JSON.parse(readFileSync(join(traces, f), "utf8")) as { topic?: string; provider?: string; ok?: boolean; ms?: number; script?: string };
+      if (!t.script?.trim() || t.topic === "replay") continue;
+      const m = /^(\d{4}-\d\d-\d\d)T(\d\d)-(\d\d)-(\d\d)-(\d+)Z/.exec(f);
+      const at = m ? `${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z` : new Date().toISOString();
+      const id = `${at.replace(/[^0-9]/g, "")}-${f.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(-6) || "trace"}`;
+      const entry = { id, at, topic: t.topic ?? "", provider: t.provider ?? "", ok: Boolean(t.ok), seconds: (t.ms ?? 0) / 1000, scenes: (t.script.match(/^scene\s/gm) ?? []).length, script: t.script };
+      writeFileSync(join(historyDir, `${id}.json`), JSON.stringify(entry, null, 2));
+    } catch {
+      /* an unreadable trace is skipped */
+    }
+  }
+}
+
+function historyApi(method: string, rawId: string | null): unknown {
+  const id = historyId(rawId);
+  if (rawId && !id) throw new Error("bad history id");
+  if (id && method === "DELETE") {
+    rmSync(join(historyDir, `${id}.json`), { force: true });
+    return { ok: true };
+  }
+  if (id) return JSON.parse(readFileSync(join(historyDir, `${id}.json`), "utf8"));
+  if (!existsSync(historyDir)) backfillHistory();
+  if (!existsSync(historyDir)) return [];
+  const list: HistoryMeta[] = [];
+  for (const f of readdirSync(historyDir).filter((f) => f.endsWith(".json")).sort().reverse()) {
+    try {
+      const { script: _script, ...meta } = JSON.parse(readFileSync(join(historyDir, f), "utf8"));
+      list.push(meta);
+    } catch {
+      /* an unreadable file is skipped */
+    }
+  }
+  return list;
 }
 
 /** Keeps every generation's call trace (prompts, replies, timings, tokens) in out/traces/ for later inspection. */
@@ -363,5 +436,7 @@ export default defineConfig({
   resolve: { alias },
   plugins: [api()],
   // Local only: the tunnel (cloudflared) is the one way in from outside.
-  server: { port: 5199, host: "127.0.0.1", allowedHosts: ["animation.tandemloop.tech"] },
+  // ANIM_HMR=off (the hosted instance): no file watching and no live-reload socket. Otherwise a file change, a
+  // git pull or a dropped tunnel connection makes every open page reload itself in the middle of a video.
+  server: { port: 5199, host: "127.0.0.1", allowedHosts: ["animation.tandemloop.tech"], ...(process.env.ANIM_HMR === "off" && { hmr: false, watch: null }) },
 });

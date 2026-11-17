@@ -12,4 +12,16 @@ describe("studio page", () => {
     for (const n of names) expect(html).toContain(`id="tab-${n}"`);
     for (const t of [...html.matchAll(/data-sheet-tab="([^"]+)"/g)].map((m) => m[1])) expect(html, t).toContain(`data-pane="${t}"`);
   });
+
+  it("has the history panel and both buttons that open it", () => {
+    for (const id of ["history", "history-list", "history-count", "history-btn", "script-history", "gen-log"]) expect(html, id).toContain(`id="${id}"`);
+  });
+
+  it("keeps the key-status code away from the play button, which also carries data-state", () => {
+    const main = readFileSync(join(import.meta.dirname, "../src/main.ts"), "utf8");
+    expect(html).toMatch(/id="play"[^>]*data-state=/);
+    // Every data-state selector in the script must be scoped, never the bare attribute.
+    expect(main).not.toMatch(/querySelectorAll[^)]*\(\s*"\[data-state\]"/);
+    for (const el of html.matchAll(/<small class="key-state" data-state="/g)) expect(el[0]).toContain("key-state");
+  });
 });
