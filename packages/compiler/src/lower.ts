@@ -229,8 +229,10 @@ function furnish(scene: SceneIR, layout: SceneLayout, motion: MotionProfile): vo
       for (const action of beat.actions) {
         let elapsed = 0;
         for (const call of action.calls) {
-          if (ENTER.has(call.verb)) {
-            call.targets.forEach((id, k) => {
+          // clone a,b: the copies (every target after the first) appear, so what is shown with them (a lane's name and line) does too.
+          const entering = ENTER.has(call.verb) ? call.targets : call.verb === "clone" ? call.targets.slice(1) : [];
+          if (entering.length) {
+            entering.forEach((id, k) => {
               const known = Number.isFinite(elapsed);
               const m: Moment = known
                 ? { step: si, beat: bi, rank: rankOf(action.anchor), anchor: action.anchor, offset: elapsed + call.delay + k * call.stagger, line: action.line }

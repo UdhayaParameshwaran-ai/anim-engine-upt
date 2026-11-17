@@ -474,7 +474,11 @@ motion <personality>
 scene <id> "Title" template=<template>      a diagram
 scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true to some)
 # usecase: <name>                           once, right after the motion line: what this video is (see USE CASES)
-# shape: <shape> · goal: <one line>          one comment line under each scene line; grid pages use shape: page
+# question: <what the video answers>        the BRIEF: three comment lines right after the usecase line, written before any scene
+# example: <the one concrete case the video follows, with its real values, or "none">
+# outcome: <what the viewer can see, say or do at the end>
+# shape: <shape> · role: <role> · goal: <one line>   one comment line under each scene line; grid pages use shape: page
+<role> is one of: problem, idea, example, limit, takeaway, context, result, misconception. Use the ones the story needs; no video needs all of them, and none is required. The roles together must answer the question and reach the outcome.
 <id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
 
 USE CASES (decide what the video is for, write it on the "# usecase:" line, and plan the scenes the way that use case says)
@@ -493,10 +497,11 @@ Plan a page only when its content fits the slots: one element per slot, each slo
 PICTURES: ${S.v("pictures", `${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons`)} of everyday things (people, places, money, law, science, nature, weather, technology, transport, food, tools). The scene writer picks them; plan scenes around things that can be pictured.
 
 ${S.v("domain_plan", domain ? `${DOMAINS[domain].plan}\n\n` : "")}PLANNING RULES
-- Tell one story: each scene covers a different point, in a logical order, ending with a takeaway.
-- Every scene brings new items: never show the same things in two scenes (say it once, with the best-fitting template).
+- Teach, don't list: the video answers one question and builds toward it. Every scene has a job, and its goal says it: the problem, the idea, the worked example, the limit or trade-off, the takeaway.
+- A scene may be ONE GROWING PICTURE: when the video follows one example or one system that changes step by step (a run, a conversation, a request path, a branching history, a state machine, or two options applied one after the other to the same data), plan it as a single scene whose goal says what the finished picture shows, then 3 to 6 comment lines under it, "# chapter: <id> · <what this chapter adds or changes, and what it says>". The picture stays on screen and changes chapter by chapter. It counts as one scene of the budget; use at most one. Every other scene brings new items: never show the same items in two separate scenes.
 - Diagrams: label the scene's shape, then write the template shown after → for that shape (template=<template name>, never the shape name). Check its "not if".
-- Open and end the video the way the request asks. template=title is only ever the first scene.
+- Decide the brief first (question, example, outcome), then give each scene a role. Choose templates last: they carry the roles, they are not the plan.
+- The request suggests an opening and an ending. Use them when they fit; when the topic's story clearly needs another (for example a worked result as the ending), choose that. template=title is only ever the first scene.
 - Grid pages (shape: page) are for numbers, quotes, bullet text, charts and tables, with at most one icon. Several pictures of equal weight → template=cards.
 - Vary scene types across the video; mirror=true on some grid pages. Leave variant= out: the engine picks the arrangement that fits.
 - Plan only facts you are sure of.${S.v("house_style", styleGuide(settings))}`);
@@ -611,13 +616,15 @@ The viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefe
   return S.done(`Plan a narrated explainer video about:
 ${S.v("topic", topic)}
 
-Open with ${S.v("opening", arc.open.ask)}.
-End with ${S.v("closing", arc.close.ask)}.
+Suggested opening: ${S.v("opening", arc.open.ask)}.
+Suggested ending: ${S.v("closing", arc.close.ask)}.
+(Use them when they fit the topic; choose better ones when the story needs it.)
 ${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${S.v("usecase_hint", guess ? `Likely use case: ${guess.name} (change it if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - right after the "motion" line, one comment line "# usecase: <name>" from USE CASES
-- one "scene" line per scene (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · goal: <what this scene explains and what it shows>"
+- then the brief: "# question: …", "# example: …" (one concrete case with its real values, or none), "# outcome: …"
+- one "scene" line per scene (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>"
 - optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
 No elements, narration or actions yet.`);
 }
@@ -626,7 +633,7 @@ No elements, narration or actions yet.`);
  * Second pass: one complete scene, written against the whole outline and,
  * when earlier scenes are already written, what they say.
  */
-export function scenePrompt(outline: string, sceneId: string, earlier = "", canvas = false, settings: PromptSettings = {}): string {
+export function scenePrompt(outline: string, sceneId: string, earlier = "", canvas = false, settings: PromptSettings = {}, example = ""): string {
   const S = new Slots("scene.user", settings);
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
   const plan = castPlan(outline);
@@ -644,7 +651,10 @@ export function scenePrompt(outline: string, sceneId: string, earlier = "", canv
   const grid = line ? gridCard(/\bgrid=(\S+)/.exec(line)?.[1] ?? "") : undefined;
   const card = tpl ? `\n\n${templateCard(tpl)}` : grid ? `\n\n${grid}` : "";
   return S.done(`Video outline:
-${S.v("outline", outline)}${S.v("earlier_scenes", said)}${S.v("template_card", card)}${S.v("recurring", castBlock)}${S.v("carried", carried)}
+${S.v("outline", outline)}${S.v("earlier_scenes", said)}${S.v("template_card", card)}${S.v("scene_example", example ? `
+
+A finished scene of this kind, for its pattern only (never copy its topic or numbers):
+${example}` : "")}${S.v("recurring", castBlock)}${S.v("carried", carried)}
 
 ${S.v("task", canvas
     ? `Write scene "${sceneId}" in full: its scene line, ALL element declarations, then one step per "# chapter:" line with its narration lines (with cues) and actions.
@@ -787,6 +797,24 @@ const CARRY_TEMPLATES = new Set(["compare", "steps", "cycle", "timeline", "hub",
  * Drops the `· carry:` of a scene when it or the scene before it can't hold a recurring picture
  * (a flowchart, a page, code...): the carried thing would have nowhere to be.
  */
+export const ROLES = ["problem", "idea", "example", "limit", "takeaway", "context", "result", "misconception"] as const;
+
+/** The plan's brief (question, example, outcome) and each scene's role, with what is missing from it. */
+export function briefOf(outline: string): { question?: string; example?: string; outcome?: string; roles: string[]; problems: string[] } {
+  const field = (k: string) => new RegExp(`^\\s*#\\s*${k}:\\s*(.+)$`, "im").exec(outline)?.[1]?.trim();
+  const question = field("question");
+  const example = field("example");
+  const outcome = field("outcome");
+  const roles = outline.split("\n").filter((l) => /^\s*#\s*shape:/i.test(l)).map((l) => /\brole:\s*([a-z]+)/i.exec(l)?.[1]?.toLowerCase() ?? "");
+  const problems: string[] = [];
+  if (!question) problems.push("no # question: line");
+  if (!outcome) problems.push("no # outcome: line");
+  if (!example) problems.push("no # example: line");
+  if (roles.some((r) => !(ROLES as readonly string[]).includes(r))) problems.push("a scene has no valid role");
+  else if (roles.length && !roles.includes("takeaway") && !roles.includes("example")) problems.push("no scene is an example or a takeaway");
+  return { question, example, outcome, roles, problems };
+}
+
 export function pruneCarry(outline: string): string {
   const lines = outline.split("\n");
   const kinds: (string | undefined)[] = [];

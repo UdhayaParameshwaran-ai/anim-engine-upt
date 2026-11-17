@@ -99,6 +99,7 @@ export const SLOT_INFO: Record<string, { about: string; required?: boolean }> = 
   outline: { about: "the whole planned outline", required: true },
   earlier_scenes: { about: "what earlier scenes already said" },
   template_card: { about: "the planned template's card, with an example" },
+  scene_example: { about: "a finished scene of the use case's kind, shown only to the scene that needs it" },
   recurring: { about: "recurring elements (the cast)" },
   carried: { about: "elements carried from the previous scene" },
   task: { about: "the instruction to write this scene (or its chapters)", required: true },

@@ -16,21 +16,77 @@ export interface UseCase {
   scene: string;
   /** A free first guess from the topic's words; the planner confirms or changes it. */
   keywords: RegExp;
+  /** A finished scene of the kind this use case needs most, shown to the one scene that needs it (never to the others). */
+  example?: { template: string; text: string };
 }
+
+/** One row that stays on screen, one step per sentence, a label that changes, values marked as they are decided. Shows the pattern, not any topic. */
+const SCAN_EXAMPLE = `scene scan "Finding the largest of five numbers" template=structure variant=array
+c1 = box "3"
+c2 = box "7"
+c3 = box "2"
+c4 = box "9"
+c5 = box "4"
+best = label "Best: 3" @above:c3
+step start "The row"
+> Here are {1}five numbers, and we want {2}the largest one.
+1 pop c1,c2,c3,c4,c5 then fade best
+2 visit c1 then visit c5
+step scan "One look at each"
+> We keep a best so far, and {1}start with the first number, three.
+1 visit c1 then mark c1 as=ok
+> {1}Seven is bigger, so {2}it becomes the new best.
+1 visit c2
+2 set best to="Best: 7" then mark c2 as=ok
+> {1}Two is smaller, so {2}the best stays seven.
+1 visit c3
+2 mark c3 as=fail
+> {1}Nine is bigger again, so {2}nine is the new best.
+1 visit c4
+2 set best to="Best: 9" then mark c4 as=ok
+step result "The answer"
+> {1}Four is smaller, so {2}after one look at each number, the largest is nine.
+1 visit c5 then mark c5 as=fail
+2 visit c4`;
+
+/** Two options applied to the same starting row, one after the other, and set side by side at the end. Shows the pattern, not any topic. */
+const ROW_EXAMPLE = `scene ops "Two ways to change one row" template=structure variant=array
+c1 = box "10"
+c2 = box "20"
+c3 = box "30"
+c4 = box "40"
+note = label "Original row" @above:c2
+step start "The same row"
+> Here is {1}one row of four values, {2}the starting point for both options.
+1 pop c1,c2,c3,c4 then fade note
+2 visit c1 then visit c4
+step add "Option one: add five"
+> The first option {1}adds five to every value.
+1 set note to="Add 5" then set c1 to="15" then set c2 to="25" then set c3 to="35" then set c4 to="45"
+> {1}Every value moves up by the same amount, so the gaps between them stay the same.
+1 mark c1,c2,c3,c4 as=ok
+step double "Option two: double"
+> Go back to {1}the original row, and apply the second option.
+1 set note to="Original row" then set c1 to="10" then set c2 to="20" then set c3 to="30" then set c4 to="40"
+> It {1}doubles every value, so the gaps grow too.
+1 set note to="Double" then set c1 to="20" then set c2 to="40" then set c3 to="60" then set c4 to="80"
+> Option one {1}shifts the row, and option two {2}stretches it.
+1 visit c1 then visit c2
+2 visit c3 then visit c4`;
 
 export const USE_CASES: readonly UseCase[] = [
   {
     name: "algorithm",
     when: "a procedure that runs step by step on data: sorting, searching, traversal, recursion, a pass over a list",
-    plan: "Pick ONE small concrete example (4 to 6 values) and use it in every scene. Open on the idea or the data, never on a statistic or a cost. A title scene says what the algorithm does, then the run on that example, then the finished result and what it costs. Declare the data once in the cast and carry it, so the same values stay on screen from scene to scene. Never replace the data with icons.",
-    scene:
-      "Show the data itself (template=structure, one box per value, carried from the earlier scene). One compare or one swap per sentence: visit the pair, then swap it, so the viewer can follow every move; never chain several swaps in one sentence. Keep a label that names the current pass or step (pass = label \"Pass 1\") and change it with set pass to=\"Pass 2\". After each pass mark the values that are finished (mark … as=ok). Run the example all the way to its finished result; do not stop after the first pass. Say the actual values in the narration (\"4 is bigger than 2, so they swap\"). No decorative icons beside the data.",
+    plan: "One small example (4 to 6 values) runs through the video. Open on the idea or the data, never on a statistic. The core is ONE growing scene (template=structure) that runs the example from start to finished result, one chapter per pass or round; then what it costs, then a recap.",
+    scene: "One compare or one swap per sentence: visit the pair, then swap it. A label names the current pass and changes with set. Mark finished values ok after each pass and run the example to its finished result. Say the actual values in the narration. No decorative icons beside the data.",
+    example: { template: "structure", text: SCAN_EXAMPLE },
     keywords: /\b(sort(ing)?|bubble|quick ?sort|merge ?sort|insertion|selection sort|binary search|linear search|search algorithm|algorithms?|traversal|bfs|dfs|recursion|dynamic programming|dijkstra|heap ?sort)\b/i,
   },
   {
     name: "protocol",
     when: "parties exchanging messages or requests over time: handshakes, authentication flows, request lifecycles, lookups",
-    plan: "Use the same parties in every scene (declare them in the cast and carry them). One scene per phase of the conversation: the setup, the main exchange, the failure or retry, the result.",
+    plan: "The same parties throughout. The core is ONE growing exchange scene (template=exchange), one chapter per phase: the setup, the main exchange, the failure or retry, the result.",
     scene:
       "template=exchange with the parties as items and one arrow per message, in time order. Show each message with send; a lost or slow one with send fail=true or wait=…; mark the outcome ok or fail. Label arrows with the real message names (SYN, GET /, 200 OK).",
     keywords: /\b(handshake|protocols?|oauth|sso|authentication flow|auth flow|request lifecycle|dns (lookup|resolution)|tls|three-way|3-way)\b/i,
@@ -38,25 +94,23 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "system",
     when: "how something is built from parts that work together: architectures, pipelines, compilers, operating systems",
-    plan: "One scene for the whole picture (the parts and how they connect), then one scene per important part or stage, then one for how the parts behave together under load or when one fails. Carry the parts that stay in view.",
-    scene:
-      "Name each part with its real name and role. Draw the connections as labelled arrows and show data moving along them (send, stream). Use visit on the part being discussed and mark one that fails.",
+    plan: "The core is ONE growing scene that draws the whole system (architecture or flow), one chapter per part or stage, following one request or one piece of data through it; then how it behaves under load or when one part fails.",
+    scene: "",
     keywords: /\b(architecture|pipeline|components?|stages|how .* is built|how .* works internally|operating system|compiler)\b/i,
   },
   {
     name: "concept",
     when: "what something is and how it works as an idea: a token format, a data structure, a language feature, a field in a protocol",
-    plan: "Start with the problem it solves, then its parts, then one worked example end to end, then the common mistake or limit.",
-    scene:
-      "Use a real example, not abstractions: show the actual value or snippet (anatomy or code) and point at each part with visit while it is named.",
+    plan: "Start with the problem it solves, then its parts, then one worked example end to end, then the common mistake or limit. Separate scenes are fine here.",
+    scene: "",
     keywords: /\b(what is|what are|explain|anatomy|structure of|format)\b/i,
   },
   {
     name: "comparison",
     when: "two or more options set against each other: A vs B, which to choose, before and after",
-    plan: "Show what they share, then the differences on the same few axes, then when to choose each, then a verdict. When the options change a picture (branches, a data layout, a diagram), draw the same starting picture and then the result of each option on it, so the viewer sees the difference instead of being told. Never explain an option with generic icons.",
-    scene:
-      "Put the same axes on each side so the eye can compare line by line. When the narration decides, mark the better side ok or strike the weaker one.",
+    plan: "Two kinds. If the options CHANGE A PICTURE or can be RUN on data (branches, a data layout, two data structures, two algorithms, a diagram): ONE growing scene draws the shared starting point first, then applies each option to the SAME data in its own chapter (for data structures, each one's operations on the same row of values; for algorithms, both runs on the same input), so the viewer sees both results side by side; then a separate scene for when to choose each. Otherwise: what they share, the differences on the same few axes, when to choose each, a verdict. Never explain an option with generic icons.",
+    scene: "",
+    example: { template: "structure", text: ROW_EXAMPLE },
     keywords: /\b(vs\.?|versus|difference between|differences|compare|comparison|which (one )?to (use|choose))\b/i,
   },
   {
@@ -70,25 +124,22 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "lifecycle",
     when: "stages or states something goes through over time: an order, a connection, a build, a traffic light",
-    plan: "One scene for the whole machine (all states and transitions), then walk one real item through it, then the unusual path (failure, timeout, retry).",
-    scene:
-      "template=states or steps. visit moves a ring through the stages as the item advances; mark failure or completion states.",
+    plan: "The core is ONE growing scene (template=states or steps): the whole machine first, then one real item walked through it with visit, one chapter per stage; then the unusual path (failure, timeout, retry).",
+    scene: "",
     keywords: /\b(state machine|lifecycle|life cycle|states of|life of|stages of)\b/i,
   },
   {
     name: "data",
     when: "numbers and what they show: performance, growth, statistics, benchmarks",
-    plan: "The headline number first, then the trend or comparison that explains it, then what it means for the viewer.",
-    scene:
-      "Use stat, chart or comparison pages. Count a number up when it first appears and point at the bar or point being discussed.",
+    plan: "The headline number first, then the trend or comparison that explains it, then what it means for the viewer. Separate scenes are fine here.",
+    scene: "",
     keywords: /\b(statistics|stats|growth|trend|benchmark|percent|market share|revenue)\b/i,
   },
   {
     name: "history",
     when: "how something developed over time",
     plan: "A short timeline, then the two or three turning points explained, then where it stands now.",
-    scene:
-      "template=timeline; visit each event as its date is spoken and mark the turning point.",
+    scene: "",
     keywords: /\b(history of|timeline|evolution|origins? of)\b/i,
   },
 ];
@@ -116,4 +167,9 @@ export function playbook(uc: UseCase | undefined, settings: PromptSettings = {})
   const own = settings.playbooks?.[uc.name];
   const text = own !== undefined ? own : uc.scene;
   return text.trim() ? `\nUSE CASE: ${uc.name} (${uc.when})\n${text.trim()}\n` : "";
+}
+
+/** The example of a use case for a scene of this template, when it has one. */
+export function exampleFor(uc: UseCase | undefined, template: string | undefined): string {
+  return uc?.example && uc.example.template === template ? uc.example.text : "";
 }

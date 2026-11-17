@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -25,7 +25,23 @@ const STORY_TEMPLATES = new Set(["exchange", "states", "structure", "tree", "git
 /** Verbs that show something happening, not only appearing. */
 const STORY_VERBS = new Set(["send", "stream", "visit", "mark", "shake", "drop", "lift", "swap", "move", "frame", "focus", "set", "count", "strike", "clone", "merge"]);
 
-export function qualityIssues(header: string, sceneText: string, usecase?: string): QualityIssue[] {
+/** A sentence's words, lowercased, without cue marks: what two sentences are compared by. */
+const wordsOf = (line: string): Set<string> => new Set(line.replace(/\{\w+\s?/g, " ").replace(/[^a-z0-9' ]/gi, " ").toLowerCase().split(/\s+/).filter(Boolean));
+const narrationLines = (text: string): string[] => text.split("\n").filter((l) => l.trimStart().startsWith(">")).map((l) => l.trimStart().slice(1).trim());
+
+/** Narration sentences that say (nearly) what a finished example said: the model copied its wording instead of writing about this topic. */
+export function copiedFrom(example: string, sceneText: string): string[] {
+  const known = narrationLines(example).map((l) => ({ l, w: wordsOf(l) })).filter((x) => x.w.size >= 5);
+  const copied: string[] = [];
+  for (const line of narrationLines(sceneText)) {
+    const w = wordsOf(line);
+    if (w.size < 5) continue;
+    if (known.some((k) => [...w].filter((x) => k.w.has(x)).length / new Set([...w, ...k.w]).size >= 0.7)) copied.push(line.replace(/\{\w+\s?/g, "").replace(/\}/g, "").trim());
+  }
+  return copied;
+}
+
+export function qualityIssues(header: string, sceneText: string, usecase?: string, example?: string): QualityIssue[] {
   const offset = header.split("\n").length;
   const { script, diagnostics } = compile(`${header}\n${sceneText}\n`);
   const scene = script.scenes[0];
@@ -73,6 +89,12 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
     const spoken = scene.steps.flatMap((st) => st.beats.flatMap((b) => (b.type === "speech" ? [b.text] : []))).join(" ");
     if (/\bswap(s|ped|ping)?\b/i.test(spoken) && !verbs.includes("swap")) {
       issues.push({ code: "Q5", message: `scene \`${scene.id}\` says things swap but never swaps them; do each swap on screen with swap <a>,<b> right after the visit that compares them` });
+    }
+  }
+  // Q6: wording taken from the finished example the scene was shown.
+  if (example) {
+    for (const line of copiedFrom(example, sceneText).slice(0, 3)) {
+      issues.push({ code: "Q6", message: `scene \`${scene.id}\` repeats the example's wording ("${line.slice(0, 70)}"); say it about this topic, with this topic's own names and values` });
     }
   }
   // Q4 for number pages: a stat or gauge that only appears, when it could count up.

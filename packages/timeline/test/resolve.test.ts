@@ -504,3 +504,52 @@ describe("visiting a pair", () => {
     expect(release("d")).toHaveLength(0);
   });
 });
+
+describe("branch graphs keep the full frame", () => {
+  it("a growing gitgraph gets no close-up camera, which would cut the lane names off the left edge", async () => {
+    const src = `video 1
+scene g "G" template=gitgraph
+main = zone "main"
+a = circle "A"
+b = circle "B"
+c = circle "C"
+feature = zone "feature"
+d = circle "D"
+e = circle "E"
+l1 = line a->b
+l2 = line b->c
+l3 = line b->d
+l4 = line d->e
+step one "One"
+> {1}Main has three commits.
+1 pop a,b,c then draw l1,l2
+step two "Two"
+> {1}A feature branch leaves from B.
+1 draw l3 then pop d,e then draw l4
+`;
+    const { tl } = await build(src);
+    expect(tl.tracks.filter((t) => t.prop === "camera" && t.verb === "frame")).toEqual([]);
+  });
+});
+
+describe("a short data structure keeps the full frame", () => {
+  it("a growing structure scene gets no close-up camera, which would cut off what sits beside the cells", async () => {
+    const src = `video 1
+scene s "S" template=structure variant=array
+c1 = box "5"
+c2 = box "1"
+c3 = box "4"
+c4 = box "2"
+c5 = box "8"
+step one "One"
+> {1}Five numbers in a row.
+1 pop c1,c2,c3,c4,c5
+step two "Two"
+> {1}Five and one {2}swap.
+1 visit c1 then visit c2
+2 swap c1,c2
+`;
+    const { tl } = await build(src);
+    expect(tl.tracks.filter((t) => t.prop === "camera" && t.verb === "frame")).toEqual([]);
+  });
+});

@@ -351,6 +351,9 @@ class Resolver {
    */
   private autoFrame(scene: SceneIR, scheduled: Scheduled[], beats: { t0: number; t1: number }[], steps: { id?: string; t0: number; t1: number }[]): void {
     // An anatomy bar spans the whole width, so any close-up would cut its neighbouring parts at the frame edge.
+    // A branch graph fits the frame, and its lane names sit left of the commits: a close-up would cut them.
+    // A data structure is at most 8 cells and also fits the frame: a close-up would cut off what sits beside it.
+    if (scene.template === "gitgraph" || scene.template === "structure") return;
     if (!scene.template || scene.template === "anatomy") return;
     const BACK = new Set(["panel", "rule", "zone", "chevron", "badge", "kicker", "caption"]);
     const els = new Map(scene.elements.map((e) => [e.id, e]));

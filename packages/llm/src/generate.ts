@@ -3,10 +3,10 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
+import { briefOf, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 import { detectLength, type Length } from "./length.js";
-import { guessUseCase, useCaseOf, type UseCase } from "./usecases.js";
+import { exampleFor, guessUseCase, useCaseOf, type UseCase } from "./usecases.js";
 import { effectiveSpec, type PromptSettings } from "./settings.js";
 
 export interface GenerateOptions {
@@ -127,6 +127,8 @@ interface Ctx {
   trace: CallTrace[];
   /** What the video is for (the plan's `# usecase:` line); scenes are written and checked by it. */
   usecase?: UseCase;
+  /** The finished example each growing scene was shown, so its wording can be kept out of the scene. */
+  examples?: Map<string, string>;
 }
 
 interface CallMeta {
@@ -189,9 +191,12 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     ctx.usecase = named ?? guessUseCase(topic);
     if (ctx.usecase) opts.onLog?.(`use case: ${ctx.usecase.name}${named ? "" : " (guessed from the topic; the plan named none)"}`);
     if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
+    const brief = briefOf(outline);
+    if (!canvas) opts.onLog?.(brief.problems.length ? `brief incomplete: ${brief.problems.join("; ")}` : `brief: ${brief.question} → ${brief.outcome}`);
     const plan = split(outline);
     // The scene planned with chapters is the growing diagram (its chapters become the steps it is written with).
-    const isCanvas = (text: string) => canvas && /^\s*#\s*chapter:/m.test(text);
+    // Any scene the plan gives chapters is a growing picture, in a video of separate scenes too.
+    const isCanvas = (text: string) => /^\s*#\s*chapter:/m.test(text);
     if (!plan.scenes.length) {
       note(ctx, planned.trace, { verdict: "no scenes; falling back to a single pass" });
       opts.onLog?.("outline had no scenes; falling back to a single pass");
@@ -204,9 +209,12 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     scenes = await pool(plan.scenes, opts.concurrency ?? opts.client.concurrency ?? 3, async (s, i) => {
       // Earlier scenes that are already written (all of them when scenes run one at a time).
       const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
-      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text), settings) };
-      // Only what this scene's kind needs, and the pictures that match its words.
       const planned = s.text.split("\n")[0]!;
+      // A growing scene is shown a finished one of its kind (one per use case); no other scene gets an example.
+      const example = isCanvas(s.text) ? exampleFor(ctx.usecase, /\btemplate=(\S+)/.exec(planned)?.[1]) : "";
+      if (example) (ctx.examples ??= new Map()).set(s.id, example);
+      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text), settings, example) };
+      // Only what this scene's kind needs, and the pictures that match its words.
       const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), isCanvas(s.text), spec, settings, ctx.usecase);
       const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
       // The plan's template or grid layout is binding: a scene line that changed it gets it back.
@@ -256,7 +264,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     repairs: ctx.repairs,
     calls: ctx.calls,
     usage: ctx.usage,
-    quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text, ctx.usecase?.name).map((q) => `${sc.id}: ${q.message}`)),
+    quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text, ctx.usecase?.name, ctx.examples?.get(sc.id)).map((q) => `${sc.id}: ${q.message}`)),
     trace: ctx.trace,
     ms: Math.round(performance.now() - ctx.started),
   };
@@ -302,7 +310,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
     judge(last, errors, 0, "still has errors → auto-fix");
     return current;
   }
-  const issues = qualityIssues(header, current, ctx.usecase?.name);
+  const issues = qualityIssues(header, current, ctx.usecase?.name, ctx.examples?.get(scene ?? ""));
   if (!qualityOn || !issues.length) {
     judge(last, errors, issues.length, "valid");
     return current;
@@ -312,7 +320,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
   ctx.opts.onLog?.(`improving scene:\n${report}`);
   const better = await ask(current, report, "quality");
   const after = checkScene(header, better.text);
-  const left = qualityIssues(header, better.text, ctx.usecase?.name).length;
+  const left = qualityIssues(header, better.text, ctx.usecase?.name, ctx.examples?.get(scene ?? "")).length;
   if (after.errors || left >= issues.length) {
     judge(better.trace, after, left, after.errors ? "rejected: introduced errors" : "rejected: no better");
     ctx.opts.onLog?.("the improvement didn't help; keeping the previous version");

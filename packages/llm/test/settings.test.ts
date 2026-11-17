@@ -156,7 +156,7 @@ describe("use cases", () => {
     const sys = outlineSystemPrompt([], undefined);
     for (const u of USE_CASES) expect(sys).toContain(u.name);
     expect(sys).toContain("# usecase: <name>");
-    expect(useCaseCatalogue()).toContain("Pick ONE small concrete example");
+    expect(useCaseCatalogue()).toContain("ONE growing scene (template=structure)");
     const ask = outlinePrompt("Explain the bubble sort", { min: 3, max: 4 });
     expect(ask).toContain("Likely use case: algorithm");
     expect(ask).toContain('"# usecase: <name>"');
@@ -165,7 +165,7 @@ describe("use cases", () => {
     const kind = sceneKindOf('scene s "S" template=structure');
     const algo = sceneSystemPrompt(kind, [], false, undefined, {}, findUseCase("algorithm"));
     expect(algo).toContain("USE CASE: algorithm");
-    expect(algo).toContain("all the way to its finished result");
+    expect(algo).toContain("to its finished result");
     expect(algo).not.toContain("USE CASE: protocol");
     expect(sceneSystemPrompt(kind, [])).not.toContain("USE CASE:");
   });

@@ -13,12 +13,15 @@ import {
   flatten,
   FallbackClient,
   generate,
+  outlineSystemPrompt,
   LlmError,
   modelChoices,
   OPENINGS,
   outlinePrompt,
   OpenAICompatibleClient,
   qualityIssues,
+  copiedFrom,
+  USE_CASES,
   ReplayClient,
   retrieveAssets,
   routeOutline,
@@ -30,6 +33,7 @@ import {
   chosenCanvas,
   bindCarry,
   checkScene,
+  briefOf,
   pruneCarry,
   sceneSystemPrompt,
   shapeTable,
@@ -669,8 +673,8 @@ describe("pictures, structure and story arcs", () => {
     expect(new Set(arcs.map((a) => a.close.name)).size).toBeGreaterThan(2);
     const forced = storyArc("water cycle", { open: "cold", close: "recap" });
     const ask = outlinePrompt("water cycle", { min: 4, max: 6 }, forced);
-    expect(ask).toContain("Open with no title scene: open on the first idea itself");
-    expect(ask).toContain("End with a diagram that pulls the main ideas into one picture");
+    expect(ask).toContain("Suggested opening: no title scene: open on the first idea itself");
+    expect(ask).toContain("Suggested ending: a diagram that pulls the main ideas into one picture");
     expect(OPENINGS.map((o) => o.name)).toEqual(["title", "question", "cold", "number"]);
     expect(CLOSINGS.map((c) => c.name)).toEqual(["bullets", "recap", "checklist", "takeaway"]);
   });
@@ -794,6 +798,48 @@ describe("one evolving diagram (canvas)", () => {
   });
 });
 
+describe("a video of separate scenes with one growing scene in it", () => {
+  const PLAN = `\`\`\`
+video 1 "Sorting"
+theme paper
+motion minimal
+# usecase: algorithm
+scene intro "Sorting" template=title
+# shape: intro · goal: what sorting is
+scene run "A run" template=structure
+# shape: structure · goal: the finished sorted row
+# chapter: one · the first pass
+# chapter: two · the second pass
+scene cost "Cost" template=steps
+# shape: steps · goal: what it costs
+\`\`\``;
+  it("writes the scene that has chapters as a growing diagram, shows it a finished example, and gives no other scene one", async () => {
+    const seen: Record<string, { user: string; system: string }> = {};
+    const client = new ScriptedLlm((user, req) => {
+      if (user.startsWith("Plan a narrated")) return PLAN;
+      const id = /Write scene "(\w+)"/.exec(user)?.[1] ?? "?";
+      seen[id] = { user, system: req.messages.find((m) => m.role === "system")?.content ?? "" };
+      return `scene ${id} "S" template=${id === "intro" ? "title" : id === "run" ? "structure" : "steps"}\nt = title "S"\n> Hello {1 there}.\n1 fade t`;
+    });
+    await generate("Explain the bubble sort", { client, scenes: { min: 3, max: 3 }, qualityRepairs: false, maxRepairs: 0 });
+    expect(seen["run"]!.user).toContain("A finished scene of this kind");
+    expect(seen["run"]!.user).toContain("Finding the largest of five numbers");
+    expect(seen["run"]!.user).toContain('one step per "# chapter:" line');
+    expect(seen["run"]!.system).toContain("Declare EVERY element of the whole diagram first");
+    for (const id of ["intro", "cost"]) {
+      expect(seen[id]!.user).not.toContain("A finished scene of this kind");
+      expect(seen[id]!.system).not.toContain("Declare EVERY element");
+    }
+  });
+
+  it("the planner may plan one growing picture and is no longer told to never repeat a picture", () => {
+    const sys = outlineSystemPrompt([], undefined);
+    expect(sys).toContain("ONE GROWING PICTURE");
+    expect(sys).toContain("# chapter: <id>");
+    expect(sys).not.toContain("never show the same things in two scenes");
+  });
+});
+
 describe("choosing between one diagram and scenes", () => {
   it("reads the one-word answer", () => {
     expect(chosenCanvas("diagram")).toBe(true);
@@ -836,5 +882,62 @@ describe("quality Q4 beyond the story templates", () => {
     const page = (actions: string) => `scene n "N" grid=L1-02\ns = stat "95%" "of users"\n> {1}Ninety five percent.\n${actions}`;
     expect(qualityIssues(HEADER, page("1 fade s")).map((q) => q.code)).toContain("Q4");
     expect(qualityIssues(HEADER, page('1 fade s then count s from=0 to=95 suffix="%"')).map((q) => q.code)).not.toContain("Q4");
+  });
+});
+
+describe("wording copied from a finished example", () => {
+  const example = USE_CASES.find((u) => u.name === "comparison")!.example!.text;
+  const header = 'video 1 "T"\ntheme paper';
+  const scene = (said: string) => `scene s "S" template=structure variant=array\nc1 = box "1"\nc2 = box "2"\n> ${said}\n1 pop c1,c2 then visit c1\n`;
+
+  it("flags a sentence that repeats the example, and nothing that is about the topic", () => {
+    const copy = scene("Go back to {1}the original row, and apply the second option.");
+    expect(copiedFrom(example, copy.replace("{1}", ""))).toHaveLength(1);
+    const own = scene("A {1}stack pops the newest item, while a queue takes the oldest.");
+    expect(copiedFrom(example, own)).toEqual([]);
+    // Short lines are never compared.
+    expect(copiedFrom(example, scene("Here is {1}a row."))).toEqual([]);
+  });
+
+  it("is a quality issue only when the scene was shown an example", () => {
+    const copy = scene("Go back to {1}the original row, and apply the second option.");
+    expect(qualityIssues(header, copy, "comparison", example).some((q) => q.code === "Q6")).toBe(true);
+    expect(qualityIssues(header, copy, "comparison").some((q) => q.code === "Q6")).toBe(false);
+  });
+
+  it("the examples themselves are checked scenes: they compile and say nothing about any real topic's numbers", () => {
+    for (const u of USE_CASES.filter((u) => u.example)) {
+      const r = compile(`${header}\n\n${u.example!.text}\n`);
+      expect(r.diagnostics.filter((d) => d.severity === "error"), u.name).toEqual([]);
+    }
+  });
+});
+
+describe("comparing options on the same data", () => {
+  it("the comparison plan tells the planner to apply each option to the same data in one growing scene", () => {
+    const plan = USE_CASES.find((u) => u.name === "comparison")!.plan;
+    expect(plan).toContain("SAME data");
+    expect(plan).toContain("two data structures");
+    expect(outlineSystemPrompt([], undefined)).toContain("two options applied one after the other to the same data");
+  });
+});
+
+describe("planner brief", () => {
+  const good = `video 1 "x"\n# usecase: concept\n# question: How do stack and queue differ?\n# example: values 4, 7, 2, 9\n# outcome: Say which removes first.\nscene a "A" template=structure\n# shape: structure · role: example · goal: run both\nscene b "B" grid=L2-08\n# shape: page · role: takeaway · goal: pick one`;
+  it("reads the brief and roles", () => {
+    const b = briefOf(good);
+    expect(b.question).toContain("stack and queue");
+    expect(b.roles).toEqual(["example", "takeaway"]);
+    expect(b.problems).toEqual([]);
+  });
+  it("names what is missing", () => {
+    const b = briefOf(`scene a "A" template=cards\n# shape: cards · goal: list`);
+    expect(b.problems).toContain("no # question: line");
+    expect(b.problems).toContain("a scene has no valid role");
+  });
+  it("offers the opening and ending as suggestions", () => {
+    const ask = outlinePrompt("How a stack works", { min: 4, max: 6 });
+    expect(ask).toContain("Suggested opening");
+    expect(ask).toContain("# question:");
   });
 });

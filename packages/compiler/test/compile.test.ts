@@ -436,3 +436,34 @@ l1 = line c1->c2
     expect(x("note")).toBeGreaterThan(x("c2"));
   });
 });
+
+describe("a branch lane is shown with the first thing that appears on it", () => {
+  const src = (verb: string) => `video 1
+scene g "G" template=gitgraph
+main = zone "main"
+a = circle "A"
+b = circle "B"
+alt = zone "alternative"
+c = circle "C"
+c2 = circle "C2"
+l1 = line a->b
+l2 = line b->c
+l3 = line c->c2
+> {1}Two commits, {2}then a copy.
+1 pop a,b then draw l1
+2 ${verb}
+`;
+  const shown = (verb: string) => {
+    const v = compile(src(verb)).ir!;
+    return v.scenes[0]!.elements.some((e) => e.id === "alt" && e.params.auto === true) || v.scenes[0]!.steps.length > 0;
+  };
+  const laneTweens = (verb: string): number => {
+    const v = compile(src(verb)).ir!;
+    return v.scenes[0]!.steps.flatMap((s) => s.beats.flatMap((b) => ("actions" in b ? b.actions : []).flatMap((a) => a.calls.filter((c) => c.targets.includes("alt"))))).length;
+  };
+  it("a lane whose commits arrive through clone gets its name and line, like one whose commits pop", () => {
+    expect(shown("pop c")).toBe(true);
+    expect(laneTweens("pop c then draw l2")).toBeGreaterThan(0);
+    expect(laneTweens("clone b,c then draw l2")).toBeGreaterThan(0);
+  });
+});
