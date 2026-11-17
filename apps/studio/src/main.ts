@@ -55,7 +55,7 @@ const genBtn = $<HTMLButtonElement>("generate");
 const stopBtn = $<HTMLButtonElement>("stop");
 const provider = $<HTMLSelectElement>("provider");
 const modelSel = $<HTMLSelectElement>("model");
-/** Model menus per provider (gemini, azure, claude), from /api/providers. */
+/** Model menus per provider (gemini, claude), from /api/providers. */
 let modelMenus: Record<string, { default: string; models: string[] }> = {};
 const replayExample = $<HTMLSelectElement>("replay-example");
 
@@ -357,14 +357,19 @@ function stopGeneration(): void {
 
 type Choice = { name: string; summary: string };
 
+let providersLoaded = false;
+
 async function loadProviders(): Promise<void> {
   const p: { llm: Record<string, boolean>; models?: Record<string, { default: string; models: string[] }>; tts: string; examples: string[]; themes: Choice[]; motions: Choice[] } = await (await fetch("/api/providers")).json();
   tts.value = p.tts;
   const options = (list: Choice[]) => list.map((c) => `<option value="${c.name}" title="${c.summary}">${c.name}</option>`).join("");
-  look.insertAdjacentHTML("beforeend", options(p.themes));
-  motion.insertAdjacentHTML("beforeend", options(p.motions));
-  replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
-  const labels: Record<string, string> = { openrouter: "OpenRouter", azure: "Azure", gemini: "Gemini", groq: "Groq", claude: "Claude subscription" };
+  if (!providersLoaded) {
+    look.insertAdjacentHTML("beforeend", options(p.themes));
+    motion.insertAdjacentHTML("beforeend", options(p.motions));
+    replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
+    providersLoaded = true;
+  }
+  const labels: Record<string, string> = { openrouter: "OpenRouter", gemini: "Gemini", anthropic: "Claude API", claude: "Claude subscription" };
   const any = Object.values(p.llm).some(Boolean);
   $<HTMLParagraphElement>("keys").innerHTML =
     Object.entries(p.llm)
@@ -503,3 +508,32 @@ document.addEventListener("keydown", (e) => {
 });
 
 void init();
+
+// ------------------------------------------------------------- API keys ---
+const keyInputs = [...document.querySelectorAll<HTMLInputElement>("input[data-key]")];
+const showKeyHints = (hints: Record<string, string>) => {
+  for (const el of document.querySelectorAll<HTMLElement>("[data-state]")) {
+    const h = hints[el.dataset.state!];
+    el.textContent = h ? `Saved (${h})` : "Not set";
+    el.classList.toggle("on", Boolean(h));
+  }
+};
+void fetch("/api/keys").then((r) => r.json()).then(showKeyHints).catch(() => undefined);
+$<HTMLButtonElement>("keys-save").addEventListener("click", async () => {
+  const msg = $<HTMLElement>("keys-msg");
+  const body = Object.fromEntries(keyInputs.filter((i) => i.value.trim()).map((i) => [i.dataset.key!, i.value.trim()]));
+  if (!Object.keys(body).length) {
+    msg.textContent = "Nothing to save.";
+    return;
+  }
+  try {
+    const res = await fetch("/api/keys", { method: "POST", body: JSON.stringify(body) });
+    if (!res.ok) throw new Error("could not save");
+    showKeyHints(await res.json());
+    for (const i of keyInputs) i.value = "";
+    await loadProviders();
+    msg.textContent = "Saved.";
+  } catch {
+    msg.textContent = "Could not save the keys.";
+  }
+});

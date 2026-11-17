@@ -1,5 +1,5 @@
 /**
- * Provider-neutral chat client. OpenRouter, Groq, Azure OpenAI (v1 API) and
+ * Provider-neutral chat client. OpenRouter, Claude API and
  * Gemini (its OpenAI-compatible endpoint) all speak the OpenAI
  * chat-completions protocol, so one implementation covers them; a fallback
  * client tries providers in order. `claude` is different: it runs the Claude
@@ -77,7 +77,7 @@ export interface ProviderPreset {
   model?: (name: string) => string;
 }
 
-export const PROVIDERS: Record<"openrouter" | "groq" | "azure" | "gemini", ProviderPreset> = {
+export const PROVIDERS: Record<"openrouter" | "anthropic" | "gemini", ProviderPreset> = {
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
     defaultModel: "anthropic/claude-sonnet-4.5",
@@ -85,27 +85,12 @@ export const PROVIDERS: Record<"openrouter" | "groq" | "azure" | "gemini", Provi
     modelEnv: "ANIM_OPENROUTER_MODEL",
     headers: { "X-Title": "anim-engine-upt" },
   },
-  groq: {
-    baseUrl: "https://api.groq.com/openai/v1",
-    defaultModel: "openai/gpt-oss-120b",
-    keyEnv: "GROQ_API_KEY",
-    modelEnv: "ANIM_GROQ_MODEL",
-    // The free tier allows ~8k tokens per minute and each call sends a ~4k-token prompt.
-    concurrency: 1,
-  },
-  azure: {
-    baseUrl: "",
-    baseUrlEnv: "AZURE_OPENAI_ENDPOINT",
-    // https://<resource>.openai.azure.com/openai → .../openai/v1 (the v1 API takes the deployment as "model").
-    endpoint: (url) => {
-      const u = url.trim().replace(/\/+$/, "");
-      if (/\/openai\/v1$/.test(u)) return u;
-      return /\/openai$/.test(u) ? `${u}/v1` : `${u}/openai/v1`;
-    },
-    defaultModel: "gpt-4.1",
-    keyEnv: "AZURE_OPENAI_API_KEY",
-    modelEnv: "AZURE_OPENAI_DEPLOYMENT",
-    auth: "api-key",
+  // Claude API (key from console.anthropic.com), through Anthropic's OpenAI-compatible endpoint.
+  anthropic: {
+    baseUrl: "https://api.anthropic.com/v1",
+    defaultModel: "claude-sonnet-5-5",
+    keyEnv: "ANTHROPIC_API_KEY",
+    modelEnv: "ANIM_ANTHROPIC_MODEL",
   },
   gemini: {
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -139,7 +124,7 @@ export interface CompatOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-/** OpenAI-compatible chat-completions client (OpenRouter, Groq, Azure, Gemini, ...). */
+/** OpenAI-compatible chat-completions client (OpenRouter, Claude API, Gemini, ...). */
 export class OpenAICompatibleClient implements LlmClient {
   readonly name: string;
   readonly concurrency?: number;
@@ -299,7 +284,7 @@ export class FallbackClient implements LlmClient {
 }
 
 export interface FromEnvOptions {
-  /** Provider order; default $ANIM_LLM_PROVIDERS or "openrouter,azure,gemini,groq" (add `claude` for your Claude subscription). */
+  /** Provider order; default $ANIM_LLM_PROVIDERS or "openrouter,gemini,anthropic" (add `claude` for your Claude subscription). */
   providers?: ProviderName[];
   /** Model override for the first provider. */
   model?: string;
@@ -348,7 +333,7 @@ export function clientFromEnv(opts: FromEnvOptions = {}): LlmClient {
   return clients.length === 1 ? clients[0]! : new FallbackClient(clients);
 }
 
-const DEFAULT_ORDER = "openrouter,azure,gemini,groq";
+const DEFAULT_ORDER = "openrouter,gemini,anthropic";
 
 /** The env vars a provider needs before it can be used. */
 function required(p: ProviderPreset): string[] {
@@ -375,8 +360,6 @@ const geminiCache = new Map<string, Promise<string[]>>();
 /**
  * Models to offer for a provider:
  * - claude: CLAUDE_MODELS.
- * - azure: your deployment names. Azure can't list them, so they come from
- *   AZURE_OPENAI_DEPLOYMENTS (comma-separated) plus AZURE_OPENAI_DEPLOYMENT.
  * - gemini: the text models the key can use, from Gemini's models endpoint
  *   (fetched once), else just the configured model.
  * Other providers: only their configured model.
@@ -389,7 +372,6 @@ export async function modelChoices(provider: ProviderName, env: Record<string, s
   }
   const preset = PROVIDERS[provider];
   const def = preset.model ? preset.model(env[preset.modelEnv] || preset.defaultModel) : env[preset.modelEnv] || preset.defaultModel;
-  if (provider === "azure") return { default: def, models: unique([def, ...(env.AZURE_OPENAI_DEPLOYMENTS ?? "").split(",")]) };
   if (provider === "gemini" && env[preset.keyEnv]) {
     const key = env[preset.keyEnv]!;
     if (!geminiCache.has(key)) geminiCache.set(key, listGeminiModels(preset.baseUrl, key, fetchFn));

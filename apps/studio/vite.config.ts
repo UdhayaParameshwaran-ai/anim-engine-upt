@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { basename, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
@@ -24,6 +25,8 @@ function api(): Plugin {
     configureServer(server) {
       // Load the voice model in the background so the first build doesn't wait for it.
       if (defaultTts() === "kokoro") void voice(server, "kokoro").catch(() => undefined);
+      // With ANIM_PASSWORD set (the hosted Studio), everything sits behind a login page.
+      if (process.env.ANIM_PASSWORD) server.middlewares.use(passwordGate(process.env.ANIM_PASSWORD));
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://localhost");
         // The layout gallery is its own page.
@@ -34,6 +37,8 @@ function api(): Plugin {
           if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), ttsOf(url), url.searchParams.get("variants") === "exact" ? "exact" : "fit"));
           if (url.pathname === "/api/settings" && req.method === "POST") return json(res, stashSettings(await body(req)));
           if (url.pathname === "/api/prompt-defaults") return json(res, await promptDefaults(server));
+          if (url.pathname === "/api/keys" && req.method === "POST") return json(res, saveKeys(await body(req)));
+          if (url.pathname === "/api/keys") return json(res, keyHints());
           if (url.pathname === "/api/providers") return json(res, await providers(server));
           if (url.pathname === "/api/generate") return await generateStream(server, url, req, res);
           if (url.pathname.startsWith("/audio/")) return send(res, "audio/wav", readFileSync(join(ttsDir, basename(url.pathname))));
@@ -141,7 +146,7 @@ async function providers(server: ViteDevServer) {
   const llm: Record<string, boolean> = configuredProviders(process.env);
   // Model menus for the providers that offer a choice (and are set up).
   const models: Record<string, unknown> = {};
-  for (const p of ["gemini", "azure", "claude"]) if (llm[p]) models[p] = await modelChoices(p, process.env);
+  for (const p of ["gemini", "claude"]) if (llm[p]) models[p] = await modelChoices(p, process.env);
   return {
     themes: THEMES.map((name: keyof typeof THEME_SUMMARIES) => ({ name, summary: THEME_SUMMARIES[name] })),
     motions: MOTIONS.map((m: { name: string; summary: string }) => ({ name: m.name, summary: m.summary })),
@@ -258,6 +263,83 @@ function saveTrace(topic: string, provider: string, mode: string, result: { trac
   return relative(repo, file).replace(/\\/g, "/");
 }
 
+const LOGIN_PAGE = (error: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in</title>
+<style>:root{color-scheme:light dark}body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px system-ui,sans-serif;background:Canvas;color:CanvasText}
+form{display:grid;gap:12px;width:min(320px,calc(100vw - 32px))}h1{font-size:18px;margin:0}input,button{font:inherit;height:40px;padding:0 12px;border-radius:8px;border:1px solid #8886}
+button{background:CanvasText;color:Canvas;border:0;cursor:pointer}p{margin:0;color:#b91c1c;font-size:13px;min-height:1em}</style></head>
+<body><form method="post" action="/login"><h1>Animation Studio</h1><input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus required><button>Sign in</button><p role="alert">${error}</p></form></body></html>`;
+
+/** Password login: a signed HttpOnly cookie, a few attempts per minute per address. */
+function passwordGate(password: string) {
+  const token = createHmac("sha256", password).update("anim-studio-session").digest("hex");
+  const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const attempts = new Map<string, { n: number; since: number }>();
+  const page = (res: ServerResponse, status: number, error = "") => {
+    res.statusCode = status;
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    res.end(LOGIN_PAGE(error));
+  };
+  return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const path = (req.url ?? "/").split("?")[0];
+    const cookie = /(?:^|;\s*)anim_session=([a-f0-9]+)/.exec(req.headers.cookie ?? "")?.[1] ?? "";
+    if (same(cookie, token)) return next();
+    if (path === "/login" && req.method === "POST") {
+      const ip = String(req.headers["cf-connecting-ip"] ?? req.socket.remoteAddress ?? "");
+      const now = Date.now();
+      const t = attempts.get(ip);
+      const rec = t && now - t.since < 60_000 ? t : { n: 0, since: now };
+      if (rec.n >= 5) return page(res, 429, "Too many attempts. Wait a minute.");
+      const given = new URLSearchParams(await body(req)).get("password") ?? "";
+      if (!same(createHmac("sha256", given).update("anim-studio-session").digest("hex"), token)) {
+        attempts.set(ip, { n: rec.n + 1, since: rec.since });
+        return page(res, 401, "Wrong password.");
+      }
+      attempts.delete(ip);
+      res.setHeader("set-cookie", `anim_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${60 * 60 * 24 * 14}`);
+      res.statusCode = 303;
+      res.setHeader("location", "/");
+      return void res.end();
+    }
+    if (path.startsWith("/api/") || path.startsWith("/audio/")) {
+      res.statusCode = 401;
+      return void res.end("Sign in first.");
+    }
+    return page(res, 401);
+  };
+}
+
+/** The API keys the Settings sheet may set; nothing else can be written to .env through it. */
+const KEY_VARS = ["OPENROUTER_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"];
+
+/** Which keys are set, as the last four characters only. */
+function keyHints(): Record<string, string> {
+  return Object.fromEntries(KEY_VARS.map((k) => [k, process.env[k] ? `…${process.env[k]!.slice(-4)}` : ""]));
+}
+
+/** Saves the given keys to .env and the running process; an empty value removes that key. */
+function saveKeys(raw: string): Record<string, string> {
+  const given = JSON.parse(raw) as Record<string, unknown>;
+  const file = join(repo, ".env");
+  const lines = existsSync(file) ? readFileSync(file, "utf8").split("\n") : [];
+  for (const name of KEY_VARS) {
+    const v = given[name];
+    if (typeof v !== "string") continue;
+    const value = v.trim();
+    if (/[\r\n"'#\s]/.test(value)) throw new Error(`${name} has characters a key never contains`);
+    const at = lines.findIndex((l) => l.startsWith(`${name}=`));
+    if (value) {
+      process.env[name] = value;
+      if (at >= 0) lines[at] = `${name}=${value}`;
+      else lines.push(`${name}=${value}`);
+    } else {
+      delete process.env[name];
+      if (at >= 0) lines[at] = `${name}=`;
+    }
+  }
+  writeFileSync(file, lines.join("\n").replace(/\n*$/, "\n"));
+  return keyHints();
+}
+
 function body(req: IncomingMessage): Promise<string> {
   return new Promise((ok, fail) => {
     let data = "";
@@ -280,5 +362,6 @@ export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   resolve: { alias },
   plugins: [api()],
-  server: { port: 5199 },
+  // Local only: the tunnel (cloudflared) is the one way in from outside.
+  server: { port: 5199, host: "127.0.0.1", allowedHosts: ["animation.tandemloop.tech"] },
 });

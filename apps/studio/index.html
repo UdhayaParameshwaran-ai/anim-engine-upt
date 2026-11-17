@@ -157,6 +157,7 @@
         <button type="button" role="tab" data-sheet-tab="planning" aria-selected="false">Length &amp; plan<i hidden></i></button>
         <button type="button" role="tab" data-sheet-tab="writing" aria-selected="false">Scene writing<i hidden></i></button>
         <button type="button" role="tab" data-sheet-tab="prompts" aria-selected="false">Prompts<i hidden></i></button>
+        <button type="button" role="tab" data-sheet-tab="keys" aria-selected="false">API keys<i hidden></i></button>
       </nav>
       <div class="sheet-body">
         <section class="sheet-pane" data-pane="video">
@@ -166,9 +167,8 @@
                   <select id="provider" aria-label="Provider">
                     <option value="auto">Auto</option>
                     <option value="openrouter">OpenRouter</option>
-                    <option value="azure">Azure</option>
                     <option value="gemini">Gemini</option>
-                    <option value="groq">Groq</option>
+                    <option value="anthropic">Claude API</option>
                     <option value="claude" title="Your Claude subscription, through the Claude Code CLI">Claude (subscription)</option>
                     <option value="replay">Replay</option>
                   </select>
@@ -208,6 +208,28 @@
         <section class="sheet-pane" id="pane-planning" data-pane="planning" hidden></section>
         <section class="sheet-pane" id="pane-writing" data-pane="writing" hidden></section>
         <section class="sheet-pane" id="pane-prompts" data-pane="prompts" hidden></section>
+        <section class="sheet-pane" id="pane-keys" data-pane="keys" hidden>
+          <p class="sheet-intro">Keys are saved to the <code>.env</code> file on this machine (gitignored) and used straight away. They are never sent back to the page; only the last four characters are shown. Leave a field empty to keep the saved key.</p>
+          <div class="sgrid">
+            <label class="sfield"><span>OpenRouter</span>
+              <input type="password" id="key-OPENROUTER_API_KEY" data-key="OPENROUTER_API_KEY" autocomplete="off" spellcheck="false" placeholder="sk-or-…" />
+              <small class="key-state" data-state="OPENROUTER_API_KEY"></small>
+            </label>
+            <label class="sfield"><span>Gemini</span>
+              <input type="password" id="key-GEMINI_API_KEY" data-key="GEMINI_API_KEY" autocomplete="off" spellcheck="false" placeholder="AIza…" />
+              <small class="key-state" data-state="GEMINI_API_KEY"></small>
+            </label>
+            <label class="sfield"><span>Claude API</span>
+              <input type="password" id="key-ANTHROPIC_API_KEY" data-key="ANTHROPIC_API_KEY" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+              <small class="key-state" data-state="ANTHROPIC_API_KEY"></small>
+            </label>
+          </div>
+          <div class="key-actions">
+            <button type="button" id="keys-save" class="btn-main">Save keys</button>
+            <span id="keys-msg" class="sheet-intro" role="status"></span>
+          </div>
+          <p class="sheet-intro">Claude (subscription) needs no key here: it always runs on this server's own Claude Code login. The Claude API field above is a separate, pay-per-token key you provide.</p>
+        </section>
       </div>
       <footer class="sheet-foot">
         <button type="button" id="sheet-reset" class="btn-quiet">Reset wording, planning and prompts</button>

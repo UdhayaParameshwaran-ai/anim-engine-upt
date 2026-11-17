@@ -706,6 +706,10 @@ table.calls { width: 100%; border-collapse: collapse; font-size: 12px; }
 .sfield > span { font-weight: 500; }
 .sfield[hidden] { display: none; }
 .sfield select { height: 34px; font-size: 13px; color: var(--fg); }
+.sfield input[type="password"], .sfield input[type="text"] { height: 34px; font: inherit; font-size: 13px; padding: 0 10px; color: var(--fg); background: var(--bg, #fff); border: 1px solid var(--border, #d4d4d8); border-radius: 8px; }
+.key-state { font-size: 12px; color: var(--fg-2); }
+.key-state.on { color: #15803d; }
+.key-actions { display: flex; align-items: center; gap: 14px; }
 .sheet .prompt-text { min-height: 260px; }
 .sheet .pfield input, .sheet .pfield textarea, .sheet .pfield select { font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheet-backdrop { animation: none; } }

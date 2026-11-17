@@ -169,40 +169,28 @@ describe("OpenAI-compatible client", () => {
   });
 
   it("builds clients from the environment, skipping providers without keys", () => {
-    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b" } }).name).toBe("openrouter:anthropic/claude-sonnet-4.5 → groq:openai/gpt-oss-120b");
-    expect(clientFromEnv({ env: { GROQ_API_KEY: "b", ANIM_GROQ_MODEL: "x/y" } }).name).toBe("groq:x/y");
-    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b", ANIM_LLM_PROVIDERS: "groq,openrouter" }, model: "fast" }).name).toBe("groq:fast → openrouter:anthropic/claude-sonnet-4.5");
-    expect(() => clientFromEnv({ env: {} })).toThrow(/OPENROUTER_API_KEY or AZURE_OPENAI_ENDPOINT \+ AZURE_OPENAI_API_KEY or GEMINI_API_KEY or GROQ_API_KEY/);
+    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", ANTHROPIC_API_KEY: "b" } }).name).toBe("openrouter:anthropic/claude-sonnet-4.5 → anthropic:claude-sonnet-5-5");
+    expect(clientFromEnv({ env: { ANTHROPIC_API_KEY: "b", ANIM_ANTHROPIC_MODEL: "x-y" } }).name).toBe("anthropic:x-y");
+    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", ANTHROPIC_API_KEY: "b", ANIM_LLM_PROVIDERS: "anthropic,openrouter" }, model: "fast" }).name).toBe("anthropic:fast → openrouter:anthropic/claude-sonnet-4.5");
+    expect(() => clientFromEnv({ env: {} })).toThrow(/OPENROUTER_API_KEY or GEMINI_API_KEY or ANTHROPIC_API_KEY/);
   });
 
-  it("talks to Azure and Gemini through their OpenAI-compatible endpoints", async () => {
+  it("talks to Gemini and the Claude API through their OpenAI-compatible endpoints", async () => {
     const seen: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = [];
     const fetch = (async (url: string, init: RequestInit) => {
       seen.push({ url, headers: init.headers as Record<string, string>, body: JSON.parse(init.body as string) });
       return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 });
     }) as unknown as typeof globalThis.fetch;
-    const env = {
-      AZURE_OPENAI_ENDPOINT: "https://res.openai.azure.com/openai/",
-      AZURE_OPENAI_API_KEY: "az",
-      GEMINI_API_KEY: "gm",
-      ANIM_GEMINI_MODEL: "models/gemini-3-flash-preview",
-    };
-    // Azure needs its endpoint too; the key alone isn't enough.
-    expect(clientFromEnv({ env: { AZURE_OPENAI_API_KEY: "az", GROQ_API_KEY: "g" } }).name).toBe("groq:openai/gpt-oss-120b");
-    expect(clientFromEnv({ env }).name).toBe("azure:gpt-4.1 → gemini:gemini-3-flash-preview");
+    const env = { GEMINI_API_KEY: "gm", ANTHROPIC_API_KEY: "an", ANIM_GEMINI_MODEL: "models/gemini-3-flash-preview" };
+    expect(clientFromEnv({ env }).name).toBe("gemini:gemini-3-flash-preview → anthropic:claude-sonnet-5-5");
 
     const ask = { messages: [{ role: "user" as const, content: "x" }], temperature: 0.4, maxTokens: 50 };
-    await clientFromEnv({ env, providers: ["azure"], fetch }).chat(ask);
     await clientFromEnv({ env, providers: ["gemini"], fetch }).chat(ask);
-    await clientFromEnv({ env: { ...env, AZURE_OPENAI_DEPLOYMENT: "gpt-5.4-nano" }, providers: ["azure"], fetch }).chat(ask);
-    const [azure, gemini, reasoning] = seen;
-    expect(azure!.url).toBe("https://res.openai.azure.com/openai/v1/chat/completions");
-    expect(azure!.headers["api-key"]).toBe("az");
-    expect(azure!.headers.authorization).toBeUndefined();
-    expect(azure!.body).toMatchObject({ model: "gpt-4.1", temperature: 0.4, max_tokens: 50 });
-    // gpt-5 models only take the default temperature and use max_completion_tokens.
-    expect(reasoning!.body).toMatchObject({ model: "gpt-5.4-nano", max_completion_tokens: 50 });
-    expect(reasoning!.body).not.toHaveProperty("temperature");
+    await clientFromEnv({ env, providers: ["anthropic"], fetch }).chat(ask);
+    const [gemini, claude] = seen;
+    expect(claude!.url).toBe("https://api.anthropic.com/v1/chat/completions");
+    expect(claude!.headers.authorization).toBe("Bearer an");
+    expect(claude!.body).toMatchObject({ model: "claude-sonnet-5-5", max_tokens: 50 });
     expect(gemini!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
     expect(gemini!.headers.authorization).toBe("Bearer gm");
     expect(gemini!.body).toMatchObject({ model: "gemini-3-flash-preview", temperature: 0.4, max_tokens: 50 });
@@ -396,8 +384,6 @@ describe("generation fixes from the traced run", () => {
   });
 
   it("writes scenes one at a time on providers with a concurrency limit", async () => {
-    expect(clientFromEnv({ env: { GROQ_API_KEY: "k" } }).concurrency).toBe(1);
-    expect(clientFromEnv({ env: { OPENROUTER_API_KEY: "a", GROQ_API_KEY: "b" } }).concurrency).toBe(1);
     const limited = tracker(new ScriptedLlm(plain), 1);
     await generate("plants", { client: limited });
     expect(limited.peak).toBe(1);
@@ -559,14 +545,10 @@ a1 = arrow sun->water
 });
 
 describe("model choices", () => {
-  it("offers the Claude models, the Azure deployments and the Gemini key's text models", async () => {
+  it("offers the Claude models and the Gemini key's text models", async () => {
     expect(await modelChoices("claude", { ANIM_CLAUDE_MODEL: "claude-sonnet-5-5" })).toEqual({
       default: "claude-sonnet-5-5",
       models: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
-    });
-    expect(await modelChoices("azure", { AZURE_OPENAI_DEPLOYMENT: "gpt-4.1", AZURE_OPENAI_DEPLOYMENTS: "gpt-5.4-nano, gpt-4.1,gpt-5-mini" })).toEqual({
-      default: "gpt-4.1",
-      models: ["gpt-4.1", "gpt-5.4-nano", "gpt-5-mini"],
     });
     const list = { data: [{ id: "models/gemini-2.5-flash" }, { id: "models/gemini-3-pro-preview" }, { id: "models/text-embedding-004" }, { id: "models/gemini-2.5-flash-preview-tts" }] };
     const gem = await modelChoices("gemini", { GEMINI_API_KEY: "k-test-1" }, async () => jsonResponse(list));
