@@ -299,7 +299,8 @@ class Validator {
     // A carried element is on screen from the first moment (when nothing precedes the scene, it is assumed to be).
     for (const id of carry) if (own.has(id) || prev.declared.has(id)) visible.add(id);
     const shown = new Set(visible);
-    for (const step of scene.steps) for (const beat of step.beats) this.visibility(beat, visible, shown, declared);
+    this.sceneBeats = scene.steps.flatMap((st) => st.beats);
+    for (const beat of this.sceneBeats) this.visibility(beat, visible, shown, declared);
     // An element nothing shows would leave a hole in the scene: it fades in after the first
     // sentence (a connector, which needs both its ends on screen, after the last).
     const beats = scene.steps.flatMap((s) => s.beats);
@@ -732,13 +733,7 @@ class Validator {
    * emphasis on hidden elements (fixed by inserting an enter) and similar.
    */
   private visibility(beat: Beat, visible: Set<string>, shown: Set<string>, declared: Map<string, ElementDecl>): void {
-    const order = (a: Action): number => {
-      if (a.anchor === "start") return -1;
-      if (a.anchor === "end") return Infinity;
-      return beat.type === "speech" ? (beat.cues.find((c) => c.id === a.anchor)?.start ?? Infinity) : Infinity;
-    };
-    const actions = [...beat.actions].sort((a, b) => order(a) - order(b));
-    for (const action of actions) {
+    for (const action of this.orderedActions(beat)) {
       // Endpoints revealed later in the same chain (`draw e1 then pop n2`) count as present for connectors.
       const chainEnters = new Set(action.calls.filter((c) => ENTER.has(c.verb)).flatMap((c) => c.targets.map((t) => t.split(".")[0]!)));
       for (const call of [...action.calls]) {
@@ -752,6 +747,61 @@ class Validator {
         for (const id of new Set(targets)) this.visit(v, id, call, action, beat, visible, shown, declared, chainEnters);
       }
     }
+  }
+
+  /** A beat's actions in the order they play: before the narration, by cue, after it. */
+  private orderedActions(beat: Beat): Action[] {
+    const order = (a: Action): number => {
+      if (a.anchor === "start") return -1;
+      if (a.anchor === "end") return Infinity;
+      return beat.type === "speech" ? (beat.cues.find((c) => c.id === a.anchor)?.start ?? Infinity) : Infinity;
+    };
+    return [...beat.actions].sort((a, b) => order(a) - order(b));
+  }
+
+  /** The beats of the scene being checked, in play order (for looking ahead). */
+  private sceneBeats: Beat[] = [];
+  /** For a call that connectors were moved behind: the last one moved there. */
+  private readonly movedTail = new WeakMap<VerbCall, VerbCall>();
+
+  /**
+   * A fix for a connector that is shown before its ends: move it to just after the last call that shows an
+   * end it is missing. None when an end is never shown later (nothing sensible to move it behind).
+   */
+  private moveBehindEnds(call: VerbCall, id: string, action: Action, beat: Beat, missing: string[]): Fix | undefined {
+    let seen = false;
+    const found = new Map<string, { action: Action; call: VerbCall }>();
+    for (const b of this.sceneBeats) {
+      for (const a of this.orderedActions(b)) {
+        for (const c of a.calls) {
+          if (c === call) {
+            seen = true;
+            continue;
+          }
+          if (!seen || !ENTER.has(c.verb)) continue;
+          for (const t of c.targets) {
+            const e = t.split(".")[0]!;
+            if (!t.includes(".") && missing.includes(e) && !found.has(e)) found.set(e, { action: a, call: c });
+          }
+        }
+      }
+    }
+    if (found.size < missing.length) return undefined;
+    // The end that appears last decides where the connector goes.
+    const last = [...found.values()].at(-1)!;
+    return {
+      desc: `moved \`${id}\` after \`${last.call.targets.join(",")}\` appears`,
+      apply: () => {
+        remove(call.targets, id);
+        if (!call.targets.length) remove(action.calls, call);
+        if (!action.calls.length) remove(beat.actions, action);
+        const moved: VerbCall = { verb: call.verb, targets: [id], args: call.args, span: call.span };
+        // Several connectors moved behind the same call keep the order they had.
+        const after = this.movedTail.get(last.call) ?? last.call;
+        last.action.calls.splice(last.action.calls.indexOf(after) + 1, 0, moved);
+        this.movedTail.set(last.call, moved);
+      },
+    };
   }
 
   private visit(v: VerbManifest, id: string, call: VerbCall, action: Action, beat: Beat, visible: Set<string>, shown: Set<string>, declared: Map<string, ElementDecl>, chainEnters: Set<string>): void {
@@ -776,7 +826,11 @@ class Validator {
         return;
       }
       const missing = [el.link.from, el.link.to].filter((e) => !visible.has(e) && !chainEnters.has(e));
-      if (missing.length) this.warn(C.DanglingConnector, `\`${id}\` appears before \`${missing.join("`, `")}\``, call.span);
+      if (missing.length) {
+        const fix = this.moveBehindEnds(call, id, action, beat, missing);
+        this.warn(C.DanglingConnector, `\`${id}\` appears before \`${missing.join("`, `")}\``, call.span, fix);
+        if (fix && this.autofix) return; // moved: it appears where it now stands
+      }
       visible.add(id);
       shown.add(id);
       return;
@@ -799,7 +853,11 @@ class Validator {
       const el = declared.get(id)!;
       if (el.link) {
         const missing = [el.link.from, el.link.to].filter((e) => !visible.has(e) && !chainEnters.has(e));
-        if (missing.length) this.warn(C.DanglingConnector, `\`${id}\` appears before \`${missing.join("`, `")}\``, call.span);
+        if (missing.length) {
+          const fix = this.moveBehindEnds(call, id, action, beat, missing);
+          this.warn(C.DanglingConnector, `\`${id}\` appears before \`${missing.join("`, `")}\``, call.span, fix);
+          if (fix && this.autofix) return; // moved: it appears where it now stands
+        }
       }
       visible.add(id);
       shown.add(id);

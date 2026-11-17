@@ -216,6 +216,26 @@ describe("semantics", () => {
     expect(r.codes).toEqual([C.DanglingConnector]);
   });
 
+  it("moves a connector behind the endpoint that appears last", () => {
+    const r = check("a = icon:sun\nb = icon:heart\nx = arrow a->b\n> {1}Hi {2}there.\n1 draw x\n2 pop a,b");
+    expect(r.diagnostics[0]!.fixed).toContain("moved `x`");
+    expect(r.printed).toMatch(/2 pop a,b then draw x/);
+    expect(r.printed).not.toMatch(/1 draw x/);
+  });
+
+  it("keeps several moved connectors in their order, and lets send follow a draw", () => {
+    const r = check("a = icon:sun\nb = icon:heart\nc = icon:moon\nx = arrow a->c\ny = arrow b->c\n> {1}Hi {2}there.\n1 pop a,b\n1 draw x then draw y\n2 pop c");
+    expect(r.printed).toMatch(/2 pop c then draw x then draw y/);
+    const s = check("a = icon:sun\nb = icon:heart\nx = arrow a->b\n> {1}Hi {2}there.\n1 pop a\n1 draw x then send x\n2 pop b");
+    expect(s.printed).toMatch(/2 pop b then draw x then send x/);
+    expect(s.codes.filter((c) => c === C.AlreadyVisible)).toEqual([]);
+  });
+
+  it("leaves a connector alone when an end never appears later", () => {
+    const r = check("a = icon:sun\nb = icon:heart\nx = arrow a->b\n> {1}Hi {2}there.\n1 pop a\n1 draw x");
+    expect(r.diagnostics.find((d) => d.code === C.DanglingConnector)?.fixed).toBeUndefined();
+  });
+
   it("warns on long beats", () => {
     const r = check(`a = icon:sun\n> {1}${"word ".repeat(45)}\n1 pop a`);
     expect(r.codes).toEqual([C.BeatTooLong]);
