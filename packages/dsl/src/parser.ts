@@ -359,6 +359,7 @@ export class Parser {
     const items: StateItem[] = [];
     const pointers: { name: string; at: string }[] = [];
     let afterBar = false;
+    let prevEnd = -1;
     for (const t of toks.slice(2)) {
       if (!t.quoted && t.text === "|") {
         afterBar = true;
@@ -370,6 +371,14 @@ export class Parser {
         else this.err(Codes.BadArgument, `a pointer is name=index or name=item (\`i=2\`), not \`${t.text}\``, this.tokSpan(t));
         continue;
       }
+      // `"fact(4)"*` reads as a quoted value and a `*` touching it: that is one marked item.
+      const before = items.at(-1);
+      if (!t.quoted && MARKS.has(t.text) && before && !before.mark && prevEnd === t.col) {
+        before.mark = t.text as StateItem["mark"];
+        prevEnd = t.endCol;
+        continue;
+      }
+      prevEnd = t.endCol;
       const item = stateItem(t);
       if (item) items.push(item);
       else this.err(Codes.BadArgument, `invalid item \`${t.text}\` (a value, name:value or "quoted", with an optional mark * + ~ !)`, this.tokSpan(t));

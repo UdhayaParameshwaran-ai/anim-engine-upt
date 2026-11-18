@@ -90,6 +90,7 @@ export const ValidateCodes = {
   TemplateSlot: "NAR407",
   AlreadyVisible: "NAR408",
   SamePlace: "NAR409",
+  NarrationIsAction: "NAR417",
   // L6 trace scenes (state lines)
   TraceNoTemplate: "NAR601",
   TraceItem: "NAR602",
@@ -599,6 +600,10 @@ class Validator {
     if (beat.type === "speech") {
       const words = beat.text.split(/\s+/).filter(Boolean).length;
       if (words > this.maxBeatWords) this.warn(C.BeatTooLong, `beat has ${words} words; keep one idea per beat (≤${this.maxBeatWords})`, beat.span);
+      // An action written after `>` would be spoken aloud ("start write title").
+      if (/^(start|end|\d+)\s+(write|fade|pop|draw|hide|highlight|pulse|dim|visit|mark|send)\b\s*\S*\s*$/i.test(beat.text.trim())) {
+        this.error(C.NarrationIsAction, `\`> ${beat.text.trim()}\` is an action, not a sentence: it would be spoken aloud. Write the sentence on a \`>\` line and the action on its own line below it, without the \`>\``, beat.span);
+      }
     }
 
     // Writers often number cues across the whole scene (`{1}` in the text, `2 pop x` below it).

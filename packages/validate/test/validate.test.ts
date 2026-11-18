@@ -392,3 +392,11 @@ describe("trace items", () => {
     expect(r.printed).toContain('1 s: "fact(4)"~ "fact(3)"*');
   });
 });
+
+describe("narration that is really an action", () => {
+  it("is an error, so the repair loop rewrites it instead of speaking it", () => {
+    const r = check("t = title \"T\"\n> start write title\n> Real sentence {1}here.\n1 write t", { autofix: false });
+    expect(r.codes).toContain(C.NarrationIsAction);
+    expect(check("t = title \"T\"\n> We start writing {1}the title.\n1 write t").codes).not.toContain(C.NarrationIsAction);
+  });
+});

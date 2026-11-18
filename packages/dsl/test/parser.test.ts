@@ -232,3 +232,11 @@ describe("state lines", () => {
     expect(diagnostics.map((d) => d.code)).toContain(Codes.BadArgument);
   });
 });
+
+describe("state line marks", () => {
+  it("attaches a mark that touches a quoted value, and leaves a spaced one as a value", () => {
+    const body = (line: string) => parse(`video 1 "T"\nscene s template=trace\nr = row\n> A {1}row.\n${line}\n`).script.scenes[0]!.steps[0]!.beats[0]!.actions[0]!.calls[0]!.state!.items;
+    expect(body('1 r: "20:25"* "fact(4)"+ 7')).toEqual([{ value: "20:25", mark: "*" }, { value: "fact(4)", mark: "+" }, { value: "7" }]);
+    expect(body('1 r: "a" *').map((i) => i.value)).toEqual(["a", "*"]);
+  });
+});
