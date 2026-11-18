@@ -501,9 +501,19 @@ export function routeOutline(text: string): { text: string; changes: string[] } 
  */
 export function traceForAlgorithms(outline: string, _usecase?: string): { text: string; changes: string[] } {
   const changes: string[] = [];
-  const text = outline
-    .split("\n")
-    .map((l) => {
+  const all = outline.split("\n");
+  // A worked example planned as a grid page (a table of numbers) cannot show the run: it becomes a trace too.
+  const example = new Set<number>();
+  all.forEach((l, i) => {
+    if (!/^\s*scene\s/.test(l) || !/\bgrid=\S+/.test(l)) return;
+    if (/^\s*#\s*shape:\s*page\b.*\brole:\s*example\b/i.test(all[i + 1] ?? "")) example.add(i);
+  });
+  const text = all
+    .map((l, i) => {
+      if (example.has(i)) {
+        changes.push(`${sceneIdOf(l) ?? "?"}: worked example page → trace`);
+        return l.replace(/\s+grid=\S+/, " template=trace").replace(/\s+mirror=\S+/, "");
+      }
       if (!/^\s*scene\s/.test(l) || !/\btemplate=structure\b/.test(l)) return l;
       changes.push(`${sceneIdOf(l) ?? "?"}: structure → trace`);
       return l.replace(/\btemplate=structure\b/, "template=trace").replace(/\s+variant=\S+/, "");

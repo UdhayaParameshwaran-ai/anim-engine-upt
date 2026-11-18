@@ -955,3 +955,15 @@ describe("algorithm data scenes", () => {
     expect(traceForAlgorithms(PLAN, "concept").text).toContain("template=trace");
   });
 });
+
+describe("worked examples", () => {
+  it("turns a worked-example grid page into a trace and leaves other pages alone", async () => {
+    const { traceForAlgorithms } = await import("../src/index.js");
+    const plan = `scene example "Three steps" grid=L1-02 mirror=true\n# shape: page · role: example · goal: a table of x values\nscene takeaway "Points" grid=L1-02\n# shape: page · role: takeaway · goal: bullets`;
+    const r = traceForAlgorithms(plan);
+    expect(r.text).toContain('scene example "Three steps" template=trace');
+    expect(r.text).not.toContain("mirror=");
+    expect(r.text).toContain('scene takeaway "Points" grid=L1-02');
+    expect(r.changes).toEqual(["example: worked example page → trace"]);
+  });
+});

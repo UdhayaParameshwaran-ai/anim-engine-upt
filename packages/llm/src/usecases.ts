@@ -55,7 +55,7 @@ dbl = row "Double"
 export const USE_CASES: readonly UseCase[] = [
   {
     name: "algorithm",
-    when: "a procedure that runs step by step on data: sorting, searching, traversal, recursion, a pass over a list",
+    when: "a procedure that runs step by step on data or values: sorting, searching, traversal, recursion, optimization (gradient descent), a cache or hash table at work, building a heap or tree, a pass over a list",
     plan: "One small example (4 to 6 values) runs through the video. Open on the idea or the data, never on a statistic. The core is ONE growing scene that is ALWAYS template=trace with shape: structure (never flow, cycle, steps or structure: those cannot show data changing) and runs the example from start to finished result, one chapter per pass or round; then what it costs, then a recap.",
     scene: "Write the state after each sentence: one compare or one swap per cue, with the pointers (i, j, mid, best) where they are and the finished values marked +. Panels (a queue, a visited set, a table of distances) beside the main row show what the algorithm keeps. Run the example to its finished result, and say the actual values in the narration. No decorative icons beside the data.",
     example: { template: "trace", text: SCAN_EXAMPLE },
