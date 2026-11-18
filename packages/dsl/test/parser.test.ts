@@ -240,3 +240,25 @@ describe("state line marks", () => {
     expect(body('1 r: "a" *').map((i) => i.value)).toEqual(["a", "*"]);
   });
 });
+
+describe("state chains and links", () => {
+  const read = (line: string) => parse(`video 1 "T"\nscene s template=trace\nl = list\n> A {1}list.\n${line}\n`).script.scenes[0]!.steps[0]!.beats[0]!.actions[0]!.calls[0]!.state!;
+  it("reads a detached chain, labelled buckets and extra links", () => {
+    const a = read("1 l: a:3 b:8 c:15 / d:10 | head=a d->c");
+    expect(a.items.map((i) => [i.id ?? i.value, i.chain ?? 0])).toEqual([["a", 0], ["b", 0], ["c", 0], ["d", 1]]);
+    expect(a.chains).toEqual([{}, {}]);
+    expect(a.links).toEqual([{ from: "d", to: "c" }]);
+    expect(a.pointers).toEqual([{ name: "head", at: "a" }]);
+    const b = read("1 l: 2: 12 7 4: 9");
+    expect(b.chains).toEqual([{}, { label: "2" }, { label: "4" }]);
+    expect(b.items.map((i) => [i.value, i.chain])).toEqual([["12", 1], ["7", 1], ["9", 2]]);
+    expect(read("1 l: 3: 5").items[0]!.chain).toBe(1);
+  });
+  it("prints chains and links back exactly", () => {
+    const src = 'video 1 "T"\nscene s template=trace\nl = list\n> A {1}list.\n1 l: a:3 b:8 / d:10 | head=a d->b\n> And {1}buckets.\n1 l: 2: 12 7 4: 9\n';
+    const printed = print(parse(src).script);
+    expect(printed).toContain("1 l: a:3 b:8 / d:10 | head=a d->b");
+    expect(printed).toContain("1 l: 2: 12 7 4: 9");
+    expect(print(parse(printed).script)).toBe(printed);
+  });
+});

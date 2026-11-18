@@ -128,6 +128,8 @@ export interface StateItem {
   value: string;
   /** `*` current, `+` done, `~` seen, `!` rejected. */
   mark?: "*" | "+" | "~" | "!";
+  /** Which chain it sits in (lists and buckets); the first chain is 0 and is not written. */
+  chain?: number;
 }
 
 /** Everything a collection holds at one moment, in order, and the pointers into it. */
@@ -135,6 +137,10 @@ export interface StateSnapshot {
   items: StateItem[];
   /** `i=2` (slot index) or `cur=b` (item name). */
   pointers: { name: string; at: string }[];
+  /** Chains, in order: `/` starts a detached one, `2:` a labelled one (a bucket). Absent: one chain. */
+  chains?: { label?: string }[];
+  /** Extra arrows between named items: `d->c`. */
+  links?: { from: string; to: string }[];
 }
 
 export interface Args {

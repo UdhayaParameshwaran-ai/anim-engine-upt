@@ -208,7 +208,7 @@ const TEXTUAL = ["title", "text", "label", "list"] as const;
 
 const TECH = ["code", "terminal"] as const;
 /** The collections of a trace scene: declared once, their contents written after each sentence. */
-export const COLLECTIONS = ["row", "stack", "queue", "set", "pairs"] as const;
+export const COLLECTIONS = ["row", "stack", "queue", "set", "pairs", "chain", "buckets", "graph", "tree"] as const;
 
 const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
@@ -279,6 +279,10 @@ export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "queue", version: 1, layer: "svg", summary: "trace collection: cells in line, front on the left, back on the right", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
   { kind: "set", version: 1, layer: "svg", summary: "trace collection: a panel of values in the order they were added (visited nodes, a result list)", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
   { kind: "pairs", version: 1, layer: "svg", summary: "trace collection: key and value rows (distances, counts, a cache); items are key:value", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
+  { kind: "chain", version: 1, layer: "svg", summary: "trace collection: a linked list. Nodes in order with an arrow from each to the next and null at the end; `/` starts a detached chain below, `| d->c` adds an arrow", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
+  { kind: "buckets", version: 1, layer: "svg", summary: "trace collection: a hash table. n numbered rows, each a chain of nodes (`buckets n=5`); write a bucket as `2: 12 7` (its number, then its nodes in order)", named: "none", texts: { min: 0, max: 1 }, link: false, params: { n: { type: "number", min: 2, max: 8, default: 5 } }, drawable: false },
+  { kind: "graph", version: 1, layer: "svg", summary: "trace collection: a graph drawn from its edges, `graph \"A-B A-C B-D:4\"` (A-B:4 gives the edge a weight); a state lists the nodes to show, with marks and `node:value` labels", named: "none", texts: { min: 1, max: 2 }, link: false, params: {}, drawable: false },
+  { kind: "tree", version: 1, layer: "svg", summary: "trace collection: a tree drawn from parent>child edges, `tree \"R>A R>B A>C\"`; a state lists the nodes to show (a node appears when it is listed), with marks and `node:value` labels", named: "none", texts: { min: 1, max: 2 }, link: false, params: {}, drawable: false },
   { kind: "zone", version: 1, layer: "svg", summary: "named group of components (architecture): the elements declared after it belong to it", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "chart", version: 1, layer: "svg", summary: "chart:bar|line|pie data=3,5,8 labels=A,B,C", named: "required", texts: { min: 0, max: 1 }, link: false, params: { data: { type: "string" }, data2: { type: "string" }, labels: { type: "string" } }, parts: "items", drawable: true },
   // Grid elements (Template Rule Book v2). Lists use `;`, fields within an item use `|`.

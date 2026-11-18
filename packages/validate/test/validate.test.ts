@@ -400,3 +400,17 @@ describe("narration that is really an action", () => {
     expect(check("t = title \"T\"\n> We start writing {1}the title.\n1 write t").codes).not.toContain(C.NarrationIsAction);
   });
 });
+
+describe("trace links and nodes", () => {
+  const T = { scene: "template=trace" };
+  it("checks that a link joins named cells of that state", () => {
+    const ok = check(["l = chain", "> A {1}list.", "1 l: a:3 b:8 | d->b"].join("\n"), T);
+    expect(ok.diagnostics.find((d) => d.code === C.TraceLink)?.message).toContain("`d`");
+    expect(check(["l = chain", "> A {1}list.", "1 l: a:3 b:8 | a->b"].join("\n"), T).codes).not.toContain(C.TraceLink);
+  });
+  it("lists only nodes of the graph or tree, and needs its edges", () => {
+    expect(check(['g = graph "A-B"', "> Nodes {1}here.", "1 g: A B Z"].join("\n"), T).diagnostics.find((d) => d.code === C.TraceLink)?.message).toContain("`Z`");
+    expect(check(["t = tree", "> Nodes {1}here.", "1 t: A"].join("\n"), T).codes).toContain(C.TraceLink);
+    expect(check(['t = tree "R>A R>B"', "> Nodes {1}here.", "1 t: R A"].join("\n"), T).codes).not.toContain(C.TraceLink);
+  });
+});

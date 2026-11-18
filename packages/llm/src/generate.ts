@@ -496,11 +496,10 @@ export function routeOutline(text: string): { text: string; changes: string[] } 
 }
 
 /**
- * A data scene in an algorithm video is a trace: a structure scene (a still row of cells) cannot show the data
- * changing, so the plan's structure scenes become trace scenes.
+ * A data scene is a trace: a structure scene (a still row of cells) cannot show the data changing, and a trace
+ * with one state is the same still picture, so the plan's structure scenes become trace scenes.
  */
-export function traceForAlgorithms(outline: string, usecase: string | undefined): { text: string; changes: string[] } {
-  if (usecase !== "algorithm") return { text: outline, changes: [] };
+export function traceForAlgorithms(outline: string, _usecase?: string): { text: string; changes: string[] } {
   const changes: string[] = [];
   const text = outline
     .split("\n")

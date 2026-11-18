@@ -23,9 +23,9 @@ export const SHAPES = {
   interaction: "messages passed between parties over time: a request and its response, a handshake, a login",
   architecture: "a system's components and how they connect, grouped into tiers (client, servers, data)",
   layers: "layers stacked on each other, each built on the one below (network layers, a software stack)",
-  structure: "a data structure and what happens to its values (array, linked list, stack, queue)",
+  structure: "a data structure and what happens to its values step by step (array, linked list, stack, queue, tree, graph, hash table): a sort, a search, an insert, a traversal, a cache at work",
   code: "real code, a query, a config or terminal commands, walked through line by line",
-  hierarchy: "parents and their children: a file system, DNS, the DOM, an org chart, class inheritance",
+  hierarchy: "a fixed hierarchy of parents and children: a file system, DNS, the DOM, an org chart, class inheritance (a tree being built or searched step by step is a structure instead)",
   states: "the states something can be in and the events that move it between them (a TCP connection, an order, a traffic light)",
   branching: "a history that branches and merges (Git branches, merge vs rebase, versions)",
   format: "the parts of one message or format laid side by side (a URL, a packet's header and payload, a JWT, an email address)",
@@ -130,7 +130,7 @@ c3 = icon:droplet "Rain"
   flow: {
     shape: "graph",
     useWhen: "branches, decisions or dependencies: a node can have several next nodes",
-    avoidWhen: "a straight line of stages → steps",
+    avoidWhen: "a straight line of stages → steps; a graph being searched or its distances updated step by step (BFS, DFS, Dijkstra) → trace",
     variants: {
       auto: { when: "let the engine choose the direction from the depth" },
       down: { when: "decision trees and hierarchies, up to 4 levels deep" },
@@ -378,7 +378,7 @@ mid = label "mid" @above:c3
   tree: {
     shape: "hierarchy",
     useWhen: "parents and their children, 3–12 nodes: folders, DNS, the DOM, an org chart, class inheritance",
-    avoidWhen: "the order of stages matters → steps; a decision with branches → flow; a central idea with aspects → hub",
+    avoidWhen: "the order of stages matters → steps; a decision with branches → flow; a central idea with aspects → hub; a tree that grows or is searched step by step (a binary search tree, a heap, Huffman) → trace",
     variants: {
       down: { when: "root at the top, children below; up to 4 levels", items: [3, 12] },
       right: { when: "root at the left, children to the right: long labels (paths, names)", items: [3, 10] },
@@ -482,7 +482,7 @@ n4 = label "query" @below:p4
   },
   trace: {
     shape: "structure",
-    useWhen: "data that changes step by step: an algorithm run on values (sorting, searching, a heap, BFS with its queue), a stack or queue at work, a cache filling, distances being updated",
+    useWhen: "data that changes step by step: an algorithm run on values (sorting, searching, BFS with its queue), a stack or queue at work, a cache filling, distances being updated, a linked list being rewired, a hash table with chains, a tree growing by inserts, a graph being searched",
     avoidWhen: "the data does not change (a static picture of a structure → structure); the idea is not about data → another shape",
     variants: {
       main: { when: "one main collection with up to two side panels (queue, visited set, distances) beside it", items: [1, 3] },

@@ -1,4 +1,4 @@
-import type { Action, Args, Beat, ElementDecl, Place, Scene, Script, Setting, Span, StateItem, Step, VerbCall } from "./ast.js";
+import type { Action, Args, Beat, ElementDecl, Place, Scene, Script, Setting, Span, StateItem, StateSnapshot, Step, VerbCall } from "./ast.js";
 import { Codes, type Diagnostic } from "./diagnostics.js";
 import { CUE_ID, IDENT, parseNarration, tokenize, type Token } from "./lex.js";
 
@@ -358,6 +358,8 @@ export class Parser {
     const coll = toks[1]!.text.slice(0, -1);
     const items: StateItem[] = [];
     const pointers: { name: string; at: string }[] = [];
+    const links: { from: string; to: string }[] = [];
+    const chains: { label?: string }[] = [{}];
     let afterBar = false;
     let prevEnd = -1;
     for (const t of toks.slice(2)) {
@@ -367,8 +369,21 @@ export class Parser {
       }
       if (afterBar) {
         const m = !t.quoted && /^([A-Za-z_][A-Za-z0-9_]*)=(\S+)$/.exec(t.text);
+        const link = !t.quoted && /^([A-Za-z_][A-Za-z0-9_]*)->([A-Za-z_][A-Za-z0-9_]*)$/.exec(t.text);
         if (m) pointers.push({ name: m[1]!, at: m[2]! });
-        else this.err(Codes.BadArgument, `a pointer is name=index or name=item (\`i=2\`), not \`${t.text}\``, this.tokSpan(t));
+        else if (link) links.push({ from: link[1]!, to: link[2]! });
+        else this.err(Codes.BadArgument, `after | write a pointer (\`i=2\`) or a link (\`d->c\`), not \`${t.text}\``, this.tokSpan(t));
+        continue;
+      }
+      // `/` starts a detached chain; `2:` a labelled one (a bucket).
+      if (!t.quoted && t.text === "/") {
+        chains.push({});
+        prevEnd = t.endCol;
+        continue;
+      }
+      if (!t.quoted && /^[A-Za-z0-9_]+:$/.test(t.text)) {
+        chains.push({ label: t.text.slice(0, -1) });
+        prevEnd = t.endCol;
         continue;
       }
       // `"fact(4)"*` reads as a quoted value and a `*` touching it: that is one marked item.
@@ -380,10 +395,13 @@ export class Parser {
       }
       prevEnd = t.endCol;
       const item = stateItem(t);
-      if (item) items.push(item);
-      else this.err(Codes.BadArgument, `invalid item \`${t.text}\` (a value, name:value or "quoted", with an optional mark * + ~ !)`, this.tokSpan(t));
+      if (item) {
+        if (chains.length > 1) item.chain = chains.length - 1;
+        items.push(item);
+      } else this.err(Codes.BadArgument, `invalid item \`${t.text}\` (a value, name:value or "quoted", with an optional mark * + ~ !)`, this.tokSpan(t));
     }
-    const call: VerbCall = { verb: "state", targets: [coll], args: { params: {} }, state: { items, pointers }, span: this.tokSpan(toks[1]!) };
+    const state: StateSnapshot = { items, pointers, ...(chains.length > 1 && { chains }), ...(links.length && { links }) };
+    const call: VerbCall = { verb: "state", targets: [coll], args: { params: {} }, state, span: this.tokSpan(toks[1]!) };
     this.beat.actions.push({ anchor: toks[0]!.text, calls: [call], span });
   }
 

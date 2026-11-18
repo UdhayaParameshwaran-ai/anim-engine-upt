@@ -95,9 +95,16 @@ function action(a: Action): string {
   const st = a.calls[0]?.state;
   if (st) {
     // Plain words and numbers stay bare; anything else is quoted so it reads back as the same value.
-    const items = st.items.map((it) => `${it.id ? `${it.id}:` : ""}${/^[A-Za-z0-9_.-]+$/.test(it.value) ? it.value : JSON.stringify(it.value)}${it.mark ?? ""}`);
-    const ptrs = st.pointers.map((p) => `${p.name}=${p.at}`);
-    return `${a.anchor} ${a.calls[0]!.targets[0]}:${items.length ? ` ${items.join(" ")}` : ""}${ptrs.length ? ` | ${ptrs.join(" ")}` : ""}`;
+    const one = (it: (typeof st.items)[number]) => `${it.id ? `${it.id}:` : ""}${/^[A-Za-z0-9_.-]+$/.test(it.value) ? it.value : JSON.stringify(it.value)}${it.mark ?? ""}`;
+    // Chains in order: the first is written bare, a detached one after `/`, a labelled one after `label:`.
+    const chains = st.chains ?? [{}];
+    const parts: string[] = [];
+    chains.forEach((c, k) => {
+      if (k > 0) parts.push(c.label !== undefined ? `${c.label}:` : "/");
+      parts.push(...st.items.filter((it) => (it.chain ?? 0) === k).map(one));
+    });
+    const ptrs = [...st.pointers.map((p) => `${p.name}=${p.at}`), ...(st.links ?? []).map((l) => `${l.from}->${l.to}`)];
+    return `${a.anchor} ${a.calls[0]!.targets[0]}:${parts.length ? ` ${parts.join(" ")}` : ""}${ptrs.length ? ` | ${ptrs.join(" ")}` : ""}`;
   }
   const calls = a.calls.map((c) => {
     let s = c.verb;

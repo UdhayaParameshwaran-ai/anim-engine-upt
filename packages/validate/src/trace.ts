@@ -9,10 +9,42 @@ import { COLLECTIONS } from "@anim/registry";
 
 export const isCollection = (kind: string): boolean => (COLLECTIONS as readonly string[]).includes(kind);
 
+/** Collections whose items are nodes of a drawn graph or tree, known by name. */
+export const isNodeCollection = (kind: string): boolean => kind === "graph" || kind === "tree";
+/** Collections laid out as chains of nodes with arrows between neighbours. */
+export const isChainCollection = (kind: string): boolean => kind === "chain" || kind === "buckets";
+
+export interface Topology {
+  nodes: string[];
+  edges: { from: string; to: string; weight?: string }[];
+  /** Tokens that are not edges. */
+  bad: string[];
+}
+
+/** The nodes and edges of a graph (`A-B A-C:4`) or a tree (`R>A R>B`), nodes in order of first appearance. */
+export function topology(kind: string, text: string): Topology {
+  const nodes: string[] = [];
+  const edges: Topology["edges"] = [];
+  const bad: string[] = [];
+  const sep = kind === "tree" ? ">" : "-";
+  for (const tok of text.split(/\s+/).filter(Boolean)) {
+    const m = new RegExp("^(\\w+)" + sep + "(\\w+)(?::(\\S+))?$").exec(tok);
+    if (!m) {
+      bad.push(tok);
+      continue;
+    }
+    for (const n of [m[1]!, m[2]!]) if (!nodes.includes(n)) nodes.push(n);
+    edges.push({ from: m[1]!, to: m[2]!, ...(m[3] !== undefined && { weight: m[3] }) });
+  }
+  return { nodes, edges, bad };
+}
+
 /** An item's identity across states: its name, else its value and which occurrence of that value it is. */
-export function keysOf(items: readonly StateItem[]): string[] {
+export function keysOf(items: readonly StateItem[], byName = false): string[] {
   const seen = new Map<string, number>();
   return items.map((it) => {
+    // Graph and tree nodes are their names: `A`, `A*` and `A:3` are the same node.
+    if (byName) return `n:${it.id ?? it.value}`;
     if (it.id) return `#${it.id}`;
     const n = (seen.get(it.value) ?? 0) + 1;
     seen.set(it.value, n);
@@ -32,9 +64,9 @@ export interface StateDiff {
 }
 
 /** What changed between two states of one collection. */
-export function diffStates(prev: readonly StateItem[], next: readonly StateItem[]): StateDiff {
-  const pk = keysOf(prev);
-  const nk = keysOf(next);
+export function diffStates(prev: readonly StateItem[], next: readonly StateItem[], byName = false): StateDiff {
+  const pk = keysOf(prev, byName);
+  const nk = keysOf(next, byName);
   const at = new Map(pk.map((k, i) => [k, i]));
   const kept: StateDiff["kept"] = [];
   const used = new Set<number>();
@@ -48,7 +80,7 @@ export function diffStates(prev: readonly StateItem[], next: readonly StateItem[
   let exited = prev.map((_, i) => i).filter((i) => !used.has(i));
   let entered = next.map((_, j) => j).filter((j) => !kept.some((k) => k.to === j));
   const changed: StateDiff["changed"] = [];
-  for (const i of [...exited]) {
+  for (const i of byName ? [] : [...exited]) {
     if (entered.includes(i)) {
       changed.push({ from: i, to: i });
       exited = exited.filter((x) => x !== i);
@@ -102,7 +134,7 @@ export function stateEvents(scene: Scene): StateEvent[] {
 }
 
 export interface TraceProblem {
-  code: "NAR601" | "NAR602" | "NAR603" | "NAR605" | "NAR606" | "NAR607" | "NAR609" | "NAR610" | "NAR611" | "NAR612" | "NAR615";
+  code: "NAR601" | "NAR602" | "NAR603" | "NAR604" | "NAR605" | "NAR606" | "NAR607" | "NAR609" | "NAR610" | "NAR611" | "NAR612" | "NAR615";
   severity: "error" | "warning";
   message: string;
   span: Span;
@@ -114,7 +146,7 @@ export const CELL_VERBS = new Set(["swap", "move", "drop", "lift", "set", "clone
 
 /** Checks that need no knowledge of any algorithm. */
 const SORT_CHECKS = new Set(["sort", "bubble", "insertion", "selection", "partition", "quicksort", "mergesort", "heapsort"]);
-const CAPACITY = { row: 10, other: 8 } as const;
+const CAPACITY: Record<string, number> = { row: 10, chain: 8, buckets: 12, graph: 12, tree: 12 };
 const NEGATED = /\b(not|isn't|isnt|aren't|unsorted|until|before|if|once|when|so that|becomes?|to be)\b/i;
 
 const values = (items: readonly StateItem[]): string[] => items.map((i) => i.value);
@@ -217,12 +249,28 @@ export function analyzeTrace(scene: Scene): TraceProblem[] {
       });
     }
 
+    // Arrows written as `d->c` join cells that exist in this state.
+    for (const l of ev.snap.links ?? []) {
+      const missing = [l.from, l.to].find((n) => !items.some((i) => i.id === n));
+      if (missing) problems.push({ code: "NAR604", severity: "error", message: `link \`${l.from}->${l.to}\` names \`${missing}\`, which is not a named cell of \`${ev.coll}\` in this state (name cells like \`d:10\`)`, span: ev.span });
+    }
+    // A graph or tree draws its nodes from the edges declared with it; a state may only list those nodes.
+    if (isNodeCollection(kind)) {
+      const topo = topology(kind, decl.texts[0] ?? "");
+      if (!topo.nodes.length) {
+        problems.push({ code: "NAR604", severity: "error", message: `\`${ev.coll} = ${kind}\` needs its edges: \`${ev.coll} = ${kind} "${kind === "tree" ? "R>A R>B A>C" : "A-B A-C B-D"}"\``, span: decl.span });
+      } else {
+        const unknown = items.map((i) => i.id ?? i.value).find((n) => !topo.nodes.includes(n));
+        if (unknown) problems.push({ code: "NAR604", severity: "error", message: `\`${unknown}\` is not a node of \`${ev.coll}\` (nodes: ${topo.nodes.join(" ")})`, span: ev.span });
+      }
+    }
+
     // Names are identities: two cells with one name in a state cannot both be it.
     const names = items.filter((i) => i.id).map((i) => i.id!);
     const dup = names.find((n, i) => names.indexOf(n) !== i);
     if (dup) problems.push({ code: "NAR605", severity: "error", message: `\`${ev.coll}\` has two cells named \`${dup}\` in one state; names must be unique (use \`${dup}2:\`)`, span: ev.span });
 
-    const cap = kind === "row" ? CAPACITY.row : CAPACITY.other;
+    const cap = CAPACITY[kind] ?? 8;
     if (items.length > cap) problems.push({ code: "NAR615", severity: "error", message: `\`${ev.coll}\` holds ${items.length} cells; at most ${cap} fit (${kind === "row" ? "split the run or use fewer values" : "keep the panel short"})`, span: ev.span });
 
     for (const p of pointers) {

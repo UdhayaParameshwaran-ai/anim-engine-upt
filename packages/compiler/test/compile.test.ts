@@ -566,3 +566,54 @@ describe("trace scenes", () => {
     expect(panel.box.x).toBeGreaterThan(main.box.x + main.box.w);
   });
 });
+
+describe("trace chains, buckets, trees and graphs", () => {
+  const trace = (body: string) => ir(`video 1\nscene t "Run" template=trace\n${body}\n`);
+  const calls = (v: VideoIR, verb: string) => v.scenes[0]!.steps.flatMap((s) => s.beats.flatMap((b) => b.actions.flatMap((a) => a.calls))).filter((c) => c.verb === verb);
+  const arrows = (v: VideoIR) => v.scenes[0]!.elements.filter((e) => e.kind === "arrow" || e.kind === "line");
+
+  it("draws an arrow between neighbours of a linked list and a null at the end", () => {
+    const v = trace("l = chain\n> A {1}list.\n1 l: a:3 b:8 c:15");
+    expect(arrows(v)).toHaveLength(2);
+    expect(v.scenes[0]!.elements.some((e) => e.texts[0] === "null")).toBe(true);
+    const cells = v.scenes[0]!.elements.filter((e) => e.kind === "box");
+    expect(cells.map((c) => c.box.y).every((y) => y === cells[0]!.box.y)).toBe(true);
+  });
+
+  it("rewires arrows when a node joins the chain: the old arrow goes, new ones are drawn, cells slide with a destination", () => {
+    const v = trace("l = chain\n> A {1}list.\n1 l: a:3 b:8 c:15\n> {1}Make a node.\n1 l: a:3 b:8 c:15 / d:10\n> {1}Link it in.\n1 l: a:3 b:8 d:10 c:15");
+    expect(calls(v, "hide").length).toBeGreaterThan(0);
+    expect(arrows(v).length).toBeGreaterThanOrEqual(4);
+    const slides = calls(v, "move").filter((c) => c.dest);
+    expect(slides.length).toBeGreaterThan(0);
+    // Not a swap: the two nodes whose slot numbers trade are in different rows.
+    expect(calls(v, "swap")).toHaveLength(0);
+  });
+
+  it("lays buckets out one row per number and chains the nodes of a bucket", () => {
+    const v = trace("h = buckets n=4\n> A {1}table.\n1 h: 1: 5 9 3: 7");
+    const cell = (t: string) => v.scenes[0]!.elements.find((e) => e.kind === "box" && e.texts[0] === t)!.box;
+    expect(cell("5").y).toBe(cell("9").y);
+    expect(cell("7").y).toBeGreaterThan(cell("5").y);
+    expect(cell("9").x).toBeGreaterThan(cell("5").x);
+    expect(arrows(v)).toHaveLength(1);
+    expect(v.scenes[0]!.elements.filter((e) => e.kind === "label" && /^[0-3]$/.test(e.texts[0]!))).toHaveLength(4);
+  });
+
+  it("draws a tree from its edges: a node appears when listed and its edge with it", () => {
+    const v = trace('t = tree "5>3 5>8 3>1"\n> The {1}root.\n1 t: 5\n> A {1}left child.\n1 t: 5 3\n> {1}More.\n1 t: 5 3 8 1');
+    const node = (n: string) => v.scenes[0]!.elements.find((e) => e.kind === "circle" && e.texts[0] === n)!.box;
+    expect(node("5").y).toBeLessThan(node("3").y);
+    expect(node("3").y).toBe(node("8").y);
+    expect(node("3").x).toBeLessThan(node("8").x);
+    expect(arrows(v)).toHaveLength(3);
+  });
+
+  it("keeps a graph node's identity across marks and labels", () => {
+    const v = trace('g = graph "A-B A-C"\n> {1}Start.\n1 g: A B C\n> {1}Visit.\n1 g: A* B C\n> {1}Distance.\n1 g: A:0+ B C');
+    expect(v.scenes[0]!.elements.filter((e) => e.kind === "circle")).toHaveLength(3);
+    expect(calls(v, "set").map((c) => c.params.to)).toEqual(["A: 0"]);
+    expect(calls(v, "lift")).toHaveLength(0);
+    expect(arrows(v)).toHaveLength(2);
+  });
+});
