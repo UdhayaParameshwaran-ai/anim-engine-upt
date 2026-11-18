@@ -23,7 +23,7 @@ export const SHAPES = {
   interaction: "messages passed between parties over time: a request and its response, a handshake, a login",
   architecture: "a system's components and how they connect, grouped into tiers (client, servers, data)",
   layers: "layers stacked on each other, each built on the one below (network layers, a software stack)",
-  structure: "a data structure and what happens to its values step by step (array, linked list, stack, queue, tree, graph, hash table): a sort, a search, an insert, a traversal, a cache at work, a point stepping down a curve (gradient descent), items placed on a ring (consistent hashing)",
+  structure: "a data structure and what happens to its values step by step (array, linked list, stack, queue, tree, graph, hash table): a sort, a search, an insert, a traversal, a cache at work, a point stepping down a curve (gradient descent), items placed on a ring (consistent hashing), events along a time axis (polling versus push, timeouts, token windows, cold starts), a neural network layer by layer (forward values, blame flowing back)",
   code: "real code, a query, a config or terminal commands, walked through line by line",
   hierarchy: "a fixed hierarchy of parents and children: a file system, DNS, the DOM, an org chart, class inheritance (a tree being built or searched step by step is a structure instead)",
   states: "the states something can be in and the events that move it between them (a TCP connection, an order, a traffic light)",
@@ -482,7 +482,7 @@ n4 = label "query" @below:p4
   },
   trace: {
     shape: "structure",
-    useWhen: "data that changes step by step: an algorithm run on values (sorting, searching, BFS with its queue), a stack or queue at work, a cache filling, distances being updated, a linked list being rewired, a hash table with chains, a tree growing by inserts, a graph being searched, a point stepping down a curve, keys and servers on a ring",
+    useWhen: "data that changes step by step: an algorithm run on values (sorting, searching, BFS with its queue), a stack or queue at work, a cache filling, distances being updated, a linked list being rewired, a hash table with chains, a tree growing by inserts, a graph being searched, a point stepping down a curve, keys and servers on a ring, work on a time axis, a neural network",
     avoidWhen: "the data does not change (a static picture of a structure → structure); the idea is not about data → another shape",
     variants: {
       main: { when: "one main collection with up to two side panels (queue, visited set, distances) beside it", items: [1, 3] },

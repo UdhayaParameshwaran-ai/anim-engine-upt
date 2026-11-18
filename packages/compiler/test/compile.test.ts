@@ -479,12 +479,19 @@ describe("connectors around nodes", () => {
 });
 
 describe("scene titles", () => {
-  it("shows a title written on a later cue as the scene opens, typed quickly", () => {
+  it("shows a title written on a later cue as the scene opens, faded in whole (a title slide keeps typing)", () => {
     const v = ir(`video 1\nscene s "Heat" template=compare\ntitle = title "Two ways heat moves through a room"\nleft = icon:sun "Radiation"\nright = icon:wind "Convection"\n> {1}First the sun, {2}then the air.\n1 fade left\n2 write title then fade right\n`);
     const first = v.scenes[0]!.steps[0]!.beats[0]!.actions[0]!;
     expect(first.anchor).toBe("start");
-    expect(first.calls[0]).toMatchObject({ verb: "write", targets: ["title"], delay: -5 });
-    expect(first.calls[0]!.duration).toBeLessThanOrEqual(0.6);
+    expect(first.calls[0]).toMatchObject({ verb: "fade", targets: ["title"], delay: -5 });
+    expect(first.calls[0]!.duration).toBeLessThanOrEqual(0.4);
+    const slide = ir(`video 1
+scene s "Hi" template=title
+title = title "A headline"
+> {1}Hello.
+1 write title
+`);
+    expect(slide.scenes[0]!.steps[0]!.beats[0]!.actions[0]!.calls[0]!.verb).toBe("write");
     // The rest of the chain still runs on its cue.
     const later = v.scenes[0]!.steps[0]!.beats[0]!.actions.find((a) => a.anchor === "2")!;
     expect(later.calls.map((c) => c.verb)).toEqual(["fade"]);
@@ -652,5 +659,26 @@ describe("trace heaps, plots and rings", () => {
     expect(a.y).toBeLessThan(c.y);
     expect(b.x).toBeGreaterThan(a.x);
     expect(Math.abs(a.x - c.x)).toBeLessThan(2);
+  });
+});
+
+describe("trace lanes and networks", () => {
+  const trace = (body: string) => ir(`video 1\nscene t "Run" template=trace\n${body}\n`);
+  const box = (v: VideoIR, text: string) => v.scenes[0]!.elements.find((e) => (e.kind === "box" || e.kind === "circle") && e.texts[0] === text)!.box;
+
+  it("puts segments on a time axis: position by start, width by length, one row per lane", () => {
+    const v = trace("t = lanes to=10\n> Two {1}lanes.\n1 t: a: x:0-2 y:6-8 b: z:0-10");
+    expect(box(v, "y").x).toBeGreaterThan(box(v, "x").x);
+    expect(Math.round((box(v, "y").x - box(v, "x").x) / (box(v, "z").w / 10))).toBe(6);
+    expect(box(v, "z").w).toBeGreaterThan(box(v, "x").w * 4);
+    expect(box(v, "z").y).toBeGreaterThan(box(v, "x").y);
+    expect(box(v, "x").y).toBe(box(v, "y").y);
+  });
+
+  it("draws a network from its layer sizes: every node joined to the next layer, layers left to right", () => {
+    const v = trace('n = net "2 3 1"\n> A {1}net.\n1 n: x1 x2 a1 a2 a3 y1');
+    expect(box(v, "x1").x).toBeLessThan(box(v, "a1").x);
+    expect(box(v, "a1").x).toBeLessThan(box(v, "y1").x);
+    expect(v.scenes[0]!.elements.filter((e) => e.kind === "arrow")).toHaveLength(9);
   });
 });

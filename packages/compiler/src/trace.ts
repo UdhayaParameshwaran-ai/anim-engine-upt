@@ -35,6 +35,9 @@ interface Extent {
   /** Smallest and largest x of a plot's points. */
   xmin: number;
   xmax: number;
+  /** Lanes, in the order their names first appear, and the latest end time of any segment. */
+  lanes: string[];
+  tmax: number;
 }
 
 /** Where the cells of one collection go. */
@@ -97,6 +100,13 @@ function layoutNodes(kind: string, topo: Topology, f: Frame): Map<string, Box> {
   const out = new Map<string, Box>();
   const names = topo.nodes;
   if (!names.length) return out;
+  if (kind === "net" && topo.layers) {
+    const cols = topo.layers.length;
+    const widest = Math.max(...topo.layers.map((l) => l.length));
+    const d = Math.min(96, (f.w * 0.8) / cols, (f.h * 0.85) / widest);
+    topo.layers.forEach((l, li) => l.forEach((n, k) => out.set(n, { x: r1(f.x + ((li + 0.5) * f.w) / cols - d / 2), y: r1(f.y + ((k + 0.5) * f.h) / l.length - d / 2), w: r1(d), h: r1(d) })));
+    return out;
+  }
   if (kind === "tree") {
     const kids = new Map<string, string[]>(names.map((n) => [n, []]));
     const hasParent = new Set<string>();
@@ -223,6 +233,29 @@ function geometry(kind: string, frame: Frame, ext: Extent, captioned: boolean, d
     };
     return { kind, indexed: false, pointerAbove: true, caption, at: (_s, i) => slot(Math.max(0, i)) };
   }
+  if (kind === "lanes") {
+    const names = ext.lanes.length ? ext.lanes : [""];
+    const labelW = names.some((n) => n) ? 190 : 0;
+    const plot: Frame = { x: f.x + labelW, y: f.y + 10, w: f.w - labelW - 20, h: f.h - 80 };
+    const T = Number.isFinite(Number(decl.attrs.to)) && decl.attrs.to !== undefined ? Number(decl.attrs.to) : Math.max(ext.tmax, 1);
+    const rowH = Math.min(120, plot.h / names.length);
+    const h = Math.min(70, rowH * 0.62);
+    const seg = (lane: number, start: number, end: number): Box => ({ x: r1(plot.x + (start / T) * plot.w), y: r1(plot.y + lane * rowH + (rowH - h) / 2), w: r1(Math.max(((end - start) / T) * plot.w, 24)), h: r1(h) });
+    const lane = (snap: StateSnapshot, i: number): number => {
+      const c = snap.items[i]?.chain ?? 0;
+      const label = snap.chains?.[c]?.label ?? (c === 0 ? "" : `lane ${c}`);
+      return Math.max(0, names.indexOf(label));
+    };
+    const anchors: Box[] = [{ x: r1(plot.x), y: r1(plot.y + names.length * rowH + 6), w: 2, h: 2 }, { x: r1(plot.x + plot.w), y: r1(plot.y + names.length * rowH + 6), w: 2, h: 2 }];
+    const segments: [number, number][] = [[0, 1]];
+    const fmt = (v: number) => `${Math.round(v * 10) / 10}s`;
+    const labels = [
+      { text: "0s", box: { x: r1(plot.x - 30), y: r1(plot.y + names.length * rowH + 14), w: 60, h: 40 } },
+      { text: fmt(T), box: { x: r1(plot.x + plot.w - 30), y: r1(plot.y + names.length * rowH + 14), w: 60, h: 40 } },
+      ...names.map((n, k) => ({ text: n, box: { x: r1(f.x), y: r1(plot.y + k * rowH + (rowH - 44) / 2), w: labelW - 12, h: 44 } })).filter((l) => l.text),
+    ];
+    return { kind, indexed: false, pointerAbove: true, caption, decor: { anchors, segments, labels }, at: (snap, i) => { const m = /^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/.exec(snap.items[i]?.value ?? ""); return seg(lane(snap, i), Number(m?.[1] ?? 0), Number(m?.[2] ?? 1)); } };
+  }
   if (isChainCollection(kind)) {
     const n = Math.max(2, Math.min(8, Number(decl.attrs.n ?? 5)));
     const rows = kind === "buckets" ? n : Math.max(1, ext.rows);
@@ -278,7 +311,7 @@ function geometry(kind: string, frame: Frame, ext: Extent, captioned: boolean, d
 }
 
 /** A cell's text: a key and its value (`A: 4`) in tables and nodes, the value alone elsewhere. */
-const display = (kind: string, it: StateItem): string => (kind === "ring" ? (it.id ?? it.value) : (kind === "pairs" || isNodeCollection(kind)) && it.id ? `${it.id}: ${it.value}` : it.value);
+const display = (kind: string, it: StateItem): string => (kind === "lanes" ? (it.id ?? it.value) : kind === "ring" ? (it.id ?? it.value) : (kind === "pairs" || isNodeCollection(kind)) && it.id ? `${it.id}: ${it.value}` : it.value);
 const boxAttr = (b: Box): string => `${b.x},${b.y},${b.w},${b.h}`;
 
 /** Where a pointer label goes for item `i` (and how high, when several share one). */
@@ -322,7 +355,7 @@ export function expandTrace(scene: Scene, canvas: TraceCanvas): Scene {
   if (!colls.length) return scene;
   const events = stateEvents(scene);
 
-  const extent = new Map<string, Extent>(colls.map((c) => [c.id, { cap: 1, chars: 1, maxLen: 1, rows: 1, xmin: Infinity, xmax: -Infinity }]));
+  const extent = new Map<string, Extent>(colls.map((c) => [c.id, { cap: 1, chars: 1, maxLen: 1, rows: 1, xmin: Infinity, xmax: -Infinity, lanes: [], tmax: 0 }]));
   for (const ev of events) {
     const x = extent.get(ev.coll);
     const kind = colls.find((c) => c.id === ev.coll)?.kind ?? "row";
@@ -333,6 +366,13 @@ export function expandTrace(scene: Scene, canvas: TraceCanvas): Scene {
     for (const it of ev.snap.items) perChain.set(it.chain ?? 0, (perChain.get(it.chain ?? 0) ?? 0) + 1);
     x.maxLen = Math.max(x.maxLen, ...perChain.values());
     x.rows = Math.max(x.rows, ev.snap.chains?.length ?? 1);
+    if (kind === "lanes") {
+      (ev.snap.chains ?? [{}]).forEach((c, k) => {
+        const name = c.label ?? (k === 0 ? "" : `lane ${k}`);
+        if (ev.snap.items.some((it) => (it.chain ?? 0) === k) && !x.lanes.includes(name)) x.lanes.push(name);
+      });
+      for (const it of ev.snap.items) x.tmax = Math.max(x.tmax, Number(/-(\d+(?:\.\d+)?)$/.exec(it.value)?.[1] ?? 0));
+    }
     for (const it of ev.snap.items) {
       const v = Number(it.value);
       if (Number.isFinite(v)) (x.xmin = Math.min(x.xmin, v), (x.xmax = Math.max(x.xmax, v)));

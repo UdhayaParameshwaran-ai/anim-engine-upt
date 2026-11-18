@@ -11,7 +11,7 @@ import { parseCurve } from "./expr.js";
 export const isCollection = (kind: string): boolean => (COLLECTIONS as readonly string[]).includes(kind);
 
 /** Collections whose items are nodes of a drawn graph or tree, known by name. */
-export const isNodeCollection = (kind: string): boolean => kind === "graph" || kind === "tree";
+export const isNodeCollection = (kind: string): boolean => kind === "graph" || kind === "tree" || kind === "net";
 /** Collections laid out as chains of nodes with arrows between neighbours. */
 export const isChainCollection = (kind: string): boolean => kind === "chain" || kind === "buckets";
 
@@ -20,6 +20,8 @@ export interface Topology {
   edges: { from: string; to: string; weight?: string }[];
   /** Tokens that are not edges. */
   bad: string[];
+  /** A network's layers, left to right. */
+  layers?: string[][];
 }
 
 /** The nodes and edges of a graph (`A-B A-C:4`) or a tree (`R>A R>B`), nodes in order of first appearance. */
@@ -27,6 +29,15 @@ export function topology(kind: string, text: string): Topology {
   const nodes: string[] = [];
   const edges: Topology["edges"] = [];
   const bad: string[] = [];
+  // A network is its layer sizes (`2 3 1`): inputs x1.., hidden layers a1.. b1.., outputs y1.., every node joined to the next layer.
+  if (kind === "net") {
+    const sizes = text.split(/\s+/).filter(Boolean).map(Number);
+    if (sizes.length < 2 || sizes.some((n) => !Number.isInteger(n) || n < 1 || n > 6)) return { nodes, edges, bad: text.split(/\s+/).filter(Boolean) };
+    const layers = sizes.map((n, li) => Array.from({ length: n }, (_, k) => `${li === 0 ? "x" : li === sizes.length - 1 ? "y" : String.fromCharCode(96 + li)}${k + 1}`));
+    for (const l of layers) nodes.push(...l);
+    layers.slice(1).forEach((l, i) => { for (const a of layers[i]!) for (const b of l) edges.push({ from: a, to: b }); });
+    return { nodes, edges, bad, layers };
+  }
   const sep = kind === "tree" ? ">" : "-";
   for (const tok of text.split(/\s+/).filter(Boolean)) {
     const m = new RegExp("^(\\w+)" + sep + "(\\w+)(?::(\\S+))?$").exec(tok);
@@ -147,7 +158,7 @@ export const CELL_VERBS = new Set(["swap", "move", "drop", "lift", "set", "clone
 
 /** Checks that need no knowledge of any algorithm. */
 const SORT_CHECKS = new Set(["sort", "bubble", "insertion", "selection", "partition", "quicksort", "mergesort", "heapsort"]);
-const CAPACITY: Record<string, number> = { row: 10, chain: 8, buckets: 12, graph: 12, tree: 12, heap: 15, plot: 12, ring: 10 };
+const CAPACITY: Record<string, number> = { net: 16, row: 10, chain: 8, buckets: 12, graph: 12, tree: 12, heap: 15, plot: 12, ring: 10, lanes: 14 };
 const NEGATED = /\b(not|isn't|isnt|aren't|unsorted|until|before|if|once|when|so that|becomes?|to be)\b/i;
 
 const values = (items: readonly StateItem[]): string[] => items.map((i) => i.value);
@@ -264,6 +275,14 @@ export function analyzeTrace(scene: Scene): TraceProblem[] {
     if (kind === "ring") {
       const bad = items.find((i) => !i.id || !Number.isFinite(Number(i.value)) || Number(i.value) < 0 || Number(i.value) >= 360);
       if (bad) problems.push({ code: "NAR604", severity: "error", message: `an item of \`${ev.coll}\` is \`name:angle\` with an angle from 0 to 359 (\`A:40\`), not \`${bad.id ? `${bad.id}:` : ""}${bad.value}\``, span: ev.span });
+    }
+    // A lane holds segments in seconds: `label:start-end`.
+    if (kind === "lanes") {
+      const bad = items.find((i) => {
+        const m = /^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/.exec(i.value);
+        return !m || Number(m[1]) >= Number(m[2]);
+      });
+      if (bad) problems.push({ code: "NAR604", severity: "error", message: `a segment of \`${ev.coll}\` is \`label:start-end\` in seconds with start before end (\`poll1:0-1\`), not \`${bad.id ? `${bad.id}:` : ""}${bad.value}\``, span: ev.span });
     }
     // A graph or tree draws its nodes from the edges declared with it; a state may only list those nodes.
     if (isNodeCollection(kind)) {

@@ -428,3 +428,17 @@ describe("trace plots and rings", () => {
     expect(check(["r = ring", "> A {1}ring.", "1 r: 40"].join("\n"), T).codes).toContain(C.TraceLink);
   });
 });
+
+describe("trace lanes and networks", () => {
+  const T = { scene: "template=trace" };
+  it("lane segments are label:start-end with start before end", () => {
+    expect(check(["t = lanes", "> A {1}lane.", "1 t: a: x:0-2"].join("\n"), T).codes).not.toContain(C.TraceLink);
+    expect(check(["t = lanes", "> A {1}lane.", "1 t: a: x:5-2"].join("\n"), T).codes).toContain(C.TraceLink);
+    expect(check(["t = lanes", "> A {1}lane.", "1 t: a: x:soon"].join("\n"), T).codes).toContain(C.TraceLink);
+  });
+  it("a network lists only its own nodes and needs sizes", () => {
+    expect(check(['n = net "2 3 1"', "> A {1}net.", "1 n: x1 a3 y1"].join("\n"), T).codes).not.toContain(C.TraceLink);
+    expect(check(['n = net "2 3 1"', "> A {1}net.", "1 n: x9"].join("\n"), T).codes).toContain(C.TraceLink);
+    expect(check(["n = net", "> A {1}net.", "1 n: x1"].join("\n"), T).codes).toContain(C.TraceLink);
+  });
+});

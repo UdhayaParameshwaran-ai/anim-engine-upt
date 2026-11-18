@@ -231,6 +231,15 @@ function titleFirst(scene: SceneIR): void {
       const call = action.calls.find((c) => ENTER.has(c.verb) && c.targets.includes("title"));
       if (!call) continue;
       if (typeof call.duration === "number") call.duration = Math.min(call.duration, cap);
+      // A scene heading appears whole and quickly: typed text is half a word for the first moments, and a
+      // viewer (or a frame taken early) sees a cut-off title. A title slide keeps its typed headline.
+      if (scene.template !== "title" && call.verb === "write") {
+        const fade = findVerb("fade")!;
+        call.verb = "fade";
+        call.verbVersion = fade.version;
+        call.duration = 0.35;
+        call.params = { ease: "out" };
+      }
       // Already the first thing of the scene.
       if (bi === 0 && action.anchor === "start" && action.calls[0] === call) return;
       const moved = { ...call, targets: ["title"], delay: -5, stagger: 0 };
