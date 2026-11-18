@@ -47,3 +47,19 @@ gradient descent, hash collisions and a few others still got a grid table or ico
   or icon pages for recaps and limits, tiny edge labels, a worked example given as a table of numbers.
 - Three topics (sharding, message-queue, mapreduce) timed out once in the Claude CLI under parallel load and
   were re-run.
+
+## h3 (after lanes, networks, heading fade, routing fix)
+
+| Run | Videos | Average | 4s | 3s | 2s | 1s |
+|---|---|---|---|---|---|---|
+| h3: all topics | 62 | 3.21 | 18 | 39 | 5 | 0 |
+
+- Trace scenes in 38 of 62 videos (25 before). `lanes` and `net` were used by 3 videos only (the planner rarely
+  picks them: neural-network and totp still got icon chains or a number-only trace).
+- Still 2/5: process-thread, cookies-sessions, totp, regex, floating-point.
+- Defects named in most videos: recap/limit pages that are bullet text, first frame of title slides typing, tiny
+  labels, example values missing from the picture (pattern `c[ao]t` shown as `caot`, hex addresses, item names in a
+  Bloom filter), trace cells without labels, relations drawn as rows (garbage-collection graph has no edges).
+- Engine bugs found: backslash in text is eaten (file-system `C:\Users`), `|` leaks into grid bullets,
+  `count` stat shows 0 then 1, struck-through compare side reads as "wrong", trace shows `null` and `i` index chrome
+  on non-array data (order-status, traffic-light).
