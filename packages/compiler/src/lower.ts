@@ -95,6 +95,7 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
         }),
       })),
     };
+    titleFirst(ir);
     furnish(ir, layout, motion);
     scenes.push(ir);
     prevBoxes = layout.boxes;
@@ -202,6 +203,38 @@ interface Moment {
   anchor: string;
   offset: number;
   line: number;
+}
+
+/** How long a heading may take to type: it frames the scene, so it should be readable almost at once. */
+const TITLE_WRITE = 0.6;
+/** A title slide's headline is the content itself: it may take a little longer. */
+const HEADLINE_WRITE = 1.0;
+
+/**
+ * A scene's own title (the `title` element) is on screen as the scene appears, like the automatic heading:
+ * a script that writes it on a later cue, after other content, would leave the frame headless until then.
+ * Typing is capped so the title never sits half-written.
+ */
+function titleFirst(scene: SceneIR): void {
+  const title = scene.elements.find((e) => e.id === "title" && e.step === 0);
+  if (!title) return;
+  const cap = scene.template === "title" ? HEADLINE_WRITE : TITLE_WRITE;
+  const beats = scene.steps[0]?.beats ?? [];
+  for (const [bi, beat] of beats.entries()) {
+    for (const action of beat.actions) {
+      const call = action.calls.find((c) => ENTER.has(c.verb) && c.targets.includes("title"));
+      if (!call) continue;
+      if (typeof call.duration === "number") call.duration = Math.min(call.duration, cap);
+      // Already the first thing of the scene.
+      if (bi === 0 && action.anchor === "start" && action.calls[0] === call) return;
+      const moved = { ...call, targets: ["title"], delay: -5, stagger: 0 };
+      call.targets = call.targets.filter((t) => t !== "title");
+      if (!call.targets.length) action.calls.splice(action.calls.indexOf(call), 1);
+      if (!action.calls.length) beat.actions.splice(beat.actions.indexOf(action), 1);
+      beats[0]!.actions.unshift({ anchor: "start", line: action.line, calls: [moved] });
+      return;
+    }
+  }
 }
 
 const later = (a: Moment, b: Moment) => (a.step - b.step || a.beat - b.beat || a.rank - b.rank || a.offset - b.offset) > 0;

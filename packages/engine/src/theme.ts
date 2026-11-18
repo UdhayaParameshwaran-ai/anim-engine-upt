@@ -190,7 +190,12 @@ export function color(theme: Theme, token: string): string {
 /** The color of a template item, by its index (items take the look's palette in turn). */
 export function itemColor(theme: Theme, index: number): string {
   const n = theme.palette.length;
-  return color(theme, theme.palette[((Math.trunc(index) % n) + n) % n]!);
+  const token = theme.palette[((Math.trunc(index) % n) + n) % n]!;
+  // Green and red mean ok and fail (`mark`): an item that merely comes second or third must not look approved
+  // or failed, so those palette slots become blends of the look's own accent and cool colors.
+  if (token === "good") return `color-mix(in srgb, ${theme.accent} 50%, ${theme.cool})`;
+  if (token === "warn") return `color-mix(in srgb, ${theme.cool} 55%, ${theme.fg})`;
+  return color(theme, token);
 }
 
 /** CSS filter for a look's shape shadow ("" when it has none). */

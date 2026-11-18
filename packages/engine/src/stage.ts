@@ -162,6 +162,11 @@ export class Stage {
           inst.strikeLine = line;
         }
       }
+      // Connector labels sit above everything else in the scene: a node drawn over a label would cut its ends off.
+      // (The connector's own group has no transform, so the label keeps its coordinates; applyElement keeps it in step.)
+      const labels = svg(doc, "g", { "data-layer": "labels" }) as SVGGElement;
+      for (const inst of instances.values()) if (inst.connector?.label) labels.append(inst.connector.label);
+      if (labels.childNodes.length) g.append(labels);
       this.svgCamera.append(g);
       this.htmlCamera.append(html);
       this.scenes.push({ res, ir: sceneIr, svg: g, html, instances });
@@ -378,12 +383,23 @@ export class Stage {
     const c = color(this.theme, this.tintMeta(target).color);
     const blur = num(p.blur, 0);
     // A marker block suits text; behind a picture it is a crude rectangle, so pictures glow instead.
-    const filters = [root.getAttribute("data-shadow") ?? "", blur > 0.05 ? `blur(${round(blur, 2)}px)` : "", this.emphasis(tint, c, 4, 14, PICTURES.has(inst.el.kind))];
+    const glow = this.emphasis(tint, c, 4, 14, PICTURES.has(inst.el.kind));
+    // A glow goes on the element's shapes and picture, never on its text: a halo of the same color around
+    // every glyph makes a highlighted label unreadable. (Marker blocks and HTML widgets stay whole.)
+    const perChild = inst.layer !== "html" && !glow.startsWith("url(");
+    const filters = [root.getAttribute("data-shadow") ?? "", blur > 0.05 ? `blur(${round(blur, 2)}px)` : "", perChild ? "" : glow];
     style.push(["filter", filters.filter(Boolean).join(" ")]);
+    if (perChild) for (const child of Array.from(root.children)) if (child.tagName.toLowerCase() !== "text") (child as SVGElement).style.filter = glow;
     if (textual) {
       for (const t of root.querySelectorAll("text")) t.setAttribute("fill", tint > 0.01 ? `color-mix(in srgb, ${c} ${Math.round(tint * 100)}%, ${this.theme.fg})` : this.theme.fg);
     }
     css(root, this.baseStyle.get(root) ?? "", style);
+    // A connector's label lives in the scene's label layer: it shows and fades with its connector.
+    const label = inst.connector?.label;
+    if (label) {
+      label.style.opacity = String(round(innerK * opacity, 4));
+      label.style.visibility = opacity <= 0.001 ? "hidden" : "";
+    }
   }
 
   /**
@@ -500,8 +516,13 @@ export class Stage {
   /** Straight connector between the current boxes of its endpoints, clipped at their borders. */
   private route(inst: Instance, view: SceneView, state: FrameState): void {
     const c = inst.connector!;
-    const a = this.currentBox(view, c.from, state);
-    const b = this.currentBox(view, c.to, state);
+    // A picture's label can be wider than its box: clip at the label's width, or the arrowhead ends inside the text.
+    const wide = (id: string, box: Box | undefined): Box | undefined => {
+      const lw = Number(view.instances.get(id)?.el.params.labelW ?? 0);
+      return box && lw > box.w ? { ...box, x: box.x + box.w / 2 - lw / 2, w: lw } : box;
+    };
+    const a = wide(c.from, this.currentBox(view, c.from, state));
+    const b = wide(c.to, this.currentBox(view, c.to, state));
     if (!a || !b) return;
     const row = inst.el.params.route === "row";
     const [ax, ay] = [a.x + a.w / 2, a.y + a.h / 2];
@@ -538,11 +559,15 @@ export class Stage {
     if (c.label) {
       // Clear the line by half the label's extent along the line's normal (estimated glyph width); a message's label sits above it.
       const halfW = ((c.label.textContent ?? "").length * 0.55 * 26) / 2;
-      const off = 10 + Math.abs(nx) * halfW + Math.abs(ny) * 13;
+      let off = 10 + Math.abs(nx) * halfW + Math.abs(ny) * 13;
+      // A label longer than the gap between its two boxes would lie across them: it moves off the line, clear of both.
+      if (!row && !arc && halfW * 2 + 16 > len) off = Math.max(off, (Math.abs(ny) * Math.max(a.h, b.h) + Math.abs(nx) * Math.max(a.w, b.w)) / 2 + 18);
       // On an arc the label sits just outside the curve's apex (halfway between the chord and the control point).
       const apex: [number, number] = arc ? [(mx + ctrl[0]) / 2, (my + ctrl[1]) / 2] : ctrl;
       const side = arc ? Math.sign(bend) || 1 : 1;
-      c.label.setAttribute("x", String(round(row ? (start[0] + end[0]) / 2 : apex[0] + nx * off * side)));
+      // Never past the canvas edge, where the frame would cut the label.
+      const lx = row ? (start[0] + end[0]) / 2 : apex[0] + nx * off * side;
+      c.label.setAttribute("x", String(round(Math.min(Math.max(lx, halfW + 12), this.width - halfW - 12))));
       c.label.setAttribute("y", String(round(row ? rowY - 16 : apex[1] + ny * off * side + 8)));
       if (row) c.label.setAttribute("fill", this.theme.fg);
     }

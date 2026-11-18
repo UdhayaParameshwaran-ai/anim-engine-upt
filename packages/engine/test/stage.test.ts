@@ -280,6 +280,35 @@ describe("template structure and looks", () => {
   const CARDS = 'video 1\nscene s "Kinds" template=cards\na = icon:sun "Solar"\nb = icon:wind "Wind"\n> {1}Two kinds.\n1 pop a,b /0.2\n';
   const STEPS = 'video 1\nscene s "Order" template=steps\na = icon:sun "One"\nb = icon:gear "Two"\n> {1}First, then {2}second.\n1 pop a\n2 pop b\n';
 
+  it("draws connector labels above the nodes, shown and hidden with their connector", async () => {
+    const { stage, tl } = await stageOf('video 1\nscene s "Flow" template=flow\na = node "Start"\nb = node "End"\ne = a -> b "next step"\n> {1}From start {2}to end.\n1 pop a,b\n2 draw e\n');
+    const layer = stage.root.querySelector('[data-scene="s"] [data-layer="labels"]')!;
+    expect(layer).not.toBeNull();
+    // The label layer is the last thing in the scene, above every node.
+    expect(layer.parentElement!.lastElementChild).toBe(layer);
+    const label = layer.querySelector("text") as SVGTextElement;
+    expect(label.textContent).toBe("next step");
+    const draw = firstTween(tl, "s/e", "opacity");
+    stage.render(draw.t0 - 0.05);
+    expect(label.style.visibility).toBe("hidden");
+    stage.render(tl.duration - 0.05);
+    expect(label.style.visibility).toBe("");
+    expect(Number(label.style.opacity)).toBeGreaterThan(0.9);
+  });
+
+  it("glows a highlighted picture but never its label text", async () => {
+    const { stage, tl } = await stageOf(CARDS + "> {1}Look at this one.\n1 visit a\n");
+    const v = tl.tracks.find((t) => t.target === "s/a" && t.prop === "tint" && t.to === 1)!;
+    stage.render(v.t1 + 0.05);
+    const a = node(stage, "s", "a");
+    const kids = [...a.children] as SVGElement[];
+    const picture = kids.find((k) => k.tagName.toLowerCase() !== "text")!;
+    const label = kids.find((k) => k.tagName.toLowerCase() === "text")!;
+    expect(picture.style.filter).toContain("drop-shadow");
+    expect(label.style.filter ?? "").toBe("");
+    expect(a.style.filter ?? "").not.toContain("drop-shadow");
+  });
+
   it("draws panels behind the items and badges above them, each shown with its item", async () => {
     const { stage, tl } = await stageOf(STEPS);
     const order = [...stage.root.querySelectorAll('[data-scene="s"] [data-kind]')].map((n) => n.getAttribute("data-kind"));
@@ -304,9 +333,10 @@ describe("template structure and looks", () => {
     const backing = (stage: Stage, id: string) => node(stage, "s", id).querySelector("g > circle[data-solid], g > rect[data-solid]");
     const paper = await stageOf(CARDS, "paper");
     expect(backing(paper.stage, "a")!.tagName).toBe("circle");
-    // Item 1 takes the accent, item 2 the next palette color.
+    // Item 1 takes the accent, item 2 the next palette color, which is never the look's ok-green.
     expect(backing(paper.stage, "a")!.getAttribute("fill")).toContain(THEMES.paper!.accent);
-    expect(backing(paper.stage, "b")!.getAttribute("fill")).toContain(THEMES.paper!.good);
+    expect(backing(paper.stage, "b")!.getAttribute("fill")).not.toContain(THEMES.paper!.good);
+    expect(backing(paper.stage, "b")!.getAttribute("fill")).not.toBe(backing(paper.stage, "a")!.getAttribute("fill"));
     document.body.innerHTML = "";
     document.body.append(container = document.createElement("div"));
     const blueprint = await stageOf(CARDS, "blueprint");
@@ -363,7 +393,10 @@ describe("life between cues", () => {
     const rows = node(stage, "s", "p").querySelectorAll("rect");
     expect(rows).toHaveLength(3);
     const dots = [...node(stage, "s", "p").querySelectorAll("circle")].map((c) => c.getAttribute("fill"));
-    expect(dots).toEqual([THEMES.paper!.accent, THEMES.paper!.good, THEMES.paper!.warn]);
+    // Each item has its own color, and none of them is the ok-green or the fail-red.
+    expect(dots[0]).toBe(THEMES.paper!.accent);
+    expect(new Set(dots).size).toBe(3);
+    for (const d of dots) expect([THEMES.paper!.good, THEMES.paper!.warn]).not.toContain(d);
   });
 });
 

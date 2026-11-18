@@ -81,7 +81,8 @@ title = title "Plant vs animal cells"
 left = asset:cell.plant "Plant cell"
 right = asset:cell.animal "Animal cell"
 > {1}A plant cell has a wall; {2}an animal cell does not.
-1 write title then fade left then visit left
+start write title
+1 fade left then visit left
 2 fade right then visit right`,
   },
   steps: {
@@ -103,7 +104,8 @@ s1 = icon:droplet "Water the seed"
 s2 = icon:sprout "It sprouts"
 s3 = asset:tree "It grows"
 > {1}Water the seed, {2}it sprouts, {3}and it grows.
-1 write title then pop s1 then visit s1
+start write title
+1 pop s1 then visit s1
 2 pop s2 then visit s2
 3 pop s3 then visit s3 then mark s3 as=ok`,
   },
@@ -196,11 +198,11 @@ title = title "Energy sources"
 g1 = icon:sun "Solar"
 g2 = icon:wind "Wind"
 g3 = icon:droplet "Hydro"
-> {1}Clean energy comes from {2}the sun, {3}wind {4}and water.
-1 write title
-2 pop g1 then visit g1
-3 pop g2 then visit g2
-4 pop g3 then visit g3`,
+> Clean energy comes from {1}the sun, {2}wind {3}and water.
+start write title
+1 pop g1 then visit g1
+2 pop g2 then visit g2
+3 pop g3 then visit g3`,
   },
   spotlight: {
     shape: "focus",

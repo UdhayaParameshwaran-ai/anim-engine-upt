@@ -377,7 +377,11 @@ function art(doc: Document, inst: Instance, g: SVGGElement, el: ElementIR, theme
   } else {
     holder.append(svg(doc, "rect", { x: 2, y: 2, width: grid - 4, height: grid - 4, rx: grid / 8, "stroke-dasharray": `${grid / 10} ${grid / 14}` }));
   }
-  g.append(holder);
+  // The scaled art sits in an unscaled group: a glow on the picture is then measured in canvas pixels,
+  // not in the icon's 24-unit grid (where it would be several times wider).
+  const picture = svg(doc, "g", { "data-picture": "" });
+  picture.append(holder);
+  g.append(picture);
   for (const shape of holder.querySelectorAll("path,rect,circle,ellipse,line,polyline,polygon")) stroke(inst, shape as SVGElement);
   for (const p of holder.querySelectorAll("[data-part]")) addPart(inst, p.getAttribute("data-part")!, p);
   if (label && band) {

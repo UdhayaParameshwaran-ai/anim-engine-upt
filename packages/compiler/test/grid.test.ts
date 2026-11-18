@@ -43,8 +43,15 @@ describe("grid scenes", () => {
   });
 
   it("gives the content area back when there is no header or footer", () => {
-    const { ir } = compile(grid("L1-01", `s1 = body "Just a paragraph."`));
+    const { ir } = compile(grid("L1-01", `s1 = body "Just a paragraph."`).replace('scene a "A"', "scene a"));
     expect(ir!.scenes[0]!.elements[0]!.box).toEqual({ x: 96, y: 96, w: 1728, h: 888 });
+  });
+
+  it("shows the scene title as the page heading from the start when the page declares none", () => {
+    const { ir } = compile(grid("L1-01", `s1 = body "Just a paragraph."`));
+    const kicker = ir!.scenes[0]!.elements.find((e) => e.kind === "kicker")!;
+    expect(kicker.texts[0]).toBe("A");
+    expect(ir!.scenes[0]!.elements.find((e) => e.id === "s1")!.box.y).toBeGreaterThan(kicker.box.y + kicker.box.h);
   });
 
   it("R2: fixes a mistyped layout code", () => {

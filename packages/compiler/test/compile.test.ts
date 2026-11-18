@@ -477,3 +477,28 @@ describe("connectors around nodes", () => {
     expect(el(v, "s", "e2").params.curve).toBeUndefined();
   });
 });
+
+describe("scene titles", () => {
+  it("shows a title written on a later cue as the scene opens, typed quickly", () => {
+    const v = ir(`video 1\nscene s "Heat" template=compare\ntitle = title "Two ways heat moves through a room"\nleft = icon:sun "Radiation"\nright = icon:wind "Convection"\n> {1}First the sun, {2}then the air.\n1 fade left\n2 write title then fade right\n`);
+    const first = v.scenes[0]!.steps[0]!.beats[0]!.actions[0]!;
+    expect(first.anchor).toBe("start");
+    expect(first.calls[0]).toMatchObject({ verb: "write", targets: ["title"], delay: -5 });
+    expect(first.calls[0]!.duration).toBeLessThanOrEqual(0.6);
+    // The rest of the chain still runs on its cue.
+    const later = v.scenes[0]!.steps[0]!.beats[0]!.actions.find((a) => a.anchor === "2")!;
+    expect(later.calls.map((c) => c.verb)).toEqual(["fade"]);
+  });
+});
+
+describe("structure cells", () => {
+  it("numbers only the value cells; a picture declared with them sits below, unnumbered", () => {
+    const v = ir(`video 1\nscene s "Search" template=structure variant=array\nc1 = box "3"\nc2 = box "7"\nc3 = box "9"\ngoal = icon:target "Looking for 7"\n> {1}Three values and {2}a target.\n1 pop c1,c2,c3\n2 pop goal\n`);
+    const els = v.scenes[0]!.elements;
+    const captions = els.filter((e) => e.kind === "caption").map((e) => e.texts[0]);
+    expect(captions).toEqual(["0", "1", "2"]);
+    const goal = el(v, "s", "goal").box;
+    const cell = el(v, "s", "c2").box;
+    expect(goal.y).toBeGreaterThan(cell.y + cell.h);
+  });
+});

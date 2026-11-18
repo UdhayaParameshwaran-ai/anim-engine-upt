@@ -1,6 +1,6 @@
 import type { Diagnostic, ElementDecl, Place, Scene } from "@anim/dsl";
 import type { Box } from "@anim/ir";
-import { findGridLayout, findTemplate, frameRects, GRID, slotRects, SLOTS, variantGuide, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
+import { findGridLayout, findTemplate, frameMode, frameRects, GRID, slotRects, SLOTS, variantGuide, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
 import { gridMode, gridParts } from "@anim/validate";
 import { compose, COMPOSE_PATTERNS, type ComposePattern } from "./compose.js";
 import { CHAR_W, fit, measure, type Size } from "./measure.js";
@@ -299,12 +299,19 @@ class SceneLayouter {
   private grid(): void {
     const layout = findGridLayout(this.scene.attrs.grid!)!;
     const parts = gridParts(this.els);
-    const mode = gridMode(this.els);
+    // A page without a heading of its own shows the scene's title in the header band from the first moment,
+    // like the automatic heading of template scenes.
+    const kicker = !parts.title && !!this.scene.title;
+    const mode = kicker ? frameMode("title", Boolean(parts.footer)) : gridMode(this.els);
     const sx = this.ctx.width / GRID.width;
     const sy = this.ctx.height / GRID.height;
     const scale = (r: Rect): Box => round({ x: r.x * sx, y: r.y * sy, w: r.w * sx, h: r.h * sy });
     const frame = frameRects(mode);
     if (parts.title && frame.title) this.boxes.set(parts.title.id, scale(frame.title));
+    if (kicker && frame.title) {
+      this.boxes.set("__kicker", scale(frame.title));
+      this.decor.push({ id: "__kicker", kind: "kicker", text: this.scene.title!, follows: [] });
+    }
     if (parts.subtitle && frame.subtitle) this.boxes.set(parts.subtitle.id, scale(frame.subtitle));
     if (parts.footer && frame.footer) this.boxes.set(parts.footer.id, scale(frame.footer));
     const rects = slotRects(layout, mode);
@@ -536,26 +543,28 @@ class SceneLayouter {
         return;
       }
       case "structure": {
-        const cells = items.map((e) => this.cells.get(e.id)!);
+        for (const e of items) this.from(e, 0, variant === "stack" ? -1 : 1);
+        // Indexes, ends and links belong to the value cells only, never to a picture shown beside them.
+        const vals = cellItems(items);
+        const cells = vals.map((e) => this.cells.get(e.id)!);
         if (variant === "array") {
           // Indexes under the cells.
-          items.forEach((e, i) => this.addDecor("caption", [e], { box: { x: cells[i]!.x, y: cells[i]!.y + cells[i]!.h + 8, w: cells[i]!.w, h: 40 }, text: String(i) }));
+          vals.forEach((e, i) => this.addDecor("caption", [e], { box: { x: cells[i]!.x, y: cells[i]!.y + cells[i]!.h + 8, w: cells[i]!.w, h: 40 }, text: String(i) }));
         }
         if (variant === "list") {
-          items.slice(1).forEach((e, i) => this.addDecor("arrow", [items[i]!, e], { link: [items[i]!, e] }));
+          vals.slice(1).forEach((e, i) => this.addDecor("arrow", [vals[i]!, e], { link: [vals[i]!, e] }));
           const last = cells.at(-1);
-          if (last && items.at(-1)) this.addDecor("caption", [items.at(-1)!], { box: { x: last.x + last.w + 12, y: last.y + last.h / 2 - 20, w: 120, h: 40 }, text: "→ null", params: { align: "left" } });
+          if (last && vals.at(-1)) this.addDecor("caption", [vals.at(-1)!], { box: { x: last.x + last.w + 12, y: last.y + last.h / 2 - 20, w: 120, h: 40 }, text: "→ null", params: { align: "left" } });
         }
-        if (variant === "queue" && items.length > 1) {
+        if (variant === "queue" && vals.length > 1) {
           const [first, last] = [cells[0]!, cells.at(-1)!];
-          this.addDecor("caption", [items[0]!], { box: { x: first.x, y: first.y + first.h + 8, w: first.w, h: 40 }, text: "front" });
-          this.addDecor("caption", [items.at(-1)!], { box: { x: last.x, y: last.y + last.h + 8, w: last.w, h: 40 }, text: "back" });
+          this.addDecor("caption", [vals[0]!], { box: { x: first.x, y: first.y + first.h + 8, w: first.w, h: 40 }, text: "front" });
+          this.addDecor("caption", [vals.at(-1)!], { box: { x: last.x, y: last.y + last.h + 8, w: last.w, h: 40 }, text: "back" });
         }
-        if (variant === "stack" && items.length) {
+        if (variant === "stack" && vals.length) {
           const top = cells.at(-1)!;
-          this.addDecor("caption", [items.at(-1)!], { box: { x: top.x + top.w + 16, y: top.y + top.h / 2 - 20, w: 140, h: 40 }, text: "← top", params: { align: "left" } });
+          this.addDecor("caption", [vals.at(-1)!], { box: { x: top.x + top.w + 16, y: top.y + top.h / 2 - 20, w: 140, h: 40 }, text: "← top", params: { align: "left" } });
         }
-        items.forEach((e) => this.from(e, 0, variant === "stack" ? -1 : 1));
         return;
       }
       case "code": {
@@ -1259,7 +1268,17 @@ class SceneLayouter {
   }
 
   /** Data structure cells: one size for all, so values read as one structure. */
-  private structure(items: ElementDecl[], content: Box, variant: string): void {
+  private structure(all: ElementDecl[], area: Box, variant: string): void {
+    // Only values are cells; a picture or a note declared with them (a legend, the thing being searched for)
+    // sits in a row under the structure, so it never gets an index or a place in the queue.
+    const items = cellItems(all);
+    const extras = all.filter((e) => !items.includes(e));
+    let content = area;
+    if (extras.length) {
+      const band = Math.round(area.h * 0.24);
+      content = { ...area, h: area.h - band - this.gap };
+      rowCells({ x: area.x, y: area.y + area.h - band, w: area.w, h: band }, extras.length, this.gap).forEach((cell, i) => this.put(extras[i]!, cell, 0.8));
+    }
     const n = Math.max(1, items.length);
     const vertical = variant === "stack";
     if (vertical) {
@@ -1787,6 +1806,12 @@ function relative(ref: Box, size: { w: number; h: number }, relation: string, ga
     default:
       return round({ x: cx - size.w / 2, y: cy - size.h / 2, ...size });
   }
+}
+
+/** A structure's value cells: its boxes and circles (when it has at least two); otherwise every item, as before. */
+function cellItems(items: ElementDecl[]): ElementDecl[] {
+  const values = items.filter((e) => e.kind === "box" || e.kind === "circle");
+  return values.length >= 2 ? values : items;
 }
 
 /** Whether the segment (ax,ay)→(bx,by) passes through the box shrunk by `inset` on each side (Liang–Barsky clipping). */
