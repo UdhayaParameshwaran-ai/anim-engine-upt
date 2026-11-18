@@ -80,3 +80,17 @@ changes from run to run, and a video without a trace scene stays around 3.
   layout that clips or overlaps, titles typing in the first frame.
 - The `|` in checklists (websockets, browser-render) survived because it was only a warning; list widgets now split
   on it too.
+
+## s1: Sonnet generation, same 62 topics, same code as h4
+
+| Run | Videos | Average | 5s | 4s | 3s | 2s |
+|---|---|---|---|---|---|---|
+| s1 (Sonnet) | 62 | 3.35 | 1 | 21 | 39 | 1 |
+
+Sonnet scores about 0.15 above the best Haiku run and 0.3 above h4 on the same code. Trace scenes in 33 of 62
+videos; lanes in 3, graph in 5, net in 1. Still seen: text recap/limit pages, tiny labels, state diagrams that
+re-layout, flat pictures for things that need an animation (a token moving, a link cut, a vote tally).
+Found while reading the Sonnet reports: `{2server}` and `{1payment clears}` (cue number glued to the first word)
+silently dropped the word from the narration ("knock the  over"); the lexer now treats the number as the cue and
+the letters as the first spoken word. A file path such as `C:\Users\Ana\Documents\notes.txt` still loses `\n`
+(a newline escape), so the name shows as `otes.txt`.

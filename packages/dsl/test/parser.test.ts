@@ -275,3 +275,11 @@ t = body "C:\Users\me say \"hi\" a\b"
     expect(print(parse(print(script)).script)).toBe(print(script));
   });
 });
+
+describe("a cue number glued to the first word", () => {
+  it("keeps the word: {2server} and {1payment clears} are spans, not points that swallow a word", () => {
+    const b = speech("> One client can knock the {2server} over, until {1payment clears}, it waits.\n1 fade a");
+    expect(b.text).toBe("One client can knock the server over, until payment clears, it waits.");
+    expect(b.cues.map((c) => [c.id, b.text.slice(c.start, c.end)])).toEqual([["2", "server"], ["1", "payment clears"]]);
+  });
+});

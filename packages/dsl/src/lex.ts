@@ -133,8 +133,15 @@ export function parseNarration(src: string, lineNo: number, col1: number, diags:
 
     const inner = src.slice(i + 1, close);
     const sp = inner.indexOf(" ");
-    const id = sp === -1 ? inner : inner.slice(0, sp);
-    const content = sp === -1 ? "" : unescape(inner.slice(sp + 1).trim());
+    let id = sp === -1 ? inner : inner.slice(0, sp);
+    let content = sp === -1 ? "" : unescape(inner.slice(sp + 1).trim());
+    // `{2server}` and `{1payment clears}` forget the space after the cue number: the number is the cue and the
+    // letters after it are the first spoken word (otherwise that word would silently vanish from the narration).
+    const glued = /^(\d+)([A-Za-z].*)$/.exec(id);
+    if (glued) {
+      id = glued[1]!;
+      content = content ? `${glued[2]} ${content}` : glued[2]!;
+    }
     const cueSpan = span(i, close + 1);
     i = close + 1;
 
