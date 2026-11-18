@@ -25,7 +25,16 @@ for (const t of topics) {
     .map((sc) => `## scene ${sc.id} (${sc.attrs.template ? `template=${sc.attrs.template}` : `grid=${sc.attrs.grid}`}) "${sc.title ?? ""}"\n` + sc.steps.map((st) => `${st.id ? `  [step ${st.id}]\n` : ""}${st.beats.filter((b) => b.type === "speech").map((b) => `  > ${b.text}`).join("\n")}`).join("\n"))
     .join("\n\n");
   writeFileSync(join(dir, "narration.md"), said);
-  const data = await prepare(src);
+  let data;
+  try {
+    data = await prepare(src);
+  } catch (e) {
+    writeFileSync(join(dir, "FAILED.txt"), String(e?.message ?? e).split("\n").slice(0, 6).join("\n"));
+    writeFileSync(join(dir, "scenes.txt"), "");
+    writeFileSync(join(dir, "done"), "");
+    console.log("FAILED to compile", t);
+    continue;
+  }
   const fps = data.timeline.fps ?? 30;
   for (const sc of data.timeline.scenes) {
     const d = sc.t1 - sc.transitionOut.duration - sc.t0;

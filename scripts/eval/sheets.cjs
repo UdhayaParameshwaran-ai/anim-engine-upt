@@ -18,7 +18,7 @@ const sharp = require(path.join(pnpmDir, sharpDir, "node_modules/sharp"));
     const dir = path.join(review, t);
     const scenesFile = path.join(dir, "scenes.txt");
     if (!fs.existsSync(scenesFile)) continue;
-    for (const id of fs.readFileSync(scenesFile, "utf8").trim().split(/\s+/)) {
+    for (const id of fs.readFileSync(scenesFile, "utf8").trim().split(/\s+/).filter(Boolean)) {
       const out = path.join(dir, `${id}.png`);
       if (fs.existsSync(out)) continue;
       const { pngs } = JSON.parse(fs.readFileSync(path.join(dir, `${id}-f`, "list.json"), "utf8"));

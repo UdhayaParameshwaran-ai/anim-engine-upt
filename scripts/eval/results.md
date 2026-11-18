@@ -94,3 +94,14 @@ Found while reading the Sonnet reports: `{2server}` and `{1payment clears}` (cue
 silently dropped the word from the narration ("knock the  over"); the lexer now treats the number as the cue and
 the letters as the first spoken word. A file path such as `C:\Users\Ana\Documents\notes.txt` still loses `\n`
 (a newline escape), so the name shows as `otes.txt`.
+
+## h5 (Haiku) and s2 (Sonnet): after Q8/Q9/Q10, camera keeps whole connectors, glued cue fix
+
+| Run | Videos | Average | 4s | 3s | 2s | 1s |
+|---|---|---|---|---|---|---|
+| h5 (Haiku) | 62 | 3.16 | 18 | 36 | 8 | 0 |
+| s2 (Sonnet) | 62 | 3.50 | 36 | 22 | 3 | 1 |
+
+Sonnet: 36 of 62 videos at 4 (21 in s1). The 1 is compiler-stages, whose script kept validation errors after three
+repairs (a quoted `"prod:"*` state item) and could not render. Haiku moved 3.02 to 3.16, back near h3 (3.21):
+within run-to-run noise. Trace scenes: h5 and s2 about half the videos; lanes/net/graph still rarely chosen.
