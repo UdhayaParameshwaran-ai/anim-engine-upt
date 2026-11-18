@@ -1,0 +1,62 @@
+quicksort	How quicksort partitions and sorts a list
+bfs-dfs	Breadth-first vs depth-first search on a graph
+dijkstra	How Dijkstra's algorithm finds the shortest path
+linked-list	How a linked list inserts and deletes nodes
+binary-heap	How a binary heap keeps the smallest item on top
+bst	How a binary search tree inserts and finds values
+recursion	How recursion and the call stack work
+dynamic-programming	Dynamic programming explained with Fibonacci
+hash-collisions	How hash tables handle collisions
+lru-cache	How an LRU cache decides what to evict
+process-thread	Processes vs threads
+virtual-memory	How virtual memory and paging work
+deadlock	What causes a deadlock and how to avoid it
+cpu-pipeline	How a CPU runs instructions: fetch, decode, execute
+garbage-collection	How mark-and-sweep garbage collection works
+event-loop	How the JavaScript event loop works
+websockets	WebSockets vs HTTP polling
+cors	What CORS is and why browsers block requests
+nat	How NAT lets many devices share one IP address
+rest-graphql	REST vs GraphQL
+browser-render	How a browser renders a web page
+cookies-sessions	How cookies and sessions keep you logged in
+db-index	How a database index speeds up queries
+acid	Database transactions and ACID
+sharding	Database sharding vs replication
+sql-join	How SQL joins combine tables
+message-queue	How a message queue decouples services
+mapreduce	How MapReduce processes big data
+cap-theorem	The CAP theorem
+raft	How Raft consensus elects a leader
+kubernetes	How Kubernetes schedules and heals pods
+serverless	How serverless functions run
+rate-limit	How rate limiting works with a token bucket
+consistent-hashing	Consistent hashing explained
+public-key	How public-key encryption works
+sql-injection	How SQL injection works and how to prevent it
+xss	Cross-site scripting (XSS) explained
+totp	How two-factor authentication codes (TOTP) work
+neural-network	How a neural network learns with backpropagation
+gradient-descent	Gradient descent explained
+attention	How attention works in transformers
+decision-tree	How a decision tree classifies data
+regex	How regular expressions match text
+utf8	How UTF-8 encodes characters
+floating-point	Why 0.1 + 0.2 is not 0.3 in floating point
+huffman	How Huffman coding compresses data
+blockchain	How a blockchain links blocks together
+bloom-filter	How a Bloom filter works
+cicd-pipeline	A CI/CD pipeline from commit to production
+compiler-stages	How a compiler turns source code into a program
+dns-hierarchy	The DNS hierarchy: root, top-level and domain name servers
+dom-tree	What the DOM tree of a web page is
+file-system	How folders and files are organised in a computer's file system
+git-branching	Git branching and merging, for beginners
+http-request-format	What is inside an HTTP request: method, headers and body
+jwt	How a JSON Web Token (JWT) is built
+merge-rebase	Git merge vs rebase, for developers
+order-status	The life of an online order, from placed to delivered
+tcp-states	The states of a TCP connection, for developers
+traffic-light	A traffic light as a state machine, for programming beginners
+url-anatomy	The parts of a URL, explained
+bubble-sort	Explain the bubble sort
