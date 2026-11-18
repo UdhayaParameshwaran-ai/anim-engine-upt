@@ -383,3 +383,12 @@ describe("trace scenes", () => {
     expect(check(ok, T).codes).not.toContain(C.NeverShown);
   });
 });
+
+describe("trace items", () => {
+  it("attaches a mark that was written as a cell of its own", () => {
+    const r = check(['s = stack', '> Calls {1}pile up.', '1 s: "fact(4)" "*"', '> {1}Deeper.', '1 s: "fact(4)" "~" "fact(3)" "*"'].join("\n"), { scene: "template=trace" });
+    expect(r.diagnostics.filter((d) => d.code === C.TraceItem).every((d) => d.fixed?.includes("attached"))).toBe(true);
+    expect(r.printed).toContain('1 s: "fact(4)"*');
+    expect(r.printed).toContain('1 s: "fact(4)"~ "fact(3)"*');
+  });
+});

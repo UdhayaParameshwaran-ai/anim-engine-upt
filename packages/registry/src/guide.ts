@@ -353,8 +353,8 @@ ip = box "IP"
   },
   structure: {
     shape: "structure",
-    useWhen: "a data structure made of 2–8 values (array, linked list, stack, queue) and what happens to them: adding, removing, finding, sorting",
-    avoidWhen: "a hierarchy of parent and children → flow; parts of an idea → hub",
+    useWhen: "a still picture of a data structure made of 2–8 values (array, linked list, stack, queue): what it looks like and what its parts are",
+    avoidWhen: "the values change step by step (a sort, a search, a queue at work, any algorithm run) → trace; a hierarchy of parent and children → flow; parts of an idea → hub",
     variants: {
       array: { when: "values in a row with their indexes; pointers above cells (binary search, sorting)", items: [2, 8] },
       list: { when: "a linked list: each node points to the next", items: [2, 6] },

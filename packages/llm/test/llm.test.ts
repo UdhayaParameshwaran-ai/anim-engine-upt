@@ -806,7 +806,7 @@ motion minimal
 # usecase: algorithm
 scene intro "Sorting" template=title
 # shape: intro · goal: what sorting is
-scene run "A run" template=structure
+scene run "A run" template=trace
 # shape: structure · goal: the finished sorted row
 # chapter: one · the first pass
 # chapter: two · the second pass
@@ -891,7 +891,7 @@ describe("wording copied from a finished example", () => {
   const scene = (said: string) => `scene s "S" template=structure variant=array\nc1 = box "1"\nc2 = box "2"\n> ${said}\n1 pop c1,c2 then visit c1\n`;
 
   it("flags a sentence that repeats the example, and nothing that is about the topic", () => {
-    const copy = scene("Go back to {1}the original row, and apply the second option.");
+    const copy = scene("The second option {1}doubles every value.");
     expect(copiedFrom(example, copy.replace("{1}", ""))).toHaveLength(1);
     const own = scene("A {1}stack pops the newest item, while a queue takes the oldest.");
     expect(copiedFrom(example, own)).toEqual([]);
@@ -900,7 +900,7 @@ describe("wording copied from a finished example", () => {
   });
 
   it("is a quality issue only when the scene was shown an example", () => {
-    const copy = scene("Go back to {1}the original row, and apply the second option.");
+    const copy = scene("The second option {1}doubles every value.");
     expect(qualityIssues(header, copy, "comparison", example).some((q) => q.code === "Q6")).toBe(true);
     expect(qualityIssues(header, copy, "comparison").some((q) => q.code === "Q6")).toBe(false);
   });

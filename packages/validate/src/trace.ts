@@ -102,7 +102,7 @@ export function stateEvents(scene: Scene): StateEvent[] {
 }
 
 export interface TraceProblem {
-  code: "NAR601" | "NAR603" | "NAR605" | "NAR606" | "NAR607" | "NAR609" | "NAR610" | "NAR611" | "NAR612" | "NAR615";
+  code: "NAR601" | "NAR602" | "NAR603" | "NAR605" | "NAR606" | "NAR607" | "NAR609" | "NAR610" | "NAR611" | "NAR612" | "NAR615";
   severity: "error" | "warning";
   message: string;
   span: Span;
@@ -196,6 +196,26 @@ export function analyzeTrace(scene: Scene): TraceProblem[] {
     const kind = decl.kind;
     const prev = before.get(ev.coll);
     if (!first.has(ev.coll)) first.set(ev.coll, ev);
+
+    // A mark on its own is not a value: it belongs right after the item it marks (`7*`, not `7 *`).
+    for (const it of [...items]) {
+      if (it.id || !/^[*+~!]$/.test(it.value)) continue;
+      problems.push({
+        code: "NAR602",
+        severity: "error",
+        message: `\`${it.value}\` stands alone as a cell in \`${ev.coll}\`; a mark goes right after its item with no space (\`fact(4)${it.value}\`, \`7${it.value}\`)`,
+        span: ev.span,
+        fix: {
+          desc: `attached \`${it.value}\` to the item before it`,
+          apply: () => {
+            const at = items.indexOf(it);
+            const before = items[at - 1];
+            if (before && !before.mark) before.mark = it.value as StateItem["mark"];
+            if (at >= 0) items.splice(at, 1);
+          },
+        },
+      });
+    }
 
     // Names are identities: two cells with one name in a state cannot both be it.
     const names = items.filter((i) => i.id).map((i) => i.id!);

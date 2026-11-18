@@ -51,7 +51,7 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
 
   // Q1: a diagram made only of boxes and words.
   const content = elements.filter((e) => !FRAME.has(e.kind));
-  if (!scene.attrs.grid && scene.attrs.template !== "flow" && content.length >= 2 && !content.some((e) => VISUAL.has(e.kind))) {
+  if (!scene.attrs.grid && scene.attrs.template !== "flow" && scene.attrs.template !== "trace" && content.length >= 2 && !content.some((e) => VISUAL.has(e.kind))) {
     issues.push({ code: "Q1", message: `scene \`${scene.id}\` shows only boxes and text; show the ideas with listed icons or assets whose meaning matches their labels` });
   }
 
@@ -90,6 +90,14 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
     if (/\bswap(s|ped|ping)?\b/i.test(spoken) && !verbs.includes("swap")) {
       issues.push({ code: "Q5", message: `scene \`${scene.id}\` says things swap but never swaps them; do each swap on screen with swap <a>,<b> right after the visit that compares them` });
     }
+  }
+  // Q5 for a trace: a run that shows a state or two and stops, or ends without marking the finished values.
+  if (usecase === "algorithm" && tpl === "trace") {
+    const states = scene.steps.flatMap((st) => st.beats.flatMap((b) => b.actions.flatMap((a) => a.calls.filter((c) => c.verb === "state" && c.state))));
+    const first = states[0]?.targets[0];
+    const mine = states.filter((c) => c.targets[0] === first);
+    if (mine.length < 5) issues.push({ code: "Q5", message: `scene \`${scene.id}\` shows only ${mine.length} state(s) of the run; run the example all the way to the finished result, one state per compare or swap` });
+    else if (!mine.at(-1)!.state!.items.some((i) => i.mark === "+")) issues.push({ code: "Q5", message: `scene \`${scene.id}\` ends without marking the finished values; mark them + in the last state` });
   }
   // Q6: wording taken from the finished example the scene was shown.
   if (example) {

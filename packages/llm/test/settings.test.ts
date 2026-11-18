@@ -156,7 +156,7 @@ describe("use cases", () => {
     const sys = outlineSystemPrompt([], undefined);
     for (const u of USE_CASES) expect(sys).toContain(u.name);
     expect(sys).toContain("# usecase: <name>");
-    expect(useCaseCatalogue()).toContain("ONE growing scene (template=structure)");
+    expect(useCaseCatalogue()).toContain("ONE growing scene (template=trace)");
     const ask = outlinePrompt("Explain the bubble sort", { min: 3, max: 4 });
     expect(ask).toContain("Likely use case: algorithm");
     expect(ask).toContain('"# usecase: <name>"');

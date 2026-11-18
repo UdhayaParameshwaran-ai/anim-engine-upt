@@ -9,6 +9,7 @@ import {
   RELATIONS,
   slotRects,
   SLOTS,
+  COLLECTIONS,
   TEMPLATES,
   SHAPES,
   findTemplate,
@@ -310,8 +311,9 @@ function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas:
   const verbs = VERBS.filter((v) => !v.internal).map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const grid = "grid" in kind;
   const flow = !grid && kind.template.name === "flow";
+  const trace = !grid && kind.template.name === "trace";
   const gridOnly = new Set(GRID_ELEMENTS.map((e) => e.kind).filter((k) => !["icon", "asset", "chart", "formula"].includes(k)));
-  const kinds = COMPONENTS.filter((c) => c.kind !== "placeholder" && c.kind !== "footer" && !gridOnly.has(c.kind) && (flow || !["node", "edge"].includes(c.kind)))
+  const kinds = COMPONENTS.filter((c) => c.kind !== "placeholder" && c.kind !== "footer" && !gridOnly.has(c.kind) && (flow || !["node", "edge"].includes(c.kind)) && (trace || !COLLECTIONS.includes(c.kind as (typeof COLLECTIONS)[number])))
     .map((c) => `  ${(c.named === "required" ? `${c.kind}:<name>` : c.kind).padEnd(13)} ${c.summary}`)
     .join("\n");
   const sceneLine = grid ? `scene <id> "Title" grid=<layout> [mirror=true] [in=<transition>]` : `scene <id> "Title" template=${kind.template.name} [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]`;
@@ -340,6 +342,7 @@ function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas:
           ]),
     ...(!grid && kind.template.name === "code" ? ['- Code and terminal text is one quoted string with \\n between lines: code "a = 1\\nprint(a)" lang=py. Keep the real indentation of the code: spaces right after \\n ("def f(x):\\n    return x"). Lines are parts: write code.2 types line 2, highlight code.2 marks it.'] : []),
     ...(!grid && kind.template.name === "anatomy" ? ['- Every part is a box with its exact text: p1 = box "https://". Name each part with a label placed under it: n1 = label "protocol" @below:p1 (variant=stacked: @right-of:p1). Show a part and its name together.'] : []),
+    ...(trace ? ["- Declare each collection once, before the narration: id = row | stack | queue | set | pairs [\"caption\"] (row: array cells with slot numbers; stack: last on top; queue: front on the left; set: a panel of values; pairs: key:value rows). The first is the main picture, the others are panels beside it.", "- A state line is `<cue> <collection>: item item … | pointer=slot`: the whole contents of the collection at that moment. A value is `7`, a named cell `b:7` (needed for repeated values that move apart and for pairs), text in quotes. Marks follow an item: `*` being looked at, `+` done, `~` seen, `!` rejected. Pointers name a slot number (`i=2`, `mid=3`).", "- The first state line shows the collection: never fade, pop, draw or write it, and never write swap, move, drop, lift or set on its cells. You may highlight or pulse a whole collection.", "- One change per cue: a compare and a swap are two cues in the sentence. Every state line follows a cue of the sentence above it."] : []),
     ...(!grid && kind.template.name === "structure" ? ["- Each value is a box: c1 = box \"42\". Every box is a value cell, so never make a box or icon for an operation (push, pop, insert) or a target: show an operation by popping in, hiding or moving cells, and name a target with a label @above:<cell>. A pointer is a label placed above a cell: p = label \"i\" @above:c1; move it with: move p @above:c3."] : []),
     ...(hint ? [hint] : []),
     ...(note ? [`- For this template: ${note.replace(/\n+/g, " ")}`] : []),

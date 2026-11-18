@@ -50,32 +50,40 @@ function frames(count: number, canvas: TraceCanvas): Frame[] {
   return [{ x: area.x, y: area.y, w: mainW, h: area.h }, ...Array.from({ length: panels }, (_, i) => ({ x: panelX, y: area.y + i * (h + gap), w: panelW, h }))];
 }
 
-function geometry(kind: string, frame: Frame, cap: number, captioned: boolean): Geometry {
+/** How wide a cell must be for a text of `chars` characters (at the cell font), within [lo, hi]. */
+const wide = (chars: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, chars * 24 + 36));
+
+function geometry(kind: string, frame: Frame, cap: number, captioned: boolean, chars: number): Geometry {
   const top = captioned ? 56 : 0;
   const f: Frame = { x: frame.x, y: frame.y + top, w: frame.w, h: frame.h - top };
   const caption = captioned ? { x: frame.x, y: frame.y, w: frame.w, h: 48 } : undefined;
   if (kind === "stack") {
     const h = Math.min(96, (f.h * 0.8) / cap);
-    const w = Math.min(280, f.w * 0.5);
+    const w = Math.min(wide(chars, 200, 380), f.w * 0.9);
     const x = f.x + (f.w - w) / 2;
     const bottom = f.y + f.h * 0.92;
     return { kind, indexed: false, pointerAbove: false, caption, slot: (i) => ({ x, y: r1(bottom - (i + 1) * (h + 8) + 8), w, h }) };
   }
   if (kind === "set") {
-    const s = Math.min(110, (f.w - GAP * 5) / 6);
-    const cols = Math.max(1, Math.floor((f.w + GAP) / (s + GAP)));
-    return { kind, indexed: false, pointerAbove: false, caption, slot: (i) => ({ x: r1(f.x + (i % cols) * (s + GAP)), y: r1(f.y + Math.floor(i / cols) * (s + GAP)), w: s, h: s }) };
+    const w = Math.min(wide(chars, 72, 240), f.w);
+    const h = 72;
+    const cols = Math.max(1, Math.floor((f.w + GAP) / (w + GAP)));
+    return { kind, indexed: false, pointerAbove: false, caption, slot: (i) => ({ x: r1(f.x + (i % cols) * (w + GAP)), y: r1(f.y + Math.floor(i / cols) * (h + GAP)), w, h }) };
   }
   if (kind === "pairs") {
-    const h = Math.min(64, f.h / Math.max(cap, 1) - 8);
-    return { kind, indexed: false, pointerAbove: false, caption, slot: (i) => ({ x: f.x, y: r1(f.y + i * (h + 8)), w: Math.min(f.w, 520), h }) };
+    const h = Math.min(72, f.h / Math.max(cap, 1) - 8);
+    const w = Math.min(wide(chars, 240, 560), f.w);
+    return { kind, indexed: false, pointerAbove: false, caption, slot: (i) => ({ x: f.x, y: r1(f.y + i * (h + 8)), w, h }) };
   }
   // row and queue: one line of square cells, centered, with room above for pointers and below for numbers.
-  const s = Math.min(kind === "queue" ? 130 : 200, (f.w - GAP * (cap - 1)) / cap, f.h * 0.4);
-  const total = cap * s + GAP * (cap - 1);
+  // Wider than tall when the values are long, as far as the frame allows.
+  const h = Math.min(kind === "queue" ? 130 : 200, f.h * 0.4);
+  const w = Math.min(Math.max(h, wide(chars, h, 320)), (f.w - GAP * (cap - 1)) / cap);
+  const hh = Math.min(h, Math.max(w, 72));
+  const total = cap * w + GAP * (cap - 1);
   const x0 = f.x + (f.w - total) / 2;
-  const y = f.y + (f.h - s) / 2;
-  return { kind, indexed: kind === "row", pointerAbove: true, caption, slot: (i) => ({ x: r1(x0 + i * (s + GAP)), y: r1(y), w: r1(s), h: r1(s) }) };
+  const y = f.y + (f.h - hh) / 2;
+  return { kind, indexed: kind === "row", pointerAbove: true, caption, slot: (i) => ({ x: r1(x0 + i * (w + GAP)), y: r1(y), w: r1(w), h: r1(hh) }) };
 }
 
 const display = (kind: string, it: StateItem): string => (kind === "pairs" && it.id ? `${it.id}: ${it.value}` : it.value);
@@ -84,7 +92,7 @@ const boxAttr = (b: Box): string => `${b.x},${b.y},${b.w},${b.h}`;
 /** Where a pointer label goes for slot `i` (and how high, when several share a slot). */
 function pointerBox(g: Geometry, i: number, level: number): Box {
   const s = g.slot(i);
-  if (g.pointerAbove) return { x: r1(s.x + (s.w - 56) / 2), y: r1(s.y - PTR_H - level * PTR_H), w: 56, h: PTR_H };
+  if (g.pointerAbove) return { x: r1(s.x + (s.w - 56) / 2), y: r1(s.y - PTR_H - 8 - level * PTR_H), w: 56, h: PTR_H };
   return { x: r1(s.x + s.w + 12 + level * 70), y: s.y, w: 64, h: Math.min(s.h, PTR_H + 10) };
 }
 
@@ -107,9 +115,14 @@ export function expandTrace(scene: Scene, canvas: TraceCanvas): Scene {
   const events = stateEvents(scene);
 
   const cap = new Map<string, number>();
-  for (const ev of events) cap.set(ev.coll, Math.max(cap.get(ev.coll) ?? 1, ev.snap.items.length));
+  const chars = new Map<string, number>();
+  for (const ev of events) {
+    cap.set(ev.coll, Math.max(cap.get(ev.coll) ?? 1, ev.snap.items.length));
+    const kind = colls.find((c) => c.id === ev.coll)?.kind ?? "row";
+    chars.set(ev.coll, Math.max(chars.get(ev.coll) ?? 1, ...ev.snap.items.map((it) => display(kind, it).length)));
+  }
   const place = frames(colls.length, canvas);
-  const geo = new Map(colls.map((c, i) => [c.id, geometry(c.kind, place[i]!, cap.get(c.id) ?? 1, !!c.texts[0])]));
+  const geo = new Map(colls.map((c, i) => [c.id, geometry(c.kind, place[i]!, cap.get(c.id) ?? 1, !!c.texts[0], chars.get(c.id) ?? 1)]));
   const live = new Map<string, Live>(colls.map((c) => [c.id, { items: [], ids: [], pointers: new Map(), born: 0, shown: false }]));
   const kindOf = new Map(colls.map((c) => [c.id, c.kind]));
 

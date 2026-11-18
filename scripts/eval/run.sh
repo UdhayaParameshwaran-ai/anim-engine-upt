@@ -6,6 +6,7 @@
 set -u
 arm=$1; model=$2; root=$(cd "$(dirname "$0")/../.." && pwd)
 topics=${3:-$root/scripts/eval/topics.tsv}; par=${4:-2}
+topics=$(readlink -f "$topics")
 dir=$root/out/eval/$arm
 mkdir -p "$dir"; cd "$dir"; rm -f progress.log
 one() {

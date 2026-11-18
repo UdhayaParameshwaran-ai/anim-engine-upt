@@ -20,67 +20,45 @@ export interface UseCase {
   example?: { template: string; text: string };
 }
 
-/** One row that stays on screen, one step per sentence, a label that changes, values marked as they are decided. Shows the pattern, not any topic. */
-const SCAN_EXAMPLE = `scene scan "Finding the largest of five numbers" template=structure variant=array
-c1 = box "3"
-c2 = box "7"
-c3 = box "2"
-c4 = box "9"
-c5 = box "4"
-best = label "Best: 3" @above:c3
-step start "The row"
+/** One row that stays on screen, one state per sentence, pointers that move, values marked as they are decided. Shows the pattern, not any topic. */
+const SCAN_EXAMPLE = `scene scan "Finding the largest of five numbers" template=trace
+nums = row
 > Here are {1}five numbers, and we want {2}the largest one.
-1 pop c1,c2,c3,c4,c5 then fade best
-2 visit c1 then visit c5
-step scan "One look at each"
-> We keep a best so far, and {1}start with the first number, three.
-1 visit c1 then mark c1 as=ok
-> {1}Seven is bigger, so {2}it becomes the new best.
-1 visit c2
-2 set best to="Best: 7" then mark c2 as=ok
-> {1}Two is smaller, so {2}the best stays seven.
-1 visit c3
-2 mark c3 as=fail
-> {1}Nine is bigger again, so {2}nine is the new best.
-1 visit c4
-2 set best to="Best: 9" then mark c4 as=ok
-step result "The answer"
-> {1}Four is smaller, so {2}after one look at each number, the largest is nine.
-1 visit c5 then mark c5 as=fail
-2 visit c4`;
+1 nums: 3 7 2 9 4
+2 nums: 3+ 7 2 9 4 | i=0 best=0
+> {1}Seven is bigger than three, so {2}it becomes the best.
+1 nums: 3+ 7* 2 9 4 | i=1 best=0
+2 nums: 3 7+ 2 9 4 | i=1 best=1
+> {1}Two is smaller, so the best stays seven.
+1 nums: 3 7+ 2* 9 4 | i=2 best=1
+> {1}Nine is bigger again, so {2}it takes over.
+1 nums: 3 7+ 2 9* 4 | i=3 best=1
+2 nums: 3 7 2 9+ 4 | i=3 best=3
+> {1}Four is smaller, so the largest is nine.
+1 nums: 3 7 2 9+ 4* | i=4 best=3`;
 
-/** Two options applied to the same starting row, one after the other, and set side by side at the end. Shows the pattern, not any topic. */
-const ROW_EXAMPLE = `scene ops "Two ways to change one row" template=structure variant=array
-c1 = box "10"
-c2 = box "20"
-c3 = box "30"
-c4 = box "40"
-note = label "Original row" @above:c2
-step start "The same row"
-> Here is {1}one row of four values, {2}the starting point for both options.
-1 pop c1,c2,c3,c4 then fade note
-2 visit c1 then visit c4
-step add "Option one: add five"
+/** Two options applied to the same starting row, each result in a panel beside it. Shows the pattern, not any topic. */
+const ROW_EXAMPLE = `scene ops "Two ways to change one row" template=trace
+base = row "Starting row"
+add = row "Add five"
+dbl = row "Double"
+> Here is {1}one row of four values, the starting point for both options.
+1 base: 10 20 30 40
 > The first option {1}adds five to every value.
-1 set note to="Add 5" then set c1 to="15" then set c2 to="25" then set c3 to="35" then set c4 to="45"
-> {1}Every value moves up by the same amount, so the gaps between them stay the same.
-1 mark c1,c2,c3,c4 as=ok
-step double "Option two: double"
-> Go back to {1}the original row, and apply the second option.
-1 set note to="Original row" then set c1 to="10" then set c2 to="20" then set c3 to="30" then set c4 to="40"
-> It {1}doubles every value, so the gaps grow too.
-1 set note to="Double" then set c1 to="20" then set c2 to="40" then set c3 to="60" then set c4 to="80"
+1 add: 15 25 35 45
+> The second option {1}doubles every value.
+1 dbl: 20 40 60 80
 > Option one {1}shifts the row, and option two {2}stretches it.
-1 visit c1 then visit c2
-2 visit c3 then visit c4`;
+1 highlight add
+2 highlight dbl`;
 
 export const USE_CASES: readonly UseCase[] = [
   {
     name: "algorithm",
     when: "a procedure that runs step by step on data: sorting, searching, traversal, recursion, a pass over a list",
-    plan: "One small example (4 to 6 values) runs through the video. Open on the idea or the data, never on a statistic. The core is ONE growing scene (template=structure) that runs the example from start to finished result, one chapter per pass or round; then what it costs, then a recap.",
-    scene: "One compare or one swap per sentence: visit the pair, then swap it. A label names the current pass and changes with set. Mark finished values ok after each pass and run the example to its finished result. Say the actual values in the narration. No decorative icons beside the data.",
-    example: { template: "structure", text: SCAN_EXAMPLE },
+    plan: "One small example (4 to 6 values) runs through the video. Open on the idea or the data, never on a statistic. The core is ONE growing scene (template=trace) that runs the example from start to finished result, one chapter per pass or round; then what it costs, then a recap.",
+    scene: "Write the state after each sentence: one compare or one swap per cue, with the pointers (i, j, mid, best) where they are and the finished values marked +. Panels (a queue, a visited set, a table of distances) beside the main row show what the algorithm keeps. Run the example to its finished result, and say the actual values in the narration. No decorative icons beside the data.",
+    example: { template: "trace", text: SCAN_EXAMPLE },
     keywords: /\b(sort(ing)?|bubble|quick ?sort|merge ?sort|insertion|selection sort|binary search|linear search|search algorithm|algorithms?|traversal|bfs|dfs|recursion|dynamic programming|dijkstra|heap ?sort)\b/i,
   },
   {
@@ -110,7 +88,7 @@ export const USE_CASES: readonly UseCase[] = [
     when: "two or more options set against each other: A vs B, which to choose, before and after",
     plan: "Two kinds. If the options CHANGE A PICTURE or can be RUN on data (branches, a data layout, two data structures, two algorithms, a diagram): ONE growing scene draws the shared starting point first, then applies each option to the SAME data in its own chapter (for data structures, each one's operations on the same row of values; for algorithms, both runs on the same input), so the viewer sees both results side by side; then a separate scene for when to choose each. Otherwise: what they share, the differences on the same few axes, when to choose each, a verdict. Never explain an option with generic icons.",
     scene: "",
-    example: { template: "structure", text: ROW_EXAMPLE },
+    example: { template: "trace", text: ROW_EXAMPLE },
     keywords: /\b(vs\.?|versus|difference between|differences|compare|comparison|which (one )?to (use|choose))\b/i,
   },
   {
