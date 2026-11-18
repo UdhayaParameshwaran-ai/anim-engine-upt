@@ -63,3 +63,20 @@ gradient descent, hash collisions and a few others still got a grid table or ico
 - Engine bugs found: backslash in text is eaten (file-system `C:\Users`), `|` leaks into grid bullets,
   `count` stat shows 0 then 1, struck-through compare side reads as "wrong", trace shows `null` and `i` index chrome
   on non-array data (order-status, traffic-light).
+
+## h4 (after backslash/pipe/count fixes, Q7 graph/net/lanes repair, NAR613)
+
+| Run | Videos | Average | 4s | 3s | 2s | 1s |
+|---|---|---|---|---|---|---|
+| h4: all topics | 62 | 3.02 | 13 | 37 | 12 | 0 |
+
+h4 scored lower than h3 (3.21) although nothing in it should make a video worse. Single Haiku runs vary: the same
+topic moved ±1 in both directions (huffman 4→2, raft 4→2, garbage-collection 3→4, cicd 3→4), so a difference of
+0.2 on 62 videos is within noise. Only 28 videos got a trace scene (38 in h3): the planner's choice of template
+changes from run to run, and a video without a trace scene stays around 3.
+- The new kinds were rarely chosen (net 1, graph 3, plot 1, lanes 0 of 62): Haiku copies the row example even when
+  the narration is about links, time or layers; Q7 asks for a rewrite but the rewrite is sometimes rejected.
+- Still seen in most videos: recap/limit scenes as text, tiny labels, trace cells without labels, a state machine
+  layout that clips or overlaps, titles typing in the first frame.
+- The `|` in checklists (websockets, browser-render) survived because it was only a warning; list widgets now split
+  on it too.

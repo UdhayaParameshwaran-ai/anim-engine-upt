@@ -53,6 +53,8 @@ const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const out = (x: number) => 1 - (1 - clamp01(x)) ** 3;
 const items = (s = "") => s.split(";").map((x) => x.trim()).filter(Boolean);
 const fields = (s: string) => s.split("|").map((x) => x.trim());
+/** Items of a one-field list: a model sometimes separates them with a pipe, which would show as a literal bar. */
+const listItems = (s = "") => s.split(/[;|]/).map((x) => x.trim()).filter(Boolean);
 
 /** Progress of item i of n when items enter in turn (overlapping by `overlap`). */
 function stagger(k: number, i: number, n: number, overlap = 0.4): number {
@@ -390,7 +392,7 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   proscons(c) {
-    const cols = [items(c.el.texts[0]), items(c.el.texts[1])];
+    const cols = [listItems(c.el.texts[0]), listItems(c.el.texts[1])];
     const cw = (c.w - 48) / 2;
     const longest = Math.max(1, ...cols.map((l) => l.length));
     const lh = Math.min(72, (c.h - 72) / longest);
@@ -860,7 +862,7 @@ const BUILDERS: Record<string, Builder> = {
 };
 
 function listWidget(c: Ctx, style: "bullet" | "number" | "check"): Motion {
-  const list = items(c.el.texts[0]);
+  const list = listItems(c.el.texts[0]);
   const n = Math.max(1, list.length);
   // Each item is a row card: a marker in the item's color, then text sized to fill the row.
   const gap = Math.min(20, c.h * 0.03);
