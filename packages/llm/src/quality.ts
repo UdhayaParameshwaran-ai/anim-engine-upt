@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -53,6 +53,17 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
   const content = elements.filter((e) => !FRAME.has(e.kind));
   if (!scene.attrs.grid && scene.attrs.template !== "flow" && scene.attrs.template !== "trace" && content.length >= 2 && !content.some((e) => VISUAL.has(e.kind))) {
     issues.push({ code: "Q1", message: `scene \`${scene.id}\` shows only boxes and text; show the ideas with listed icons or assets whose meaning matches their labels` });
+  }
+
+  // Q9: a grid page of only sentences (bullets, a checklist, a paragraph, a callout) repeats the narration. The closing
+  // recap of a video may be one; a limit, a cost or a comparison has to show the case.
+  if (scene.attrs.grid) {
+    const TEXT = new Set(["bullets", "numbered", "checklist", "list", "body", "callout", "definition", "proscons", "title", "kicker", "footer", "caption"]);
+    const parts = elements.filter((e) => e.id !== "title");
+    const closing = /recap|remember|takeaway|wrap|summary|check|conclusion|final|end|outro/i.test(`${scene.id} ${scene.title ?? ""}`);
+    if (parts.length && parts.every((e) => TEXT.has(e.kind)) && !closing) {
+      issues.push({ code: "Q9", message: `scene \`${scene.id}\` is a page of sentences that repeats the narration; show the case instead: a number that moves (stat, gauge, chart with the real values), a table of the actual rows, or a trace/compare scene of the example` });
+    }
   }
 
   // Q2: assets that will render as grey placeholders.
@@ -112,6 +123,26 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
       } else if ((said.match(/\b(seconds?|per second|window|refill|timeout|polling|cold start|every \d+)\b/gi) ?? []).length >= 3) {
         issues.push({ code: "Q7", message: `scene \`${scene.id}\` is about events over time but draws a flat row; declare \`t = lanes to=<seconds>\` and write each lane's segments as \`label:start-end\`` });
       }
+    }
+  }
+  // Q8: numbers the narration says out loud that appear nowhere on screen: the picture has to carry the worked example.
+  {
+    const spoken = narrationLines(sceneText).join(" ").replace(/\{\w+\s?/g, " ").replace(/,(?=\d)/g, "");
+    const shown = sceneText.split("\n").filter((l) => !l.trimStart().startsWith(">")).join(" ").replace(/,(?=\d)/g, "");
+    const nums = [...new Set(spoken.match(/\d+(?:\.\d+)?/g) ?? [])];
+    const onScreen = (n: string) => new RegExp(`(^|[^\\d.])${n.replace(".", "\\.")}([^\\d]|\\.(?!\\d)|$)`).test(shown);
+    const missing = nums.filter((n) => !onScreen(n));
+    if (nums.length >= 2 && missing.length >= 2) {
+      issues.push({ code: "Q8", message: `scene \`${scene.id}\` says ${missing.slice(0, 5).join(", ")} but those numbers appear nowhere on screen; put the worked example's real values in the picture (a cell, a label, a state item, a stat) so the viewer sees what the narration says` });
+    }
+  }
+  // Q10: the narration says something fails, is cut, lost or blocked, and nothing on screen shows it.
+  if (scene.attrs.template && !["trace", "title"].includes(scene.attrs.template)) {
+    const said = narrationLines(sceneText).join(" ");
+    const calls = scene.steps.flatMap((st) => st.beats.flatMap((b) => b.actions.flatMap((a) => a.calls)));
+    const shown = calls.some((c) => c.verb === "strike" || c.verb === "shake" || c.verb === "hide" || c.args.params.fail !== undefined || c.args.params.as === "fail" || JSON.stringify(c.args).includes("fail"));
+    if (/\b(crash(es|ed)?|fail(s|ed|ure)?|cut|broken|breaks?|lost|drops?|dropped|blocked|rejected|down|stale)\b/i.test(said) && calls.length >= 3 && !shown) {
+      issues.push({ code: "Q10", message: `scene \`${scene.id}\` says something fails, breaks, is lost or blocked, but nothing on screen shows it; show it: \`mark <id> as=fail\`, \`strike <id>\`, \`shake <id>\`, or \`send ... fail=true\` for a message that does not arrive` });
     }
   }
   // Q6: wording taken from the finished example the scene was shown.

@@ -567,6 +567,26 @@ describe("camera framing", () => {
   });
 });
 
+describe("camera framing with connectors", () => {
+  it("a close-up takes in a shown arrow's two ends instead of cutting it", async () => {
+    const { ir, tl } = await build(scene(`a = icon:sun @L
+b = icon:heart @C
+c = icon:moon @R
+m = arrow a->c "far"
+> {1}Here are {2}three.
+1 pop a,b,c
+2 draw m
+> Look {1}here.
+1 frame b`));
+    const cam = tweens(tl, "s/camera", "camera").at(-1)!.to as { x: number; y: number; w: number; h: number };
+    const el = (id: string) => ir.scenes[0]!.elements.find((e) => e.id === id)!.box;
+    for (const id of ["a", "c"]) {
+      const b = el(id);
+      expect(b.x >= cam.x - 1 && b.x + b.w <= cam.x + cam.w + 1, `${id} is inside the frame`).toBe(true);
+    }
+  });
+});
+
 describe("trace scenes", () => {
   it("sets and clears a mark, and swaps two cells on the cue of their state line", async () => {
     const { ir, tl } = await build(`video 1\nscene t "Run" template=trace\narr = row\n> Start {1}here.\n1 arr: 5* 8\n> {1}Trade them.\n1 arr: 8 5+\n`);

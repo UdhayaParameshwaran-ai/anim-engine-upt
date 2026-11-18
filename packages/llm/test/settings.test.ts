@@ -219,3 +219,35 @@ describe("Q7: a trace of links, time or layers needs a picture of them", () => {
     expect(codes(scene("t = row", "{1}Every second a token refills, and after ten seconds the window resets."))).toContain("Q7");
   });
 });
+
+describe("Q8: numbers said aloud must appear on screen", () => {
+  const H = 'video 1 "x"';
+  const codes = (text: string) => qualityIssues(H, text, undefined).map((q) => q.code);
+  it("flags a scene that speaks two numbers the picture never shows, and passes when they are drawn", () => {
+    const bad = 'scene s "S" template=cards\na = icon:sun "Clock"\nb = icon:moon "Counter"\n> The time {1}1700000000 divided by 30 gives {2}56666666.\n1 pop a\n2 pop b\n';
+    expect(codes(bad)).toContain("Q8");
+    const good = bad.replace('"Clock"', '"1700000000"').replace('"Counter"', '"56666666"');
+    expect(codes(good)).not.toContain("Q8");
+  });
+});
+
+describe("Q9: a grid page of only sentences", () => {
+  const H = 'video 1 "x"';
+  const page = (id: string, body: string) => `scene ${id} "S" grid=L2-01\n${body}\n> A {1}page.\n1 fade t\n`;
+  const codes = (text: string) => qualityIssues(H, text, undefined).map((q) => q.code);
+  it("a limit page of bullets is flagged, a closing recap and a page with a number are not", () => {
+    expect(codes(page("limits", 't = bullets "one; two; three"'))).toContain("Q9");
+    expect(codes(page("recap", 't = bullets "one; two; three"'))).not.toContain("Q9");
+    expect(codes(page("limits", 't = stat "42" "rows"'))).not.toContain("Q9");
+  });
+});
+
+describe("Q10: a failure that is only spoken", () => {
+  const H = 'video 1 "x"';
+  const scene = (extra: string) => `scene s "S" template=exchange\nclient = icon:laptop "Client"\nserver = icon:server "Server"\nm = arrow client->server "write"\n> The {1}client writes, the {2}link breaks, and the {3}copy is lost.\n1 pop client,server\n2 draw m\n3 fade m${extra}\n`;
+  const codes = (text: string) => qualityIssues(H, text, undefined).map((q) => q.code);
+  it("flags a failure with no failure verb, and passes with one", () => {
+    expect(codes(scene(""))).toContain("Q10");
+    expect(codes(scene("\n3 mark server as=fail"))).not.toContain("Q10");
+  });
+});

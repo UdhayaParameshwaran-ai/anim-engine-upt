@@ -514,10 +514,21 @@ class Resolver {
         // Never cut a shown element in half at the frame edge: take in whatever the frame would cut, until it cuts nothing.
         for (let i = 0; i < 4; i++) {
           const f = framed;
+          // A shown connector counts as the box that holds both of its ends (its label sits between them), so a close-up
+          // that would cut an arrow or its label takes the whole connection in.
+          const span = (e: NonNullable<ReturnType<typeof elements.get>>): Box | undefined => {
+            if (!e.link) return e.box.w > 0 ? this.currentBox(scene, e, s.t0) : undefined;
+            const [A, B] = [elements.get(e.link.from), elements.get(e.link.to)];
+            if (!A || !B || A.box.w <= 0 || B.box.w <= 0) return undefined;
+            const [a, b] = [this.currentBox(scene, A, s.t0), this.currentBox(scene, B, s.t0)];
+            const [x0, y0] = [Math.min(a.x, b.x), Math.min(a.y, b.y)];
+            return { x: x0, y: y0, w: Math.max(a.x + a.w, b.x + b.w) - x0, h: Math.max(a.y + a.h, b.y + b.h) - y0 };
+          };
           const cut = [...visible]
             .map((id) => elements.get(id))
-            .filter((e): e is NonNullable<typeof e> => !!e && !e.link && e.box.w > 0)
-            .map((e) => this.currentBox(scene, e, s.t0))
+            .filter((e): e is NonNullable<typeof e> => !!e)
+            .map((e) => span(e))
+            .filter((b): b is Box => !!b)
             .filter((b) => b.x < f.x + f.w && b.x + b.w > f.x && b.y < f.y + f.h && b.y + b.h > f.y)
             .filter((b) => b.x < f.x - 1 || b.y < f.y - 1 || b.x + b.w > f.x + f.w + 1 || b.y + b.h > f.y + f.h + 1);
           if (!cut.length) break;
