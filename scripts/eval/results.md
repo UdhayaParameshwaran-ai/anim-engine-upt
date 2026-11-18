@@ -8,6 +8,8 @@ frames and narration only, Haiku generations. Single runs: differences of a few 
 | baseline (before explain-quality work) | 48 | 2.25 | 1 | 12 | 33 | 2 |
 | h1: polish + trace slice 1 | 48 (same topics) | 2.81 | 8 | 23 | 17 | 0 |
 | h1: all topics | 62 | 2.82 | 10 | 31 | 21 | 0 |
+| h2: + chains, buckets, graphs, trees, heaps, plots, rings | 48 (same topics) | 3.00 | 8 | 28 | 12 | 0 |
+| h2: all topics | 62 | 3.05 | 11 | 43 | 8 | 0 |
 
 ## h1 per video
 
@@ -30,3 +32,18 @@ merge-rebase, tcp-states
 - The planner did not choose trace for quicksort, dijkstra or dynamic-programming on Haiku.
 - Still frequent: text and icon pages for recaps and limits, tiny edge labels, and pictures that drop the half of a
   story that carries the point (responses, return paths, a crash).
+
+## h2 (after graphs, trees, linked lists, buckets, heaps, plots and rings)
+
+Generated before the last planner fix (worked-example grid pages and more data topics routed to a trace), so
+gradient descent, hash collisions and a few others still got a grid table or icon chain instead of a plot.
+
+- Data-structure and algorithm videos gained the most: dijkstra 2→4, linked-list 3→4, bst 3→4, recursion 3→4,
+  quicksort 2→3, bfs-dfs 2→3, binary-heap 2→3, lru-cache 3→4, event-loop 3→4, file-system 2→4.
+- Videos with a trace scene: 25 of 59 generated (13 before).
+- Still 2/5: hash-collisions, cpu-pipeline, cors, totp, neural-network, gradient-descent, floating-point,
+  bloom-filter. Most of these never got a trace, or a trace without its context (labels, source, request stream).
+- Remaining defects named by reviewers in nearly every video: half-typed title in the first sampled frame, text
+  or icon pages for recaps and limits, tiny edge labels, a worked example given as a table of numbers.
+- Three topics (sharding, message-queue, mapreduce) timed out once in the Claude CLI under parallel load and
+  were re-run.
