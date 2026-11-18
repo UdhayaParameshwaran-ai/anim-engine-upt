@@ -941,3 +941,16 @@ describe("planner brief", () => {
     expect(ask).toContain("# question:");
   });
 });
+
+describe("algorithm data scenes", () => {
+  const PLAN = `video 1 "Sorting"\n# usecase: algorithm\nscene run "A run" template=structure variant=array\n# shape: structure · goal: the run\nscene cost "Cost" template=steps\n# shape: sequence · goal: cost`;
+  it("turns a structure scene of an algorithm video into a trace, and leaves other videos alone", async () => {
+    const { traceForAlgorithms } = await import("../src/index.js");
+    const r = traceForAlgorithms(PLAN, "algorithm");
+    expect(r.text).toContain('scene run "A run" template=trace');
+    expect(r.text).not.toContain("variant=array");
+    expect(r.text).toContain("template=steps");
+    expect(r.changes).toEqual(["run: structure → trace"]);
+    expect(traceForAlgorithms(PLAN, "concept").text).toBe(PLAN);
+  });
+});

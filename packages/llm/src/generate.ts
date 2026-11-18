@@ -186,7 +186,10 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     const ask = canvas ? canvasOutlinePrompt(topic, spec.chapters, recent, settings) : outlinePrompt(topic, range, arc, recent, spec, settings);
     const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain, settings));
     const routed = routeOutline(tidyOutline(clean(planned.text)));
-    const outline = pruneCarry(routed.text);
+    const named0 = useCaseOf(routed.text);
+    const tracing = traceForAlgorithms(routed.text, (named0 ?? guessUseCase(topic))?.name);
+    if (tracing.changes.length) opts.onLog?.(`algorithm data scenes become traces: ${tracing.changes.join("; ")}`);
+    const outline = pruneCarry(tracing.text);
     const named = useCaseOf(outline);
     ctx.usecase = named ?? guessUseCase(topic);
     if (ctx.usecase) opts.onLog?.(`use case: ${ctx.usecase.name}${named ? "" : " (guessed from the topic; the plan named none)"}`);
@@ -490,6 +493,24 @@ export function routeOutline(text: string): { text: string; changes: string[] } 
     scene = -1;
   });
   return { text: lines.join("\n"), changes };
+}
+
+/**
+ * A data scene in an algorithm video is a trace: a structure scene (a still row of cells) cannot show the data
+ * changing, so the plan's structure scenes become trace scenes.
+ */
+export function traceForAlgorithms(outline: string, usecase: string | undefined): { text: string; changes: string[] } {
+  if (usecase !== "algorithm") return { text: outline, changes: [] };
+  const changes: string[] = [];
+  const text = outline
+    .split("\n")
+    .map((l) => {
+      if (!/^\s*scene\s/.test(l) || !/\btemplate=structure\b/.test(l)) return l;
+      changes.push(`${sceneIdOf(l) ?? "?"}: structure → trace`);
+      return l.replace(/\btemplate=structure\b/, "template=trace").replace(/\s+variant=\S+/, "");
+    })
+    .join("\n");
+  return { text, changes };
 }
 
 /** Sets `carry=` on a written scene line to exactly the planned ids (none: the attribute is removed). */
