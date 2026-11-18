@@ -103,6 +103,7 @@ export const ValidateCodes = {
   TraceVerb: "NAR610",
   TraceClaim: "NAR611",
   TraceConserved: "NAR612",
+  TraceEmpty: "NAR613",
   TraceCapacity: "NAR615",
   OutsideTemplate: "NAR411",
   DanglingConnector: "NAR412",
@@ -314,7 +315,7 @@ class Validator {
     if (!hasSpeech) this.error(C.NoNarration, `scene \`${scene.id}\` has no narration`, scene.span);
     // State lines: do they hold together, and are they true.
     for (const t of analyzeTrace(scene)) {
-      const code = { NAR601: C.TraceNoTemplate, NAR602: C.TraceItem, NAR603: C.TracePointer, NAR604: C.TraceLink, NAR605: C.TraceDuplicate, NAR606: C.TraceStack, NAR607: C.TraceQueue, NAR609: C.TraceBusy, NAR610: C.TraceVerb, NAR611: C.TraceClaim, NAR612: C.TraceConserved, NAR615: C.TraceCapacity }[t.code];
+      const code = { NAR601: C.TraceNoTemplate, NAR602: C.TraceItem, NAR603: C.TracePointer, NAR604: C.TraceLink, NAR605: C.TraceDuplicate, NAR606: C.TraceStack, NAR607: C.TraceQueue, NAR609: C.TraceBusy, NAR610: C.TraceVerb, NAR611: C.TraceClaim, NAR612: C.TraceConserved, NAR613: C.TraceEmpty, NAR615: C.TraceCapacity }[t.code];
       if (t.severity === "error") this.error(code, t.message, t.span, t.fix);
       else this.warn(code, t.message, t.span, t.fix);
     }

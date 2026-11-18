@@ -146,7 +146,7 @@ export function stateEvents(scene: Scene): StateEvent[] {
 }
 
 export interface TraceProblem {
-  code: "NAR601" | "NAR602" | "NAR603" | "NAR604" | "NAR605" | "NAR606" | "NAR607" | "NAR609" | "NAR610" | "NAR611" | "NAR612" | "NAR615";
+  code: "NAR601" | "NAR602" | "NAR603" | "NAR604" | "NAR605" | "NAR606" | "NAR607" | "NAR609" | "NAR610" | "NAR611" | "NAR612" | "NAR613" | "NAR615";
   severity: "error" | "warning";
   message: string;
   span: Span;
@@ -180,6 +180,12 @@ export function analyzeTrace(scene: Scene): TraceProblem[] {
       problems.push({ code: "NAR601", severity: "error", message: `state lines (\`${ev.coll}:\`) need \`template=trace\` on the scene line`, span: ev.span });
       break;
     }
+    return problems;
+  }
+
+  // A trace is its state lines: collections with none draw nothing for the narration to point at.
+  if (collections.size && !events.length) {
+    problems.push({ code: "NAR613", severity: "error", message: "a trace scene needs state lines: after each sentence write the whole contents of a collection, e.g. `1 row: 3 7* 2 9 | i=1` (declared: " + [...collections.keys()].join(", ") + ")", span: scene.span });
     return problems;
   }
 

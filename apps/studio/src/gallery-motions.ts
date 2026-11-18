@@ -8,7 +8,7 @@ function motionScript(attrs: string, decl: string[], lines: string[], head = "")
 const EX2 = [`client = icon:laptop "Client"`, `server = icon:server "Server"`, `m1 = arrow client->server "GET /data"`, `m2 = arrow server->client "200 OK"`];
 const ARCH = [`edge = zone "Edge"`, `cdn = icon:globe "CDN"`, `core = zone "Origin"`, `app = icon:server "App"`, `db = icon:database "Database"`, `l1 = arrow cdn->app "miss"`, `l2 = arrow app->db "SQL"`];
 const CELLS = [`c1 = box "7"`, `c2 = box "3"`, `c3 = box "9"`, `c4 = box "5"`];
-const BOXES = [`a = box "Status"`, `b = box "Hits"`, `c = box "Old API"`, `d = box "Copy A"`, `e = box "Copy B"`, `f = box "Merged"`];
+const BOXES = [`a = box "Status"`, `b = box "0 hits"`, `c = box "Old API"`, `d = box "Copy A"`, `e = box "Copy B"`, `f = box "Merged"`];
 
 const TWO_SCENES_CARRY = `video 1 "Motion"
 

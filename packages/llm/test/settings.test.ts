@@ -206,3 +206,16 @@ describe("use case Q5: say it, show it", () => {
     expect(codes(base + "\n2 swap c1,c2").map((q) => q.message).join(" ")).not.toContain("never swaps");
   });
 });
+
+describe("Q7: a trace of links, time or layers needs a picture of them", () => {
+  const H = 'video 1 "x"';
+  const scene = (decl: string, narration: string) => `scene s "S" template=trace\n${decl}\n> ${narration}\n1 ${decl.split(" ")[0]}: A B\n`;
+  const codes = (text: string) => qualityIssues(H, text, "algorithm").map((q) => q.code);
+  it("flat row about references asks for a graph; the graph itself passes", () => {
+    expect(codes(scene("heap = row", "{1}A points to B, so B is reachable from the root."))).toContain("Q7");
+    expect(codes(scene('heap = graph "A-B"', "{1}A points to B, so B is reachable from the root."))).not.toContain("Q7");
+  });
+  it("flat row about events over seconds asks for lanes", () => {
+    expect(codes(scene("t = row", "{1}Every second a token refills, and after ten seconds the window resets."))).toContain("Q7");
+  });
+});

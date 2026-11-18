@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -98,6 +98,21 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
     const mine = states.filter((c) => c.targets[0] === first);
     if (mine.length < 5) issues.push({ code: "Q5", message: `scene \`${scene.id}\` shows only ${mine.length} state(s) of the run; run the example all the way to the finished result, one state per compare or swap` });
     else if (!mine.at(-1)!.state!.items.some((i) => i.mark === "+")) issues.push({ code: "Q5", message: `scene \`${scene.id}\` ends without marking the finished values; mark them + in the last state` });
+  }
+  // Q7: a trace drawn as flat rows when the narration is about links, time or layers: the picture needs another kind.
+  if (tpl === "trace") {
+    const kinds = new Set(scene.steps.flatMap((st) => st.elements.map((e) => e.kind)));
+    const flat = ["row", "stack", "queue", "set", "pairs"].some((k) => kinds.has(k)) && !["graph", "tree", "net", "lanes", "plot", "heap", "ring", "chain", "buckets"].some((k) => kinds.has(k));
+    if (flat) {
+      const said = narrationLines(sceneText).join(" ");
+      if (/\b(points? to|pointing|links? to|references?|reachable|unreachable|depends? on|dependenc|parent|child(ren)?)\b/i.test(said)) {
+        issues.push({ code: "Q7", message: `scene \`${scene.id}\` talks about things pointing at each other but draws a flat row, so no link is visible; declare the objects as \`graph "A-B B-C"\` (or \`tree\`) and mark nodes in each state` });
+      } else if (/\b(neurons?|hidden layer|input layer|output layer|weights?)\b/i.test(said) && /\blayers?\b|neural|network/i.test(said)) {
+        issues.push({ code: "Q7", message: `scene \`${scene.id}\` explains a layered network but draws a flat row; declare \`n = net "2 3 1"\` and list nodes with values (x1:2 a1:1.2 y1:1.8)` });
+      } else if ((said.match(/\b(seconds?|per second|window|refill|timeout|polling|cold start|every \d+)\b/gi) ?? []).length >= 3) {
+        issues.push({ code: "Q7", message: `scene \`${scene.id}\` is about events over time but draws a flat row; declare \`t = lanes to=<seconds>\` and write each lane's segments as \`label:start-end\`` });
+      }
+    }
   }
   // Q6: wording taken from the finished example the scene was shown.
   if (example) {

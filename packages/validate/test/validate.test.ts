@@ -453,3 +453,11 @@ describe("count needs a number", () => {
     expect(check(['r = proscons "a|b" "c"', "> A {1}list.", "1 fade r"].join("\n"), { scene: "template=grid" }).codes.length).toBeGreaterThan(0);
   });
 });
+
+describe("NAR613 trace without states", () => {
+  it("a trace scene with collections and no state line is an error", () => {
+    const body = ["r = row", "> A {1}row.", "1 fade r"].join("\n");
+    expect(check(body, { scene: "template=trace" }).codes).toContain(C.TraceEmpty);
+    expect(check(["r = row", "> A {1}row.", "1 r: 1 2 3"].join("\n"), { scene: "template=trace" }).codes).not.toContain(C.TraceEmpty);
+  });
+});
