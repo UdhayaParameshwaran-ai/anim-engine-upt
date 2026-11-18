@@ -412,4 +412,5 @@ export * from "./grid.js";
 export { SHAPES, TEMPLATE_GUIDES, type Shape, type TemplateGuide, type VariantGuide } from "./guide.js";
 export { EXTRA_VARIANTS, type ExtraVariant } from "./variants.js";
 export { findPlace, PLACES } from "./places.js";
-export { AssetLibrary, flowNodes, isSetIcon, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";
+export { AssetIndex, stem, tokens, type SearchHit, type SearchOptions } from "./search.js";
+export { AssetLibrary, flowNodes, iconSet, isSetIcon, partsOf, SEED_ASSETS, type AssetMatch, type PartsInput } from "./assets.js";

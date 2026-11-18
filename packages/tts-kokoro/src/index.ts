@@ -21,6 +21,8 @@ export interface KokoroOptions {
   /** Where model files are downloaded to (default ./.cache/models). */
   cacheDir?: string;
   modelId?: string;
+  /** Tokens per model call (default 400). */
+  maxTokens?: number;
 }
 
 const MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX-timestamped";
@@ -52,8 +54,9 @@ interface Loaded {
 export class KokoroTtsProvider implements TtsProvider {
   readonly id: string;
   readonly capabilities: TtsCapabilities = { timing: "word", ssml: false, maxChars: 200_000 };
-  private readonly opts: Required<Omit<KokoroOptions, "cacheDir">> & { cacheDir: string };
+  private readonly opts: Required<Omit<KokoroOptions, "cacheDir" | "maxTokens">> & { cacheDir: string; maxTokens: number };
   private loaded?: Promise<Loaded>;
+  private backup?: Promise<StyleTextToSpeech2Model>;
   private readonly voices = new Map<string, Float32Array>();
   private readonly phonemes = new Map<string, Promise<string>>();
   /** One ONNX session: requests run one at a time. */
@@ -66,8 +69,10 @@ export class KokoroTtsProvider implements TtsProvider {
       dtype: opts.dtype ?? "q4f16",
       cacheDir: opts.cacheDir ?? join(process.cwd(), ".cache", "models"),
       modelId: opts.modelId ?? MODEL,
+      maxTokens: opts.maxTokens ?? MAX_TOKENS,
     };
-    this.id = `kokoro:${this.opts.dtype}:${this.opts.speed}`;
+    // The trailing 2 retires speech cached before silent chunks were detected (see `audible`).
+    this.id = `kokoro:${this.opts.dtype}:${this.opts.speed}:2`;
   }
 
   /** Loads the model now instead of on the first request (it takes a second or two). */
@@ -79,6 +84,12 @@ export class KokoroTtsProvider implements TtsProvider {
     const run = this.queue.then(() => this.run(req));
     this.queue = run.catch(() => undefined);
     return run;
+  }
+
+  /** The same model with 8-bit weights, loaded only when the main one fails on an input (see run). */
+  private fallback(): Promise<StyleTextToSpeech2Model> {
+    this.backup ??= StyleTextToSpeech2Model.from_pretrained(this.opts.modelId, { dtype: "q8", device: "cpu" });
+    return this.backup;
   }
 
   private load(): Promise<Loaded> {
@@ -104,7 +115,7 @@ export class KokoroTtsProvider implements TtsProvider {
     const audio: Float32Array[] = [];
     const items: TimedSpan[] = [];
     let offset = 0; // samples
-    for (const chunk of chunks(words)) {
+    for (const chunk of chunks(words, this.opts.maxTokens)) {
       const ids = [0];
       const firstToken: number[] = [];
       chunk.forEach((w, i) => {
@@ -115,12 +126,20 @@ export class KokoroTtsProvider implements TtsProvider {
       ids.push(0);
 
       const style = await this.style(voice, ids.length);
-      const out = await model({
+      const inputs = {
         input_ids: new Tensor("int64", BigInt64Array.from(ids.map(BigInt)), [1, ids.length]),
         style: new Tensor("float32", style, [1, 256]),
         speed: new Tensor("float32", [speed], [1]),
-      });
-      const wave = out.waveform!.data as Float32Array;
+      };
+      let out = await model(inputs);
+      let wave = out.waveform!.data as Float32Array;
+      // The 4-bit/fp16 weights overflow to NaN on some inputs (whatever the length), and the whole chunk would
+      // become silence while its durations, a separate output, still look fine. Say it again with the 8-bit weights.
+      if (!audible(wave) && this.opts.dtype !== "q8") {
+        out = await (await this.fallback())(inputs);
+        wave = out.waveform!.data as Float32Array;
+      }
+      if (!audible(wave)) throw new Error(`Kokoro produced no audio for: "${req.text.slice(chunk[0]!.start, chunk[chunk.length - 1]!.end)}"`);
       // The model rounds each token's duration to whole frames; rescale to the exact length it produced.
       const frames = Array.from(out.durations!.data as Float32Array, (d) => Math.max(1, Math.round(d)));
       const scale = wave.length / (frames.reduce((a, b) => a + b, 0) * FRAME);
@@ -215,6 +234,16 @@ export class KokoroTtsProvider implements TtsProvider {
   }
 }
 
+/** True when a waveform holds speech: every sample a number, and not all of them (nearly) zero. */
+export function audible(wave: Float32Array): boolean {
+  let peak = 0;
+  for (const v of wave) {
+    if (!Number.isFinite(v)) return false;
+    peak = Math.max(peak, Math.abs(v));
+  }
+  return peak > 1e-3;
+}
+
 const STRESS = /[ˈˌ]/;
 
 /**
@@ -269,13 +298,13 @@ export function splitPhonemes(phrase: string, refs: string[]): string[] {
 }
 
 /** Groups words into model calls of at most MAX_TOKENS, breaking after punctuation where possible. */
-function chunks(words: Word[]): Word[][] {
+function chunks(words: Word[], max = MAX_TOKENS): Word[][] {
   const out: Word[][] = [];
   let cur: Word[] = [];
   let size = 0;
   let lastBreak = -1; // index in `cur` after which punctuation ended a word
   for (const w of words) {
-    if (cur.length && size + w.ids.length + 1 > MAX_TOKENS) {
+    if (cur.length && size + w.ids.length + 1 > max) {
       const cut = lastBreak >= 0 ? lastBreak + 1 : cur.length;
       out.push(cur.slice(0, cut));
       cur = cur.slice(cut);

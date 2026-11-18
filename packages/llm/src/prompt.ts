@@ -34,38 +34,37 @@ const STANDARD = lengthSpec("standard");
 const span = (r: { min: number; max: number }) => `${r.min}–${r.max}`;
 
 /**
- * Picks the assets most relevant to a topic: words of the text matched
- * against names, synonyms, tags and descriptions. Keeps the prompt small as
- * the library grows; the LLM may only use names it is shown.
+ * The pictures offered for a scene: its best matches first (`best` counts them), then the hand-made art and a
+ * set of everyday icons (and, in the tech domain, the core of the technology icons), so a scene always has
+ * something to show.
  */
-export function retrieveAssets(text: string, assets: AssetLibrary, limit = 30): AssetManifest[] {
-  const words = new Set((text.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []).flatMap((w) => [w, ...w.split("-")]).filter((w) => w.length > 2 && !STOP.has(w)));
-  const stem = (w: string) => w.replace(/ves$/, "f").replace(/(ies|es|s)$/, "");
-  const stems = new Set([...words].map(stem));
-  const hit = (w: string) => w.length > 2 && (words.has(w) || stems.has(stem(w)));
-  const scored = assets.all().map((a) => {
-    const fields = new Set([a.name, ...a.name.split(/[.-]/), ...a.synonyms]);
-    let score = 0;
-    for (const f of fields) if (hit(f)) score += 3;
-    for (const t of new Set(a.tags)) if (hit(t)) score += 2;
-    for (const w of new Set(a.description.toLowerCase().split(/\W+/))) if (w.length > 3 && !fields.has(w) && hit(w)) score += 1;
-    return { a, score };
-  });
-  // Matches first; then the hand-made art and a set of everyday icons, so a scene always has
-  // something to show (icons of the set that match nothing are left out).
-  // The best matches (at most 3 of one family: house, house-plug, house-plus …), then all hand-made art and the everyday icons.
+export type Shortlist = AssetManifest[] & { best?: number };
+
+/**
+ * Picks the pictures most relevant to a text by meaning: the library's search over names, synonyms, tags and
+ * descriptions (registry/search.ts). Keeps the prompt small however large the library grows; the model may
+ * only use names it is shown. At most 4 of one family (http-get, http-post, … or house, house-plug …) so one
+ * idea does not fill the list.
+ */
+export function retrieveAssets(text: string, assets: AssetLibrary, limit = 36, domain?: Domain): Shortlist {
   const family = new Map<string, number>();
-  const ranked = scored
-    .filter((s) => s.score > 0 && isSetIcon(s.a))
-    .sort((x, y) => y.score - x.score || x.a.name.length - y.a.name.length || x.a.name.localeCompare(y.a.name))
-    .filter((s) => {
-      const f = s.a.name.split("-")[0]!;
+  const found = assets.search(text, { kind: "icon" }).filter((h) => isSetIcon(h.asset));
+  // Far behind the best match is noise (a tag shared by chance): leave it out.
+  const floor = (found[0]?.score ?? 0) * 0.15;
+  const ranked = found
+    .filter((h) => h.score >= floor)
+    .filter((h) => {
+      const f = h.asset.name.startsWith("brand-") ? h.asset.name : h.asset.name.split("-")[0]!;
       family.set(f, (family.get(f) ?? 0) + 1);
-      return family.get(f)! <= 3;
+      return family.get(f)! <= 4;
     })
-    .slice(0, limit);
-  const always = scored.filter((s) => !isSetIcon(s.a) || (EVERYDAY.has(s.a.name) && s.score === 0));
-  return [...ranked, ...always].map((s) => s.a);
+    .slice(0, limit)
+    .map((h) => h.asset);
+  const taken = new Set(ranked.map((a) => a.name));
+  const always = assets.all().filter((a) => !taken.has(a.name) && (!isSetIcon(a) || EVERYDAY.has(a.name) || (domain === "tech" && TECH_CORE.has(a.name))));
+  const list: Shortlist = [...ranked, ...always];
+  list.best = ranked.length;
+  return list;
 }
 
 /** The words a scene's pictures are searched by: the topic, the scene's title and goal, without the plan's markup. */
@@ -78,14 +77,31 @@ export function pictureQuery(topic: string, planned: string): string {
   return `${topic}\n${plan}`;
 }
 
-/** Words too common to say anything about a scene. */
-const STOP = new Set(
-  "the and for with from that this how what why who when where are was were its into than then them they their there have has had not but you your our can will one two three four five all any each out off over under about between through show shows scene goal uses using use video explain explains explained make makes made shape sequence loop compare many one-to-many many-to-one transform hub collection timeline focus graph page template title steps cycle cards spotlight converge diverge process flow grid together combine combines into".split(" "),
-);
 /** Icons of the set offered to every scene: people, places, money, time, ideas, direction. */
 const EVERYDAY = new Set(
   "users house building-2 factory globe map-pin coins banknote trending-up trending-down chart-line chart-bar calendar book-open graduation-cap rocket target scale handshake shield lock key search flag star trophy truck shopping-cart phone mail brain sprout mountain waves snowflake moon thermometer microscope atom dna pill stethoscope car plane ship cpu wifi smartphone laptop camera megaphone newspaper wrench hammer recycle battery-charging plug timer hourglass circle-alert thumbs-up thumbs-down".split(" "),
 );
+
+/** Technology icons offered to every scene of the tech domain: the parts almost any software topic draws. */
+const TECH_CORE = new Set(
+  "server database cloud-computing network api lock key shield-lock bug code terminal git-branch container cpu memory device-laptop device-mobile router world-www brand-docker brand-github logs dashboard queue-pop-in load-balancer pipeline file-code robot ai".split(" "),
+);
+
+/** How to choose a picture: what the model is told next to the list it picks from. */
+const PICTURE_GUIDE = `Choose each picture by what it means, not by how it looks:
+- Take the most specific one: icon:brand-docker for Docker, icon:database for a database; not a generic box or a loosely related symbol.
+- A product, language or service has its logo (icon:brand-…); an idea, a part or a place has a concept icon.
+- Give each thing in a scene a different picture; never reuse one for unrelated ideas.
+- Copy names exactly as written below. When nothing below fits a thing, write box "Label" (or text), never an invented name.`;
+
+/** What a picture is, in a few words: its description when it has one of its own, what people call it, then a few of its tags. */
+function pictureHint(a: AssetManifest): string {
+  const own = new Set(a.name.split(/[.-]/));
+  const plain = a.name.replace(/-/g, " ");
+  const said = a.synonyms.filter((s) => !own.has(s) && s !== plain).slice(0, 2);
+  const tags = [...new Set(a.tags)].filter((t) => !own.has(t) && !said.includes(t));
+  return [a.description && a.description !== plain ? a.description : "", ...said, ...tags].filter(Boolean).slice(0, 4).join(", ");
+}
 
 /**
  * The pictures a script may use, as the prompts list them: illustrations
@@ -94,11 +110,16 @@ const EVERYDAY = new Set(
  * keeps the system prompt cacheable across videos.
  */
 export function pictureList(assets: AssetManifest[]): string {
-  const art = assets.filter((a) => a.kind === "asset").map((a) => `${a.name}${a.parts.length ? `(${a.parts.join(",")})` : ""}`);
-  const icons = assets.filter((a) => a.kind === "icon").map((a) => a.name);
+  const best = (assets as Shortlist).best ?? 0;
+  const ranked = assets.slice(0, best);
+  const rest = assets.slice(best);
+  const art = rest.filter((a) => a.kind === "asset").map((a) => `${a.name}${a.parts.length ? `(${a.parts.join(",")})` : ""}`);
+  const icons = rest.filter((a) => a.kind === "icon").map((a) => a.name);
   return [
+    PICTURE_GUIDE,
+    ranked.length ? `Best matches for this scene, most relevant first (icon:<name> — what it shows):\n${ranked.map((a) => `  ${a.name} — ${pictureHint(a) || a.name.replace(/-/g, " ")}`).join("\n")}` : "",
     art.length ? `Illustrations, written asset:<name> (parts in brackets): ${art.join(" ")}` : "",
-    icons.length ? `Icons, written icon:<name>: ${icons.join(" ")}` : "",
+    icons.length ? `${ranked.length ? "More icons" : "Icons"}, written icon:<name>: ${icons.join(" ")}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -501,7 +522,7 @@ ${S.v("layouts", layouts)}
 PAGE ELEMENTS (the smallest slot each needs): ${S.v("page_elements", elements)}
 Plan a page only when its content fits the slots: one element per slot, each slot at least its element's size, at least one chart, stat, body, bullets, quote, table or similar, and at most one icon.
 
-PICTURES: ${S.v("pictures", `${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons`)} of everyday things (people, places, money, law, science, nature, weather, technology, transport, food, tools). The scene writer picks them; plan scenes around things that can be pictured.
+PICTURES: ${S.v("pictures", `${assets.filter((a) => a.kind === "asset").length ? `illustrations of ${assets.filter((a) => a.kind === "asset").map((a) => a.name).join(", ")}; ` : ""}${assets.filter((a) => a.kind === "icon").length} icons`)} of everyday things (people, places, money, law, science, nature, weather, transport, food, tools) and of technology (servers, databases, networks, security, code and developer tools, git, AI, and the logos of common products such as Docker, GitHub, AWS and Python). The scene writer picks them; plan scenes around things that can be pictured.
 
 ${S.v("domain_plan", domain ? `${DOMAINS[domain].plan}\n\n` : "")}PLANNING RULES
 - Teach, don't list: the video answers one question and builds toward it. Every scene has a job, and its goal says it: the problem, the idea, the worked example, the limit or trade-off, the takeaway.

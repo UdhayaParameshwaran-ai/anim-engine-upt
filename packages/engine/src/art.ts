@@ -5,6 +5,7 @@
  * Icons use a 24×24 grid, illustrations 200×200.
  */
 import { LUCIDE } from "./icons-lucide.js";
+import { TABLER } from "./icons-tabler.js";
 
 /** Hand-made icons: they carry colors of their own (water is blue, fire is red). */
 const BUILTIN_ICONS: Record<string, string> = {
@@ -26,8 +27,8 @@ const BUILTIN_ICONS: Record<string, string> = {
   gear: `<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>`,
 };
 
-/** Every icon by name: the Lucide set, with the hand-made icons on top. */
-export const ICONS: Record<string, string> = { ...LUCIDE, ...BUILTIN_ICONS };
+/** Every icon by name: the Tabler technology icons, the Lucide set over them, the hand-made icons on top. */
+export const ICONS: Record<string, string> = { ...TABLER, ...LUCIDE, ...BUILTIN_ICONS };
 
 export const ILLUSTRATIONS: Record<string, string> = {
   leaf: `

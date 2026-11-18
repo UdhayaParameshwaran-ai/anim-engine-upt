@@ -144,6 +144,16 @@ describe("schema", () => {
     expect(r.printed).toContain('b = placeholder "quasar"');
   });
 
+  it("replaces an invented icon name with the picture that means it, not just the closest spelling", () => {
+    // A typo: the closest name.
+    expect(check("a = icon:databse\n> {1}Hi.\n1 pop a").printed).toContain("a = icon:database");
+    // A word for a thing: the icon that shows it.
+    expect(check("a = icon:kubernetes\n> {1}Hi.\n1 pop a").printed).toContain("a = icon:container");
+    expect(check("a = icon:message-broker\n> {1}Hi.\n1 pop a").printed).toContain("a = icon:queue-pop-in");
+    // Nothing means it: a labeled placeholder, never a loosely related picture.
+    expect(check("a = icon:quasar\n> {1}Hi.\n1 pop a").printed).toContain('a = placeholder "quasar"');
+  });
+
   it("resolves asset synonyms to canonical names", () => {
     const r = check("a = icon:sunlight\n> {1}Hi.\n1 pop a");
     expect(r.codes).toEqual([C.UnknownAsset]);

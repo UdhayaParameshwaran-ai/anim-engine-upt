@@ -20,7 +20,7 @@ export {
 export { ClaudeCodeClient, claudeCliAvailable, flatten, type ClaudeCodeOptions } from "./claude-code.js";
 export { bindCarry, checkScene, clean, generate, keepPlanned, routeOutline, split, tidyOutline, traceForAlgorithms, type CallKind, type CallTrace, type GenerateOptions, type GenerateResult } from "./generate.js";
 export { briefOf, ROLES } from "./prompt.js";
-export { CANVAS_CHOICE_SYSTEM, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, defaultPrompts, STORY_HINTS, chosenCanvas, CLOSINGS, DOMAINS, type Domain, fullPrompt, narrationOf, OPENINGS, outlinePrompt, outlineSystemPrompt, pictureList, pictureQuery, pruneCarry, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, shapeTable, storyArc, systemPrompt, templateCard, type ArcPart, type SceneKind, type StoryArc } from "./prompt.js";
+export { CANVAS_CHOICE_SYSTEM, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, defaultPrompts, STORY_HINTS, chosenCanvas, CLOSINGS, DOMAINS, type Domain, fullPrompt, narrationOf, OPENINGS, outlinePrompt, outlineSystemPrompt, pictureList, pictureQuery, pruneCarry, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, shapeTable, storyArc, systemPrompt, templateCard, type ArcPart, type Shortlist, type SceneKind, type StoryArc } from "./prompt.js";
 export { copiedFrom, qualityIssues, qualityReport, type QualityIssue } from "./quality.js";
 export { detectLength, isLength, LENGTH_SPECS, LENGTHS, lengthForMinutes, lengthSpec, type Length, type LengthSpec } from "./length.js";
 export { DEFAULT_MAX_WORDS, effectiveSpec, planningAdvice, sanitizeSettings, settingsDefaults, styleGuide, type PromptSettings } from "./settings.js";

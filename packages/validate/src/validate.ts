@@ -531,7 +531,8 @@ class Validator {
       });
       return;
     }
-    const near = closest(name, this.assets.all().filter((a) => a.kind === kind).map((a) => a.name));
+    // A typo first (databse → database); otherwise the picture that means what the name says (kubernetes → container).
+    const near = closest(name, this.assets.all().filter((a) => a.kind === kind).map((a) => a.name)) ?? this.assets.search(name.replace(/[-_.:]+/g, " "), { kind, limit: 1, minScore: 12 })[0]?.asset.name;
     this.warn(C.UnknownAsset, `no ${kind} named \`${name}\` in the library`, el.span, {
       desc: near ? `used \`${kind}:${near}\`` : "replaced with a labeled placeholder",
       apply: () => {

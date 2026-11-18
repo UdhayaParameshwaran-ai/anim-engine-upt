@@ -151,8 +151,8 @@ export function generate(topic: string, opts: GenerateOptions): Promise<Generate
 /** `inherited` carries the trace and counters into the single-pass fallback. */
 async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promise<GenerateResult> {
   const assets = opts.assets ?? new AssetLibrary();
-  // Icon names say what they show, so the model picks by meaning from the whole list.
-  const relevant = assets.all();
+  // The one-call mode has a single system prompt, so it offers the pictures that match the topic; the outline passes only count them.
+  const relevant = (opts.mode ?? "outline") === "single" ? retrieveAssets(topic, assets, 60, opts.domain) : assets.all();
   const ctx: Ctx = inherited
     ? { ...inherited, opts }
     : { opts, system: systemPrompt(relevant, effectiveSpec(opts.settings ?? {}, opts.length ?? detectLength(topic)), opts.settings ?? {}), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0, started: performance.now(), trace: [] };
@@ -218,7 +218,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       if (example) (ctx.examples ??= new Map()).set(s.id, example);
       const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text), settings, example) };
       // Only what this scene's kind needs, and the pictures that match its words.
-      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets), isCanvas(s.text), spec, settings, ctx.usecase);
+      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets, undefined, opts.domain), isCanvas(s.text), spec, settings, ctx.usecase);
       const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
       // The plan's template or grid layout is binding: a scene line that changed it gets it back.
       const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);

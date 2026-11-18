@@ -105,7 +105,15 @@ Each look also draws icons its own way (plain line art, tinted chips, outlined t
 Scripts name pictures by meaning: `icon:gavel "Law"`, `asset:leaf "Leaf"`.
 
 - **Illustrations** are hand-made (`packages/engine/src/art.ts`), with parts a script can highlight.
-- **Icons** are 16 hand-made ones plus about 550 from [Lucide](https://lucide.dev) (ISC license; portions from Feather, MIT). `pnpm icons` regenerates `icons-lucide.ts` in the engine and the registry from the `lucide-static` dev dependency.
+- **Icons** are 16 hand-made ones, about 550 general ones from [Lucide](https://lucide.dev) (ISC license; portions from Feather, MIT), and about 560 for technology from [Tabler Icons](https://tabler.io/icons) (MIT): HTTP methods, databases, networks, git, security, AI, and the logos of about 135 common products (`icon:brand-docker`). Brand logos are trademarks of their owners and name the product they show. `pnpm icons` and `pnpm icons:tech` regenerate the icon files from the `lucide-static` and `@tabler/icons` dev dependencies; `pnpm icons:tech -- --list` shows what was picked.
+
+### How a scene gets its pictures
+
+The model never sees the whole library. For each scene the library is searched by meaning (`packages/registry/src/search.ts`): the scene's goal and topic are matched against each picture's name, synonyms, tags and description, rare words counting more than common ones. The scene writer is offered the best matches first, each with what it shows, then the hand-made art and a set of everyday icons, with a short guide on choosing: the most specific picture, a logo for a product, a different picture for each thing, and a labeled box rather than an invented name. A name the model invents anyway is replaced by the picture that means it (`icon:kubernetes` → `icon:container`), or by a placeholder when nothing does (`packages/validate`).
+
+What people call each technology (`pull request`, `message broker`, `k8s`) is written by hand in `packages/registry/src/tech-synonyms.ts`; when a topic comes back with a box where a picture belonged, one line there fixes it.
+
+`node scripts/eval-icons.mjs` (after `pnpm build`) measures the search on lists of concepts in `scripts/icon-eval-sets.mjs`. The *fresh* list was never tuned against and is the honest number: the right icon is in the top 5 for about 83% of concepts and among the 30 shown to the model for about 91%. A test (`packages/registry/test/search.test.ts`) keeps these from getting worse.
 
 ## Openings and endings
 

@@ -1,4 +1,7 @@
 import { LUCIDE_ICONS } from "./icons-lucide.js";
+import { TABLER_ICONS } from "./icons-tabler.js";
+import { AssetIndex, type SearchHit, type SearchOptions } from "./search.js";
+import { TECH_SYNONYMS } from "./tech-synonyms.js";
 import type { AssetManifest } from "./index.js";
 
 /**
@@ -30,18 +33,36 @@ const BUILTIN: readonly AssetManifest[] = [
   asset("earth", ["planet", "geography"], ["globe", "world", "planet"], [], "planet earth"),
 ];
 
-/** Icons that came from the open-source Lucide set (see scripts/build-icons.mjs). */
+/** Icons that came from the open-source Lucide set (see scripts/build-icons.mjs) or the Tabler set (scripts/build-tech-icons.mjs). */
 const LUCIDE_FILE = "icons/lucide/";
-export const isSetIcon = (m: AssetManifest) => m.file.startsWith(LUCIDE_FILE);
+const TABLER_FILE = "icons/tabler/";
+export const isSetIcon = (m: AssetManifest) => m.file.startsWith(LUCIDE_FILE) || m.file.startsWith(TABLER_FILE);
+/** The icon set an entry came from, or undefined for hand-made art. */
+export const iconSet = (m: AssetManifest): "lucide" | "tabler" | undefined => (m.file.startsWith(LUCIDE_FILE) ? "lucide" : m.file.startsWith(TABLER_FILE) ? "tabler" : undefined);
+
+const words = (name: string) => name.replace(/-/g, " ");
+/** Products whose name is not just capitalized words. */
+const BRAND_NAMES: Record<string, string> = {
+  aws: "AWS", cpp: "C++", "c-sharp": "C#", css3: "CSS3", html5: "HTML5", php: "PHP", npm: "npm", pnpm: "pnpm", amd: "AMD", d3: "D3", x: "X",
+  nodejs: "Node.js", nextjs: "Next.js", vscode: "VS Code", github: "GitHub", gitlab: "GitLab", graphql: "GraphQL", javascript: "JavaScript", typescript: "TypeScript",
+  mongodb: "MongoDB", mysql: "MySQL", openai: "OpenAI", oauth: "OAuth", youtube: "YouTube", linkedin: "LinkedIn", wordpress: "WordPress", "socket-io": "Socket.IO",
+  "github-copilot": "GitHub Copilot", "google-big-query": "Google BigQuery", threejs: "Three.js", solidjs: "SolidJS", golang: "Go", "open-source": "Open Source", "sublime-text": "Sublime Text",
+};
+/** "brand-google-drive" → "Google Drive". */
+const brandName = (name: string) => BRAND_NAMES[name.replace(/^brand-/, "")] ?? words(name.replace(/^brand-/, "")).replace(/\b[a-z]/g, (c) => c.toUpperCase());
 
 /**
- * The library: the hand-made entries, then the Lucide icons (a hand-made
- * icon of the same name wins). Lucide's tags are what the search matches.
+ * The library: the hand-made entries, then the Lucide icons (a hand-made icon of the same name wins),
+ * then the Tabler technology icons. Where Lucide and Tabler draw the same name, Lucide's picture stays
+ * and Tabler's tags are added to it, so the search knows both vocabularies. A brand icon is found by
+ * the bare product name too (`docker` → `brand-docker`).
  */
-export const SEED_ASSETS: readonly AssetManifest[] = [
-  ...BUILTIN,
-  ...LUCIDE_ICONS.filter(([name]) => !BUILTIN.some((b) => b.name === name)).map(
-    ([name, tags]): AssetManifest => ({
+function seed(): AssetManifest[] {
+  const out = new Map<string, AssetManifest>();
+  for (const b of BUILTIN) out.set(b.name, b);
+  for (const [name, tags] of LUCIDE_ICONS) {
+    if (out.has(name)) continue;
+    out.set(name, {
       name,
       version: "1.0.0",
       kind: "icon",
@@ -51,10 +72,39 @@ export const SEED_ASSETS: readonly AssetManifest[] = [
       aspect: 1,
       drawable: true,
       parts: [],
-      description: name.replace(/-/g, " "),
-    }),
-  ),
-];
+      description: words(name),
+    });
+  }
+  for (const [name, category, tags] of TABLER_ICONS) {
+    const brand = category === "Brand";
+    const own = [...new Set([category.toLowerCase().replace(/ /g, "-"), ...(tags ? tags.split(" ") : [])])];
+    const have = out.get(name);
+    if (have) {
+      out.set(name, { ...have, tags: [...new Set([...have.tags, ...own])] });
+      continue;
+    }
+    out.set(name, {
+      name,
+      version: "1.0.0",
+      kind: "icon",
+      file: `${TABLER_FILE}${name}.svg`,
+      tags: own,
+      synonyms: brand && !out.has(name.slice(6)) ? [name.slice(6)] : [],
+      aspect: 1,
+      drawable: true,
+      parts: [],
+      description: brand ? `${brandName(name)} logo` : words(name),
+    });
+  }
+  // What people call each thing: the hand-written words next to the picture's own.
+  for (const [name, syns] of Object.entries(TECH_SYNONYMS)) {
+    const have = out.get(name);
+    if (have) out.set(name, { ...have, synonyms: [...new Set([...have.synonyms, ...syns])] });
+  }
+  return [...out.values()];
+}
+
+export const SEED_ASSETS: readonly AssetManifest[] = seed();
 
 function icon(name: string, tags: string[], synonyms: string[], description: string): AssetManifest {
   return { name, version: "1.0.0", kind: "icon", file: `icons/${name}.svg`, tags, synonyms, aspect: 1, drawable: true, parts: [], description };
@@ -73,6 +123,7 @@ export interface AssetMatch {
 export class AssetLibrary {
   private readonly byName = new Map<string, AssetManifest>();
   private readonly bySynonym = new Map<string, AssetManifest>();
+  private index: AssetIndex | undefined;
 
   constructor(manifests: readonly AssetManifest[] = SEED_ASSETS) {
     for (const m of manifests) this.byName.set(m.name, m);
@@ -97,6 +148,12 @@ export class AssetLibrary {
 
   all(): AssetManifest[] {
     return [...this.byName.values()];
+  }
+
+  /** Pictures that match a text by meaning, best first (see search.ts). */
+  search(query: string, opts?: SearchOptions): SearchHit[] {
+    this.index ??= new AssetIndex(this.all());
+    return this.index.search(query, opts);
   }
 }
 
