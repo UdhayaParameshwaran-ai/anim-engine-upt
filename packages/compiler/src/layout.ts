@@ -504,6 +504,7 @@ class SceneLayouter {
       return { x: b.x + (b.w - side) / 2, y: b.y, w: side, h: side };
     };
 
+    if (tpl.name === "flow" || tpl.name === "architecture") this.avoidNodes();
     switch (tpl.name) {
       case "exchange": {
         // A lifeline down from each participant; it appears with its participant.
@@ -579,6 +580,7 @@ class SceneLayouter {
             this.params.set(e.id, { ...this.params.get(e.id), curve: "arc", bend: back ? 0.32 : 0.18 });
           }
         }
+        this.avoidNodes();
         for (const e of items) this.note(e, { round: 1 });
         return;
       }
@@ -1562,6 +1564,44 @@ class SceneLayouter {
     for (const e of pending) this.put(e, this.slotCell("C"));
   }
 
+  /**
+   * A straight connector that would run through another node (a road that skips one, a link across a group)
+   * bows around it instead: just far enough to clear the node, to the side with room. Connectors that already
+   * curve are left as they are.
+   */
+  private avoidNodes(): void {
+    const nodes = this.els.filter((e) => !LINK_KINDS.has(e.kind) && e.kind !== "zone" && e.kind !== "title" && this.boxes.has(e.id));
+    for (const e of this.els) {
+      if (!LINK_KINDS.has(e.kind) || !e.link || this.params.get(e.id)?.curve || e.attrs.curve) continue;
+      const a = this.boxes.get(e.link.from);
+      const b = this.boxes.get(e.link.to);
+      if (!a || !b) continue;
+      const [ax, ay, bx, by] = [a.x + a.w / 2, a.y + a.h / 2, b.x + b.w / 2, b.y + b.h / 2];
+      const len = Math.hypot(bx - ax, by - ay);
+      if (len < 1) continue;
+      // The unit normal of the line; a blocker's distance along it says how far the arc must bow.
+      const [nx, ny] = [-(by - ay) / len, (bx - ax) / len];
+      let need = 0;
+      let side = 0;
+      for (const n of nodes) {
+        if (n.id === e.link.from || n.id === e.link.to) continue;
+        const r = this.boxes.get(n.id)!;
+        if (!segmentHitsBox(ax, ay, bx, by, r, 6)) continue;
+        const [cx, cy] = [r.x + r.w / 2, r.y + r.h / 2];
+        const off = (cx - ax) * nx + (cy - ay) * ny;
+        // Half the node's extent across the line, plus a margin.
+        const half = (Math.abs(nx) * r.w + Math.abs(ny) * r.h) / 2 + 26;
+        need = Math.max(need, half + Math.abs(off));
+        side += off;
+      }
+      if (!need) continue;
+      // A quadratic arc bows len·bend/2 at its middle; bow away from the blockers.
+      // (The drawn line is clipped at both boxes, so it is a little shorter: bow a little more.)
+      const bend = Math.min(0.9, (2.4 * need) / len) * (side > 0 ? -1 : 1);
+      this.params.set(e.id, { ...this.params.get(e.id), curve: "arc", bend: Math.round(bend * 100) / 100 });
+    }
+  }
+
   private connector(e: { id: string; link?: { from: string; to: string } }): void {
     const a = this.boxes.get(e.link!.from);
     const b = this.boxes.get(e.link!.to);
@@ -1747,6 +1787,26 @@ function relative(ref: Box, size: { w: number; h: number }, relation: string, ga
     default:
       return round({ x: cx - size.w / 2, y: cy - size.h / 2, ...size });
   }
+}
+
+/** Whether the segment (ax,ay)→(bx,by) passes through the box shrunk by `inset` on each side (Liang–Barsky clipping). */
+function segmentHitsBox(ax: number, ay: number, bx: number, by: number, r: Box, inset = 0): boolean {
+  const [x0, y0, x1, y1] = [r.x + inset, r.y + inset, r.x + r.w - inset, r.y + r.h - inset];
+  if (x1 <= x0 || y1 <= y0) return false;
+  const [dx, dy] = [bx - ax, by - ay];
+  let t0 = 0;
+  let t1 = 1;
+  for (const [p, q] of [[-dx, ax - x0], [dx, x1 - ax], [-dy, ay - y0], [dy, y1 - ay]] as const) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
 }
 
 function round(b: Box): Box {

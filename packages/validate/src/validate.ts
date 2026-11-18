@@ -88,12 +88,15 @@ export const ValidateCodes = {
   BeatTooLong: "NAR406",
   TemplateSlot: "NAR407",
   AlreadyVisible: "NAR408",
+  SamePlace: "NAR409",
   OutsideTemplate: "NAR411",
   DanglingConnector: "NAR412",
 } as const;
 
 const C = ValidateCodes;
 const LINK_KINDS = new Set(["arrow", "line", "edge"]);
+/** Elements that are only words: two in one place read as a smear. */
+const WORDS = new Set(["label", "text"]);
 const ENTER = new Set(VERBS.filter((v) => v.category === "enter").map((v) => v.name));
 const NEEDS_VISIBLE = new Set(VERBS.filter((v) => v.category === "emphasis" || v.category === "transform").map((v) => v.name));
 
@@ -857,6 +860,25 @@ class Validator {
           const fix = this.moveBehindEnds(call, id, action, beat, missing);
           this.warn(C.DanglingConnector, `\`${id}\` appears before \`${missing.join("`, `")}\``, call.span, fix);
           if (fix && this.autofix) return; // moved: it appears where it now stands
+        }
+      }
+      // A label shown where another visible label already sits (same relation to the same element) would be
+      // drawn on top of it: the new one replaces the old.
+      const place = el.place;
+      if (!part && place?.kind === "relative" && WORDS.has(el.kind)) {
+        const covered = [...visible].filter((o) => {
+          const d = declared.get(o);
+          return o !== id && !!d && WORDS.has(d.kind) && d.place?.kind === "relative" && d.place.relation === place.relation && d.place.ref === place.ref;
+        });
+        if (covered.length) {
+          this.warn(C.SamePlace, `\`${id}\` appears on top of \`${covered.join("`, `")}\` (both @${place.relation}:${place.ref})`, call.span, {
+            desc: `hid \`${covered.join(",")}\` first`,
+            apply: () => {
+              const hide: VerbCall = { verb: "hide", targets: covered, args: { params: {} }, span: call.span };
+              action.calls.splice(action.calls.indexOf(call), 0, hide);
+              for (const o of covered) visible.delete(o);
+            },
+          });
         }
       }
       visible.add(id);

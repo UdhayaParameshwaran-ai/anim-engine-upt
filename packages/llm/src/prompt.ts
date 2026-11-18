@@ -417,7 +417,10 @@ PAGE ELEMENTS that fit this layout (syntax · role · minimum slot · limits)
 ${fits.map((e) => `  ${e.syntax.padEnd(46)} ${e.role.padEnd(7)} min ${e.minW}×${e.minH} · ${e.limits}`).join("\n")}
 
 EXAMPLE PAGE
-scene numbers "By the numbers" grid=L3-02
+${EXAMPLE_PAGE}`;
+}
+
+const EXAMPLE_PAGE = `scene numbers "By the numbers" grid=L3-02
 title = title "Microscopes changed biology"
 chart = chart:bar data=2,40,300 labels=1700,1900,2000
 cells = stat "37T" "cells in a human body"
@@ -428,7 +431,6 @@ start write title
 > Your body alone has {1 thirty-seven trillion}.
 1 draw cells
 end draw tip`;
-}
 
 /**
  * Grid scenes (Template Rule Book v2): the frame, the 27 layouts with their

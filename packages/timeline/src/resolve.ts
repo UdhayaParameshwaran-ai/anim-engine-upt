@@ -509,7 +509,28 @@ class Resolver {
         const x1 = Math.max(...boxes.map((b) => b.x + b.w));
         const y1 = Math.max(...boxes.map((b) => b.y + b.h));
         const camEase = String(s.params.ease ?? "inout");
-        const framed = focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.5, 0.5);
+        let group = { x0, y0, x1, y1 };
+        let framed = focusBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, canvas, 1.5, 0.5);
+        // Never cut a shown element in half at the frame edge: take in whatever the frame would cut, until it cuts nothing.
+        for (let i = 0; i < 4; i++) {
+          const f = framed;
+          const cut = [...visible]
+            .map((id) => elements.get(id))
+            .filter((e): e is NonNullable<typeof e> => !!e && !e.link && e.box.w > 0)
+            .map((e) => this.currentBox(scene, e, s.t0))
+            .filter((b) => b.x < f.x + f.w && b.x + b.w > f.x && b.y < f.y + f.h && b.y + b.h > f.y)
+            .filter((b) => b.x < f.x - 1 || b.y < f.y - 1 || b.x + b.w > f.x + f.w + 1 || b.y + b.h > f.y + f.h + 1);
+          if (!cut.length) break;
+          group = {
+            x0: Math.min(group.x0, ...cut.map((b) => b.x)),
+            y0: Math.min(group.y0, ...cut.map((b) => b.y)),
+            x1: Math.max(group.x1, ...cut.map((b) => b.x + b.w)),
+            y1: Math.max(group.y1, ...cut.map((b) => b.y + b.h)),
+          };
+          framed = focusBox({ x: group.x0, y: group.y0, w: group.x1 - group.x0, h: group.y1 - group.y0 }, canvas, 1.15, 0.5);
+        }
+        // A frame that takes in nearly everything is the full view.
+        if (framed.w > canvas.width * 0.85) framed = { x: 0, y: 0, w: canvas.width, h: canvas.height };
         this.add(`${scene.id}/camera`, { prop: "camera", t0: s.t0, t1: s.t0 + s.dur, to: framed, ease: this.motion.ease[camEase as keyof MotionProfile["ease"]] ?? camEase }, s);
         this.cameraDrift(`${scene.id}/camera`, framed, s);
         continue;

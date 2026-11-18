@@ -553,3 +553,16 @@ step two "Two"
     expect(tl.tracks.filter((t) => t.prop === "camera" && t.verb === "frame")).toEqual([]);
   });
 });
+
+describe("camera framing", () => {
+  it("never cuts a shown element in half at the frame edge", async () => {
+    const { ir, tl } = await build(scene(`a = icon:sun @L\nb = icon:heart @C\nc = icon:moon @R\n> {1}Here are {2}three.\n1 pop a,b,c\n> Look {1}here.\n1 frame b`));
+    const cam = tweens(tl, "s/camera", "camera").at(-1)!.to as { x: number; y: number; w: number; h: number };
+    for (const e of ir.scenes[0]!.elements) {
+      const b = e.box;
+      const inside = b.x >= cam.x - 1 && b.y >= cam.y - 1 && b.x + b.w <= cam.x + cam.w + 1 && b.y + b.h <= cam.y + cam.h + 1;
+      const outside = b.x >= cam.x + cam.w || b.x + b.w <= cam.x || b.y >= cam.y + cam.h || b.y + b.h <= cam.y;
+      expect(inside || outside, `${e.id} is cut by the frame`).toBe(true);
+    }
+  });
+});

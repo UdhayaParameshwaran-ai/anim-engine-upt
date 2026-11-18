@@ -236,6 +236,15 @@ describe("semantics", () => {
     expect(r.diagnostics.find((d) => d.code === C.DanglingConnector)?.fixed).toBeUndefined();
   });
 
+  it("replaces a label shown where another visible label sits, instead of stacking them", () => {
+    const r = check('a = icon:sun\nx = label "score" @above:a\ny = label "weight" @above:a\n> {1}Hi {2}there.\n1 pop a then fade x\n2 fade y');
+    expect(r.codes).toContain(C.SamePlace);
+    expect(r.printed).toMatch(/2 hide x then fade y/);
+    // Labels in different places are left alone.
+    const ok = check('a = icon:sun\nx = label "score" @above:a\ny = label "weight" @below:a\n> {1}Hi {2}there.\n1 pop a then fade x\n2 fade y');
+    expect(ok.codes).not.toContain(C.SamePlace);
+  });
+
   it("warns on long beats", () => {
     const r = check(`a = icon:sun\n> {1}${"word ".repeat(45)}\n1 pop a`);
     expect(r.codes).toEqual([C.BeatTooLong]);

@@ -467,3 +467,13 @@ l3 = line c->c2
     expect(laneTweens("clone b,c then draw l2")).toBeGreaterThan(0);
   });
 });
+
+describe("connectors around nodes", () => {
+  it("bows a flow edge that would run through the node it skips, and leaves the others straight", () => {
+    const v = ir(`video 1\nscene s template=flow\na = node "A"\nb = node "B"\nc = node "C"\ne1 = a -> b\ne2 = b -> c\ne3 = a -> c\n> {1}One.\n1 pop a,b,c then draw e1,e2,e3\n`);
+    expect(el(v, "s", "e3").params.curve).toBe("arc");
+    expect(Math.abs(Number(el(v, "s", "e3").params.bend))).toBeGreaterThan(0.1);
+    expect(el(v, "s", "e1").params.curve).toBeUndefined();
+    expect(el(v, "s", "e2").params.curve).toBeUndefined();
+  });
+});
