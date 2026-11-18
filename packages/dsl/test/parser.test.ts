@@ -262,3 +262,16 @@ describe("state chains and links", () => {
     expect(print(parse(printed).script)).toBe(printed);
   });
 });
+
+describe("quoted text keeps unknown backslashes", () => {
+  it("a Windows path survives, while an escaped quote, backslash and \n still work", () => {
+    const src = String.raw`video 1
+scene s "S"
+t = body "C:\Users\me say \"hi\" a\b"
+`;
+    const { script } = parse(src);
+    const el = script.scenes[0]!.steps[0]!.elements.find((e) => e.id === "t")!;
+    expect(el.texts[0]).toBe(String.raw`C:\Users\me say "hi" a\b`);
+    expect(print(parse(print(script)).script)).toBe(print(script));
+  });
+});

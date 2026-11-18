@@ -442,3 +442,14 @@ describe("trace lanes and networks", () => {
     expect(check(["n = net", "> A {1}net.", "1 n: x1"].join("\n"), T).codes).toContain(C.TraceLink);
   });
 });
+
+describe("count needs a number", () => {
+  it("counting an element with no digit in its text is an error; a stat is fine", () => {
+    const base = (decl: string) => ["scene s", decl, "> A {1}number.", "1 fade r then count r from=0 to=5"].join("\n");
+    expect(check(base('r = label "Request"')).codes).toContain(C.TargetRule);
+    expect(check(base('r = stat "0" "hits"')).codes).not.toContain(C.TargetRule);
+  });
+  it("list widgets reject | between items", () => {
+    expect(check(['r = proscons "a|b" "c"', "> A {1}list.", "1 fade r"].join("\n"), { scene: "template=grid" }).codes.length).toBeGreaterThan(0);
+  });
+});

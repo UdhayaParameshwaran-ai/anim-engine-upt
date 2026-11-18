@@ -143,14 +143,14 @@ export function elementLimit(el: ElementDecl): string | undefined {
     case "definition":
       return words(t0) > 3 ? "definition term max 3 words" : words(t1) > 20 ? "definition meaning max 20 words" : undefined;
     case "proscons":
-      return items(t0).length > 4 || items(t1).length > 4 ? "pros and cons max 4 per column" : undefined;
+      return t0.includes("|") || t1.includes("|") ? 'proscons items are separated by ";", not "|"' : items(t0).length > 4 || items(t1).length > 4 ? "pros and cons max 4 per column" : undefined;
     case "formula":
       return t0.length > 24 ? `formula max 24 characters (got ${t0.length})` : undefined;
     case "bullets":
     case "numbered":
     case "checklist":
     case "list":
-      return range(items(t0).length, 1, 5, `${el.kind} items`);
+      return t0.includes("|") ? `${el.kind} items are separated by ";", not "|"` : range(items(t0).length, 1, 5, `${el.kind} items`);
     case "table": {
       const rows = items(t0);
       return range(rows.length, 1, 6, "table rows") ?? (rows.some((r) => r.split("|").length > 4) ? "table max 4 columns" : undefined);

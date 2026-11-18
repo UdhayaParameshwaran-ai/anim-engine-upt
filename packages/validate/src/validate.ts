@@ -666,6 +666,17 @@ class Validator {
       return;
     }
 
+    // `count` rolls the number in an element's text: an element with no number would show a bare 0 then 1.
+    if (v.name === "count") {
+      for (const t of call.targets) {
+        const el = declared.get(t.split(".")[0]!);
+        if (el && !/\d/.test(el.texts.join(" "))) {
+          this.error(C.TargetRule, `\`count\` rolls a number, but \`${t}\` has none in its text: count a stat such as \`stat "0" "label"\`, or drop the verb`, call.span, drop(action.calls, call, "removed the verb"));
+          return;
+        }
+      }
+    }
+
     // Args.
     const args = call.args;
     const span = beat.type === "speech" ? beat.cues.find((c) => c.id === action.anchor) : undefined;

@@ -62,8 +62,12 @@ function readQuoted(line: string, open: number): { value: string; next: number; 
   while (i < line.length) {
     const c = line[i]!;
     if (c === "\\" && i + 1 < line.length) {
-      // \n is a line break (code and terminal elements); any other escaped character is itself.
-      value += line[i + 1] === "n" ? "\n" : line[i + 1];
+      // \n is a line break (code and terminal elements); \" and \\ are the quote and the backslash. Any other
+      // backslash stays as written, so a Windows path (C:\Users\me) is not eaten.
+      const next = line[i + 1]!;
+      if (next === "n") value += "\n";
+      else if (next === '"' || next === "\\") value += next;
+      else value += c + next;
       i += 2;
     } else if (c === '"') {
       return { value, next: i + 1, closed: true };
