@@ -682,3 +682,11 @@ describe("trace lanes and networks", () => {
     expect(v.scenes[0]!.elements.filter((e) => e.kind === "arrow")).toHaveLength(9);
   });
 });
+
+describe("graph with a node nobody links to", () => {
+  it("lists a lone node, which is placed and shown like the others", () => {
+    const v = ir(`video 1\nscene t "Run" template=trace\ng = graph "A-B B-C D"\n> A {1}graph with a loner.\n1 g: A B C D*\n`);
+    const names = v.scenes[0]!.elements.filter((e) => e.kind === "circle" || e.kind === "box").map((e) => e.texts[0]);
+    expect(names).toEqual(expect.arrayContaining(["A", "B", "C", "D"]));
+  });
+});

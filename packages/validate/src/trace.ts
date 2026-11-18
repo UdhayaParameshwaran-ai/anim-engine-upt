@@ -41,6 +41,11 @@ export function topology(kind: string, text: string): Topology {
   const sep = kind === "tree" ? ">" : "-";
   for (const tok of text.split(/\s+/).filter(Boolean)) {
     const m = new RegExp("^(\\w+)" + sep + "(\\w+)(?::(\\S+))?$").exec(tok);
+    // A graph may list a node on its own (`A-B C`): it has no edge yet, or none at all (garbage nobody points to).
+    if (!m && kind === "graph" && /^\w+$/.test(tok)) {
+      if (!nodes.includes(tok)) nodes.push(tok);
+      continue;
+    }
     if (!m) {
       bad.push(tok);
       continue;
