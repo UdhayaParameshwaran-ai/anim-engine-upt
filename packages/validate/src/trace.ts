@@ -1,5 +1,6 @@
 import type { Action, Beat, Scene, Span, StateItem, StateSnapshot, VerbCall } from "@anim/dsl";
 import { COLLECTIONS } from "@anim/registry";
+import { parseCurve } from "./expr.js";
 
 /**
  * Trace scenes: collections declared once, their whole contents written after each sentence (state lines).
@@ -146,7 +147,7 @@ export const CELL_VERBS = new Set(["swap", "move", "drop", "lift", "set", "clone
 
 /** Checks that need no knowledge of any algorithm. */
 const SORT_CHECKS = new Set(["sort", "bubble", "insertion", "selection", "partition", "quicksort", "mergesort", "heapsort"]);
-const CAPACITY: Record<string, number> = { row: 10, chain: 8, buckets: 12, graph: 12, tree: 12 };
+const CAPACITY: Record<string, number> = { row: 10, chain: 8, buckets: 12, graph: 12, tree: 12, heap: 15, plot: 12, ring: 10 };
 const NEGATED = /\b(not|isn't|isnt|aren't|unsorted|until|before|if|once|when|so that|becomes?|to be)\b/i;
 
 const values = (items: readonly StateItem[]): string[] => items.map((i) => i.value);
@@ -253,6 +254,16 @@ export function analyzeTrace(scene: Scene): TraceProblem[] {
     for (const l of ev.snap.links ?? []) {
       const missing = [l.from, l.to].find((n) => !items.some((i) => i.id === n));
       if (missing) problems.push({ code: "NAR604", severity: "error", message: `link \`${l.from}->${l.to}\` names \`${missing}\`, which is not a named cell of \`${ev.coll}\` in this state (name cells like \`d:10\`)`, span: ev.span });
+    }
+    // A plot is a curve with points at x values; a ring puts named items at angles.
+    if (kind === "plot") {
+      if (!parseCurve(decl.texts[0] ?? "")) problems.push({ code: "NAR604", severity: "error", message: `\`${ev.coll} = plot\` needs a curve of x it can draw: \`${ev.coll} = plot "(x-3)^2" from=0 to=9\` (numbers, x, + - * / ^, parentheses, sqrt abs sin cos exp ln)`, span: decl.span });
+      const bad = items.find((i) => !Number.isFinite(Number(i.value)));
+      if (bad) problems.push({ code: "NAR604", severity: "error", message: `a point of \`${ev.coll}\` is an x value (a number), not \`${bad.value}\``, span: ev.span });
+    }
+    if (kind === "ring") {
+      const bad = items.find((i) => !i.id || !Number.isFinite(Number(i.value)) || Number(i.value) < 0 || Number(i.value) >= 360);
+      if (bad) problems.push({ code: "NAR604", severity: "error", message: `an item of \`${ev.coll}\` is \`name:angle\` with an angle from 0 to 359 (\`A:40\`), not \`${bad.id ? `${bad.id}:` : ""}${bad.value}\``, span: ev.span });
     }
     // A graph or tree draws its nodes from the edges declared with it; a state may only list those nodes.
     if (isNodeCollection(kind)) {

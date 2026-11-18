@@ -617,3 +617,40 @@ describe("trace chains, buckets, trees and graphs", () => {
     expect(arrows(v)).toHaveLength(2);
   });
 });
+
+describe("trace heaps, plots and rings", () => {
+  const trace = (body: string) => ir(`video 1\nscene t "Run" template=trace\n${body}\n`);
+  const circle = (v: VideoIR, text: string) => v.scenes[0]!.elements.find((e) => e.kind === "circle" && e.texts[0] === text)!.box;
+  const lines = (v: VideoIR) => v.scenes[0]!.elements.filter((e) => e.kind === "line" || e.kind === "arrow");
+
+  it("draws a heap as a tree by index and keeps its edges when two values swap", () => {
+    const v = trace("h = heap\n> A {1}heap.\n1 h: 1 3 5 8\n> {1}Swap.\n1 h: 1 8 5 3");
+    expect(circle(v, "1").y).toBeLessThan(circle(v, "3").y);
+    expect(circle(v, "5").x).toBeGreaterThan(circle(v, "8").x);
+    // Three edges (slots 1, 2, 3 to their parents), each drawn once: a swap never redraws them.
+    expect(lines(v)).toHaveLength(3);
+    const draws = v.scenes[0]!.steps.flatMap((s) => s.beats.flatMap((b) => b.actions.flatMap((a) => a.calls))).filter((c) => c.verb === "draw");
+    expect(draws.flatMap((c) => c.targets)).toHaveLength(3);
+  });
+
+  it("draws a plot's curve and axes and puts each point on the curve", () => {
+    const v = trace('p = plot "(x-3)^2" from=0 to=9\n> A {1}start.\n1 p: 8\n> {1}Next.\n1 p: 8 5');
+    const eight = circle(v, "8");
+    const five = circle(v, "5");
+    expect(five.x).toBeLessThan(eight.x);
+    expect(five.y).toBeGreaterThan(eight.y - 1000);
+    // The lower point on the parabola is lower on screen than the higher one.
+    expect(five.y + five.h / 2).toBeGreaterThan(eight.y + eight.h / 2);
+    expect(lines(v).length).toBeGreaterThan(40);
+  });
+
+  it("puts ring items at their angles, clockwise from the top", () => {
+    const v = trace("r = ring\n> A {1}ring.\n1 r: A:0 B:90 C:180 D:270");
+    const a = circle(v, "A");
+    const b = circle(v, "B");
+    const c = circle(v, "C");
+    expect(a.y).toBeLessThan(c.y);
+    expect(b.x).toBeGreaterThan(a.x);
+    expect(Math.abs(a.x - c.x)).toBeLessThan(2);
+  });
+});

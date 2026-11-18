@@ -1,6 +1,6 @@
 import type { Action, ElementDecl, Scene, Span, StateItem, StateSnapshot, VerbCall } from "@anim/dsl";
 import type { Box } from "@anim/ir";
-import { diffStates, isChainCollection, isCollection, isNodeCollection, stateEvents, topology, type Topology } from "@anim/validate";
+import { diffStates, isChainCollection, isCollection, isNodeCollection, parseCurve, stateEvents, topology, type Topology } from "@anim/validate";
 
 /**
  * A trace scene writes the data, not the motion: collections declared once, their whole contents after each
@@ -32,6 +32,9 @@ interface Extent {
   maxLen: number;
   /** Most chains in any state. */
   rows: number;
+  /** Smallest and largest x of a plot's points. */
+  xmin: number;
+  xmax: number;
 }
 
 /** Where the cells of one collection go. */
@@ -51,6 +54,10 @@ interface Geometry {
   rows?: number;
   /** Graphs and trees: what was declared. */
   topo?: Topology;
+  /** A curve, axes or circle drawn once from hidden points: anchors, the segments joining them, and labels. */
+  decor?: { anchors: Box[]; segments: [number, number][]; labels: { text: string; box: Box }[] };
+  /** Plots: arrows join each point to the one before. */
+  stepArrows?: boolean;
 }
 
 interface Frame extends Box {}
@@ -162,6 +169,60 @@ function geometry(kind: string, frame: Frame, ext: Extent, captioned: boolean, d
     const boxes = layoutNodes(kind, topo, f);
     return { kind, indexed: false, pointerAbove: true, caption, topo, at: (snap, i) => boxes.get(snap.items[i]?.id ?? snap.items[i]?.value ?? "") ?? { x: f.x, y: f.y, w: 80, h: 80 } };
   }
+  if (kind === "plot") {
+    const f2: Frame = { x: f.x + 70, y: f.y + 10, w: f.w - 90, h: f.h - 70 };
+    const curve = parseCurve(decl.texts[0] ?? "") ?? ((x: number) => x);
+    const x0 = Number.isFinite(Number(decl.attrs.from)) && decl.attrs.from !== undefined ? Number(decl.attrs.from) : Math.min(0, Number.isFinite(ext.xmin) ? ext.xmin - 1 : 0);
+    const x1 = Number.isFinite(Number(decl.attrs.to)) && decl.attrs.to !== undefined ? Number(decl.attrs.to) : (Number.isFinite(ext.xmax) ? ext.xmax + 1 : 10);
+    const N = 40;
+    const xs = Array.from({ length: N + 1 }, (_, k) => x0 + ((x1 - x0) * k) / N);
+    const ys = xs.map(curve).map((y) => (Number.isFinite(y) ? y : NaN));
+    const finite = ys.filter((y) => Number.isFinite(y));
+    const y0 = Math.min(...finite, 0);
+    const y1 = Math.max(...finite, y0 + 1);
+    const px = (x: number) => f2.x + ((x - x0) / (x1 - x0 || 1)) * f2.w;
+    const py = (y: number) => f2.y + f2.h - ((y - y0) / (y1 - y0 || 1)) * f2.h;
+    const pt = (x: number, size: number): Box => ({ x: r1(px(x) - size / 2), y: r1(py(curve(x)) - size / 2), w: size, h: size });
+    const anchors: Box[] = [];
+    const segments: [number, number][] = [];
+    xs.forEach((x, k) => {
+      anchors.push({ x: r1(px(x)), y: r1(py(Number.isFinite(ys[k]!) ? ys[k]! : y0)), w: 2, h: 2 });
+      if (k > 0 && Number.isFinite(ys[k]!) && Number.isFinite(ys[k - 1]!)) segments.push([k - 1, k]);
+    });
+    // Axes along the bottom and left edges of the plot.
+    const base = anchors.length;
+    anchors.push({ x: r1(f2.x), y: r1(f2.y + f2.h), w: 2, h: 2 }, { x: r1(f2.x + f2.w), y: r1(f2.y + f2.h), w: 2, h: 2 }, { x: r1(f2.x), y: r1(f2.y), w: 2, h: 2 });
+    segments.push([base, base + 1], [base, base + 2]);
+    const fmt = (v: number) => String(Math.round(v * 100) / 100);
+    const labels = [
+      { text: fmt(x0), box: { x: r1(f2.x - 30), y: r1(f2.y + f2.h + 8), w: 60, h: 40 } },
+      { text: fmt(x1), box: { x: r1(f2.x + f2.w - 30), y: r1(f2.y + f2.h + 8), w: 60, h: 40 } },
+    ];
+    return { kind, indexed: false, pointerAbove: true, caption, decor: { anchors, segments, labels }, stepArrows: true, at: (snap, i) => pt(Number(snap.items[i]?.value ?? x0), 56) };
+  }
+  if (kind === "ring") {
+    const cx = f.x + f.w / 2;
+    const cy = f.y + f.h / 2;
+    const R = Math.min(f.w, f.h) * 0.36;
+    const spot = (deg: number, size: number): Box => {
+      const a = (deg * Math.PI) / 180;
+      return { x: r1(cx + R * Math.sin(a) - size / 2), y: r1(cy - R * Math.cos(a) - size / 2), w: size, h: size };
+    };
+    const anchors: Box[] = Array.from({ length: 48 }, (_, k) => spot((k * 360) / 48, 2));
+    const segments: [number, number][] = anchors.map((_, k) => [k, (k + 1) % 48] as [number, number]);
+    return { kind, indexed: false, pointerAbove: true, caption, decor: { anchors, segments, labels: [] }, at: (snap, i) => spot(Number(snap.items[i]?.value ?? 0), 84) };
+  }
+  if (kind === "heap") {
+    // Slot i sits where a complete binary tree puts it: row floor(log2(i+1)), spread across that row.
+    const levels = Math.max(1, Math.ceil(Math.log2(cap + 1)));
+    const d = Math.min(100, (f.w * 0.9) / 2 ** (levels - 1) / 1.15, (f.h * 0.8) / levels);
+    const slot = (i: number): Box => {
+      const level = Math.floor(Math.log2(i + 1));
+      const k = i + 1 - 2 ** level;
+      return { x: r1(f.x + ((k + 0.5) * f.w) / 2 ** level - d / 2), y: r1(f.y + ((level + 0.5) * f.h) / levels - d / 2), w: r1(d), h: r1(d) };
+    };
+    return { kind, indexed: false, pointerAbove: true, caption, at: (_s, i) => slot(Math.max(0, i)) };
+  }
   if (isChainCollection(kind)) {
     const n = Math.max(2, Math.min(8, Number(decl.attrs.n ?? 5)));
     const rows = kind === "buckets" ? n : Math.max(1, ext.rows);
@@ -217,7 +278,7 @@ function geometry(kind: string, frame: Frame, ext: Extent, captioned: boolean, d
 }
 
 /** A cell's text: a key and its value (`A: 4`) in tables and nodes, the value alone elsewhere. */
-const display = (kind: string, it: StateItem): string => ((kind === "pairs" || isNodeCollection(kind)) && it.id ? `${it.id}: ${it.value}` : it.value);
+const display = (kind: string, it: StateItem): string => (kind === "ring" ? (it.id ?? it.value) : (kind === "pairs" || isNodeCollection(kind)) && it.id ? `${it.id}: ${it.value}` : it.value);
 const boxAttr = (b: Box): string => `${b.x},${b.y},${b.w},${b.h}`;
 
 /** Where a pointer label goes for item `i` (and how high, when several share one). */
@@ -242,6 +303,9 @@ interface Live {
   arrowIds: Map<string, string>;
   arrowsOn: Set<string>;
   nullAt?: number;
+  decorMade?: boolean;
+  /** Heap places that have their hidden anchor. */
+  anchors: Set<number>;
   born: number;
   arrowsMade: number;
   shown: boolean;
@@ -258,7 +322,7 @@ export function expandTrace(scene: Scene, canvas: TraceCanvas): Scene {
   if (!colls.length) return scene;
   const events = stateEvents(scene);
 
-  const extent = new Map<string, Extent>(colls.map((c) => [c.id, { cap: 1, chars: 1, maxLen: 1, rows: 1 }]));
+  const extent = new Map<string, Extent>(colls.map((c) => [c.id, { cap: 1, chars: 1, maxLen: 1, rows: 1, xmin: Infinity, xmax: -Infinity }]));
   for (const ev of events) {
     const x = extent.get(ev.coll);
     const kind = colls.find((c) => c.id === ev.coll)?.kind ?? "row";
@@ -269,10 +333,14 @@ export function expandTrace(scene: Scene, canvas: TraceCanvas): Scene {
     for (const it of ev.snap.items) perChain.set(it.chain ?? 0, (perChain.get(it.chain ?? 0) ?? 0) + 1);
     x.maxLen = Math.max(x.maxLen, ...perChain.values());
     x.rows = Math.max(x.rows, ev.snap.chains?.length ?? 1);
+    for (const it of ev.snap.items) {
+      const v = Number(it.value);
+      if (Number.isFinite(v)) (x.xmin = Math.min(x.xmin, v), (x.xmax = Math.max(x.xmax, v)));
+    }
   }
   const place = frames(colls.length, canvas);
   const geo = new Map(colls.map((c, i) => [c.id, geometry(c.kind, place[i]!, extent.get(c.id)!, !!(isNodeCollection(c.kind) ? c.texts[1] : c.texts[0]), c)]));
-  const live = new Map<string, Live>(colls.map((c) => [c.id, { items: [], ids: [], pointers: new Map(), arrowIds: new Map(), arrowsOn: new Set(), born: 0, arrowsMade: 0, shown: false }]));
+  const live = new Map<string, Live>(colls.map((c) => [c.id, { items: [], ids: [], pointers: new Map(), arrowIds: new Map(), arrowsOn: new Set(), anchors: new Set(), born: 0, arrowsMade: 0, shown: false }]));
   const kindOf = new Map(colls.map((c) => [c.id, c.kind]));
 
   const steps = scene.steps.map((step) => {
@@ -359,7 +427,7 @@ function states(
   const enters = diff.entered.map((j) => {
     const id = fresh();
     ids[j] = id;
-    decl(id, byName ? "circle" : "box", display(kind, next[j]!), g.at(snap, j), span);
+    decl(id, byName || kind === "heap" || kind === "plot" || kind === "ring" ? "circle" : "box", display(kind, next[j]!), g.at(snap, j), span);
     return { id, slot: j };
   });
 
@@ -381,6 +449,21 @@ function states(
       labels.forEach((id, r) => decl(id, "label", String(r), g.rowLabel!(r), span));
       add("fade", labels, 0, 0.4, {}, 0.05);
     }
+  }
+  // A curve, axes or circle outline: drawn once from hidden points, left to right.
+  if (g.decor && !L.decorMade) {
+    L.decorMade = true;
+    const d = g.decor;
+    d.anchors.forEach((box, k) => decl(`${coll}__d${k}`, "box", "", box, span));
+    const lines: string[] = [];
+    d.segments.forEach(([a, b], k) => {
+      const id = `${coll}__l${k}`;
+      declLink(id, "line", `${coll}__d${a}`, `${coll}__d${b}`, undefined, span);
+      lines.push(id);
+    });
+    if (lines.length) add("draw", lines, 0, 0.5, {}, 0.02);
+    d.labels.forEach((l, k) => decl(`${coll}__t${k}`, "label", l.text, l.box, span));
+    if (d.labels.length) add("fade", d.labels.map((_, k) => `${coll}__t${k}`), 0, 0.4);
   }
   // A linked list ends in null, just past its last node.
   if (kind === "chain" && g.cell) {
@@ -434,6 +517,18 @@ function states(
 
   // Arrows between cells: neighbours in a chain, extra links, or the edges of a graph or tree whose ends are both shown.
   const want = new Map<string, { from: string; to: string; text?: string; kind: "arrow" | "line" }>();
+  // A heap's edges join fixed places in the tree (hidden anchors), not the values sitting there: a swap must not redraw them.
+  if (kind === "heap") {
+    const anchor = (i: number): string => {
+      const id = `${coll}__s${i}`;
+      if (!L.anchors.has(i)) {
+        L.anchors.add(i);
+        decl(id, "box", "", g.at(snap, i), span);
+      }
+      return id;
+    };
+    for (let i = 1; i < next.length; i++) want.set(`${anchor((i - 1) >> 1)}>${anchor(i)}`, { from: anchor((i - 1) >> 1), to: anchor(i), kind: "arrow" });
+  }
   const want1 = (from: number, to: number, text?: string): void => {
     const f = ids[from];
     const t = ids[to];
@@ -446,6 +541,10 @@ function states(
       if (last.has(c)) want1(last.get(c)!, i);
       last.set(c, i);
     });
+    for (const l of snap.links ?? []) want1(next.findIndex((it) => it.id === l.from), next.findIndex((it) => it.id === l.to));
+  } else if (g.stepArrows) {
+    for (let i = 1; i < next.length; i++) want1(i - 1, i);
+  } else if (kind === "ring") {
     for (const l of snap.links ?? []) want1(next.findIndex((it) => it.id === l.from), next.findIndex((it) => it.id === l.to));
   } else if (byName && g.topo) {
     const at = new Map(next.map((it, i) => [it.id ?? it.value, i]));

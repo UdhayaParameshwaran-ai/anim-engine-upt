@@ -208,7 +208,7 @@ const TEXTUAL = ["title", "text", "label", "list"] as const;
 
 const TECH = ["code", "terminal"] as const;
 /** The collections of a trace scene: declared once, their contents written after each sentence. */
-export const COLLECTIONS = ["row", "stack", "queue", "set", "pairs", "chain", "buckets", "graph", "tree"] as const;
+export const COLLECTIONS = ["row", "stack", "queue", "set", "pairs", "chain", "buckets", "graph", "tree", "heap", "plot", "ring"] as const;
 
 const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
@@ -283,6 +283,9 @@ export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "buckets", version: 1, layer: "svg", summary: "trace collection: a hash table. n numbered rows, each a chain of nodes (`buckets n=5`); write a bucket as `2: 12 7` (its number, then its nodes in order)", named: "none", texts: { min: 0, max: 1 }, link: false, params: { n: { type: "number", min: 2, max: 8, default: 5 } }, drawable: false },
   { kind: "graph", version: 1, layer: "svg", summary: "trace collection: a graph drawn from its edges, `graph \"A-B A-C B-D:4\"` (A-B:4 gives the edge a weight); a state lists the nodes to show, with marks and `node:value` labels", named: "none", texts: { min: 1, max: 2 }, link: false, params: {}, drawable: false },
   { kind: "tree", version: 1, layer: "svg", summary: "trace collection: a tree drawn from parent>child edges, `tree \"R>A R>B A>C\"`; a state lists the nodes to show (a node appears when it is listed), with marks and `node:value` labels", named: "none", texts: { min: 1, max: 2 }, link: false, params: {}, drawable: false },
+  { kind: "heap", version: 1, layer: "svg", summary: "trace collection: a binary heap. Write its values like an array (`h: 1 3 8 5`); it is drawn as a tree, the children of slot i being slots 2i+1 and 2i+2, so a swap moves values along the tree", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
+  { kind: "plot", version: 1, layer: "svg", summary: "trace collection: a curve with points on it. `plot \"(x-3)^2\" from=0 to=9`; a state lists x values, each a point on the curve joined by an arrow to the one before (a descent, a search)", named: "none", texts: { min: 1, max: 2 }, link: false, params: { from: { type: "number" }, to: { type: "number" } }, drawable: false },
+  { kind: "ring", version: 1, layer: "svg", summary: "trace collection: positions on a circle. Items are `name:angle` (0 to 359, clockwise from the top); `| k->B` adds an arrow, a clockwise walk to the owner", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
   { kind: "zone", version: 1, layer: "svg", summary: "named group of components (architecture): the elements declared after it belong to it", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "chart", version: 1, layer: "svg", summary: "chart:bar|line|pie data=3,5,8 labels=A,B,C", named: "required", texts: { min: 0, max: 1 }, link: false, params: { data: { type: "string" }, data2: { type: "string" }, labels: { type: "string" } }, parts: "items", drawable: true },
   // Grid elements (Template Rule Book v2). Lists use `;`, fields within an item use `|`.

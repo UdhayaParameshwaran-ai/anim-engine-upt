@@ -414,3 +414,17 @@ describe("trace links and nodes", () => {
     expect(check(['t = tree "R>A R>B"', "> Nodes {1}here.", "1 t: R A"].join("\n"), T).codes).not.toContain(C.TraceLink);
   });
 });
+
+describe("trace plots and rings", () => {
+  const T = { scene: "template=trace" };
+  it("needs a curve the plot can draw and numeric points", () => {
+    expect(check(['p = plot "(x-3)^2"', "> A {1}point.", "1 p: 4"].join("\n"), T).codes).not.toContain(C.TraceLink);
+    expect(check(['p = plot "drop table"', "> A {1}point.", "1 p: 4"].join("\n"), T).codes).toContain(C.TraceLink);
+    expect(check(['p = plot "x^2"', "> A {1}point.", "1 p: a"].join("\n"), T).codes).toContain(C.TraceLink);
+  });
+  it("needs ring items named with an angle", () => {
+    expect(check(["r = ring", "> A {1}ring.", "1 r: A:40 B:150"].join("\n"), T).codes).not.toContain(C.TraceLink);
+    expect(check(["r = ring", "> A {1}ring.", "1 r: A:400"].join("\n"), T).codes).toContain(C.TraceLink);
+    expect(check(["r = ring", "> A {1}ring.", "1 r: 40"].join("\n"), T).codes).toContain(C.TraceLink);
+  });
+});
