@@ -566,3 +566,24 @@ describe("camera framing", () => {
     }
   });
 });
+
+describe("trace scenes", () => {
+  it("sets and clears a mark, and swaps two cells on the cue of their state line", async () => {
+    const { ir, tl } = await build(`video 1\nscene t "Run" template=trace\narr = row\n> Start {1}here.\n1 arr: 5* 8\n> {1}Trade them.\n1 arr: 8 5+\n`);
+    const cells = ir.scenes[0]!.elements.filter((e) => e.kind === "box");
+    const five = cells.find((e) => e.texts[0] === "5")!;
+    const eight = cells.find((e) => e.texts[0] === "8")!;
+    // The accent ring on 5 is set, then replaced by the done color.
+    const tint = tweens(tl, `t/${five.id}`, "tint");
+    expect(tint.map((t) => t.to)).toEqual([1, 1]);
+    expect(tint.map((t) => t.meta?.color)).toEqual(["accent", "good"]);
+    // Trading places moves both cells: 5 ends where 8 stood and 8 where 5 stood.
+    const ev = createEvaluator(tl);
+    const end = tl.duration;
+    expect(ev.valueAt(`t/${five.id}`, "x", end)).toBeCloseTo(eight.box.x + eight.box.w / 2, 0);
+    expect(ev.valueAt(`t/${eight.id}`, "x", end)).toBeCloseTo(five.box.x + five.box.w / 2, 0);
+    // The second sentence's swap starts at or after that sentence begins.
+    const swap = tweens(tl, `t/${five.id}`, "x").at(-1)!;
+    expect(swap.t0).toBeGreaterThanOrEqual(tl.scenes[0]!.steps[0]!.t0);
+  });
+});

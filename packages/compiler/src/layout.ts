@@ -426,8 +426,32 @@ class SceneLayouter {
   }
 
   private template(tpl: TemplateManifest, pool: ElementDecl[], area: Box): void {
+    if (tpl.name === "trace") return this.traceScene(pool);
     this.arrange(tpl, pool, area);
     this.furnish(tpl, pool);
+  }
+
+  /**
+   * A trace scene arrives with every cell, pointer and number already placed (compiler/trace.ts sized one layout
+   * for the fullest state): copy those boxes. The heading takes the band left free at the top.
+   */
+  private traceScene(pool: ElementDecl[]): void {
+    const band = { x: this.safe.x, y: this.safe.y, w: this.safe.w, h: 84 };
+    const title = pool.find((e) => e.id === "title");
+    if (title) this.put(title, band, 0.95);
+    else if (this.scene.title) {
+      this.boxes.set("__kicker", round(band));
+      this.decor.push({ id: "__kicker", kind: "kicker", text: this.scene.title, follows: [] });
+    }
+    for (const e of pool) {
+      const raw = e.attrs.tbox?.split(",").map(Number);
+      if (!raw || raw.length !== 4 || !raw.every(Number.isFinite)) continue;
+      const box = { x: raw[0]!, y: raw[1]!, w: raw[2]!, h: raw[3]! };
+      // Exactly the box the compiler computed: a move to another slot must not rescale the element.
+      this.cells.set(e.id, box);
+      this.boxes.set(e.id, round(box));
+      this.scales.set(e.id, 1);
+    }
   }
 
   // ------------------------------------------------------------ furnish ---
@@ -1683,8 +1707,9 @@ class SceneLayouter {
   }
 
   private checkOverlaps(): void {
-    // Zones contain their members, so they never overlap them.
-    const solid = this.els.filter((e) => !LINK_KINDS.has(e.kind) && e.kind !== "zone" && e.place?.kind !== "relative" && this.boxes.has(e.id));
+    // Zones contain their members, so they never overlap them. A trace scene reuses its slots over time:
+    // the cell that leaves a slot and the one that arrives there are never on screen together.
+    const solid = this.els.filter((e) => !LINK_KINDS.has(e.kind) && e.kind !== "zone" && e.place?.kind !== "relative" && !e.attrs.tbox && this.boxes.has(e.id));
     for (let i = 0; i < solid.length; i++)
       for (let j = i + 1; j < solid.length; j++) {
         const a = this.boxes.get(solid[i]!.id)!;

@@ -116,7 +116,25 @@ export interface VerbCall {
   /** Element ids, `id.part`, or "*". */
   targets: string[];
   args: Args;
+  /** A state line (`1 arr: 7 2* 9 | i=1`): verb "state", target the collection, and its whole contents now. */
+  state?: StateSnapshot;
   span: Span;
+}
+
+/** One value in a collection's snapshot: `7`, `b:7` (named), `"fib(3)"` (quoted), with an optional mark. */
+export interface StateItem {
+  /** A name that keeps the item's identity when its value changes or repeats (`b:7` → b). Keys in a table. */
+  id?: string;
+  value: string;
+  /** `*` current, `+` done, `~` seen, `!` rejected. */
+  mark?: "*" | "+" | "~" | "!";
+}
+
+/** Everything a collection holds at one moment, in order, and the pointers into it. */
+export interface StateSnapshot {
+  items: StateItem[];
+  /** `i=2` (slot index) or `cur=b` (item name). */
+  pointers: { name: string; at: string }[];
 }
 
 export interface Args {

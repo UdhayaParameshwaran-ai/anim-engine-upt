@@ -2,6 +2,7 @@ import type { Action, Args, Diagnostic, ElementDecl, Script, Setting } from "@an
 import { IR_VERSION, type ActionIR, type BeatIR, type Box, type ElementIR, type SceneIR, type VideoIR } from "@anim/ir";
 import { COMPONENTS, findComponent, findMotion, findVerb, KITS, partsOf, VERBS, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
 import { layoutScene, type SceneLayout } from "./layout.js";
+import { expandTrace } from "./trace.js";
 
 export const DEFAULTS = {
   width: 1920,
@@ -37,7 +38,9 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
   let prevBoxes = new Map<string, Box>();
   let prevElements = new Map<string, ElementIR>();
 
-  for (const [sceneIndex, scene] of script.scenes.entries()) {
+  for (const [sceneIndex, written] of script.scenes.entries()) {
+    // A trace scene (state lines) becomes cells, pointers and timed actions before anything else sees it.
+    const scene = expandTrace(written, { width: w!, height: h! });
     const keepAttr = (scene.attrs.keep ?? "").split(",").filter(Boolean);
     // Carried: declared again here (it gets a place in this scene's layout and moves there from where it was).
     // A carried id this scene doesn't declare stays as it was, like a kept one.
@@ -166,6 +169,7 @@ function lowerAction(action: Action, elements: ElementIR[], layout: SceneLayout,
       const params = typed(args.params, verb.params);
       for (const [k, spec] of Object.entries(verb.params)) if (!(k in params) && spec.default !== undefined) params[k] = spec.default;
       delete params.until;
+      delete params.dest;
 
       let duration: ActionIR["calls"][number]["duration"];
       if (args.duration !== undefined) duration = args.duration;
@@ -176,7 +180,9 @@ function lowerAction(action: Action, elements: ElementIR[], layout: SceneLayout,
         duration = round2(Math.max(DEFAULTS.minWrite, chars / DEFAULTS.writeCps));
       } else duration = round2(verb.defaultDuration * motion.durScale);
 
-      const dest = verb.name === "move" && args.place && call.targets[0] ? layout.destination(call.targets[0], args.place) : undefined;
+      // A move the compiler worked out (trace scenes) carries its destination; a written one names a place.
+      const given = verb.name === "move" ? args.params.dest?.split(",").map(Number) : undefined;
+      const dest = given && given.length === 4 && given.every(Number.isFinite) ? { x: given[0]!, y: given[1]!, w: given[2]!, h: given[3]! } : verb.name === "move" && args.place && call.targets[0] ? layout.destination(call.targets[0], args.place) : undefined;
       return {
         verb: verb.name,
         verbVersion: verb.version,

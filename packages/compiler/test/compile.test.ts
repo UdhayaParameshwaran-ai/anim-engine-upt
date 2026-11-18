@@ -502,3 +502,67 @@ describe("structure cells", () => {
     expect(goal.y).toBeGreaterThan(cell.y + cell.h);
   });
 });
+
+describe("trace scenes", () => {
+  const trace = (body: string) => ir(`video 1\nscene t "Run" template=trace\n${body}\n`);
+  const actions = (v: VideoIR) => v.scenes[0]!.steps.flatMap((s) => s.beats.flatMap((b) => b.actions.flatMap((a) => a.calls)));
+  const call = (v: VideoIR, verb: string) => actions(v).filter((c) => c.verb === verb);
+
+  it("makes one cell per value, all the same size, with slot numbers under a row", () => {
+    const v = trace("arr = row\n> Here are {1}three.\n1 arr: 5 8 2");
+    const cells = v.scenes[0]!.elements.filter((e) => e.kind === "box");
+    expect(cells.map((e) => e.texts[0])).toEqual(["5", "8", "2"]);
+    expect(new Set(cells.map((e) => `${e.box.w}x${e.box.h}`)).size).toBe(1);
+    expect(v.scenes[0]!.elements.filter((e) => e.kind === "label").map((e) => e.texts[0])).toEqual(["0", "1", "2"]);
+    // The collection itself is not an element.
+    expect(v.scenes[0]!.elements.some((e) => e.id === "arr")).toBe(false);
+  });
+
+  it("turns two cells trading places into one swap, and other moves into slides with a destination", () => {
+    const v = trace("arr = row\n> Start {1}here.\n1 arr: 5 8 2\n> {1}Trade.\n1 arr: 8 5 2\n> {1}Rotate.\n1 arr: 5 2 8");
+    const swaps = call(v, "swap");
+    expect(swaps).toHaveLength(1);
+    expect(swaps[0]!.targets).toHaveLength(2);
+    const moves = call(v, "move");
+    expect(moves.length).toBeGreaterThan(0);
+    for (const m of moves) expect(m.dest).toMatchObject({ w: expect.any(Number), h: expect.any(Number) });
+  });
+
+  it("lifts a cell that leaves, changes a named cell's text in place, and pops a new one in", () => {
+    const v = trace('q = queue\nd = pairs\n> Start {1}here.\n1 q: 1 2 3\n1 d: A:4\n> {1}Serve one, add one.\n1 q: 2 3 4\n1 d: A:3');
+    expect(call(v, "lift")).toHaveLength(1);
+    expect(call(v, "set").map((c) => c.params.to)).toEqual(["A: 3"]);
+    expect(call(v, "pop").some((c) => c.targets.length === 1 && v.scenes[0]!.elements.find((e) => e.id === c.targets[0])?.texts[0] === "4")).toBe(true);
+  });
+
+  it("keeps one element per pointer and moves it from slot to slot", () => {
+    const v = trace("arr = row\n> Look {1}here.\n1 arr: 5 8 2 | i=0\n> {1}Then there.\n1 arr: 5 8 2 | i=2");
+    const pointers = v.scenes[0]!.elements.filter((e) => e.texts[0] === "i");
+    expect(pointers).toHaveLength(1);
+    const move = call(v, "move").find((c) => c.targets[0] === pointers[0]!.id)!;
+    expect(move.dest!.x).toBeGreaterThan(pointers[0]!.box.x);
+  });
+
+  it("clears a mark with a tint to zero and sets a new one with its color", () => {
+    const v = trace("arr = row\n> Look {1}here.\n1 arr: 5* 8\n> {1}Done.\n1 arr: 5+ 8");
+    const tints = call(v, "tint");
+    expect(tints.map((c) => c.params.color)).toContain("good");
+    expect(tints.some((c) => c.params.to === 0)).toBe(false);
+    const cleared = trace("arr = row\n> Look {1}here.\n1 arr: 5* 8\n> {1}Done.\n1 arr: 5 8");
+    expect(call(cleared, "tint").some((c) => c.params.to === 0)).toBe(true);
+  });
+
+  it("sends a highlight on a whole collection to the cells it holds then", () => {
+    const v = trace("arr = row\n> Look {1}here.\n1 arr: 5 8\n> {1}All of it.\n1 highlight arr");
+    const h = call(v, "highlight")[0]!;
+    expect(h.targets).toHaveLength(2);
+    expect(h.targets.every((id) => v.scenes[0]!.elements.some((e) => e.id === id))).toBe(true);
+  });
+
+  it("puts side panels in a column to the right of the main collection", () => {
+    const v = trace('arr = row\nq = queue "Queue"\n> Here {1}both.\n1 arr: 5 8\n1 q: 1 2');
+    const main = v.scenes[0]!.elements.find((e) => e.texts[0] === "5")!;
+    const panel = v.scenes[0]!.elements.find((e) => e.texts[0] === "1" && e.kind === "box")!;
+    expect(panel.box.x).toBeGreaterThan(main.box.x + main.box.w);
+  });
+});

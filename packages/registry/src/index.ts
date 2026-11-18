@@ -32,6 +32,8 @@ export interface VerbManifest {
   targets: "required" | "optional" | "none";
   supportsFit: boolean;
   params: Record<string, ParamSpec>;
+  /** Written by the compiler, never by a script or the LLM (state lines lower to these): left out of prompts. */
+  internal?: boolean;
 }
 
 const EASE: ParamSpec = { type: "enum", values: ["in", "out", "inout", "spring", "linear"], default: "out" };
@@ -63,6 +65,9 @@ export const VERBS: readonly VerbManifest[] = [
   { name: "swap", version: 1, category: "transform", summary: "two elements trade places along arcs: swap a,b", defaultDuration: 0.8, mustFinish: false, targets: "required", supportsFit: false, params: {} },
   { name: "frame", version: 1, category: "camera", summary: "the camera frames several elements together: frame a,b,c (focus reset to pull out)", defaultDuration: 0.9, mustFinish: false, targets: "required", supportsFit: true, params: { ease: { ...EASE, default: "inout" } } },
   { name: "focus", version: 1, category: "camera", summary: "zoom the camera to an element, or `reset`", defaultDuration: 0.9, mustFinish: false, targets: "required", supportsFit: true, params: { ease: { ...EASE, default: "inout" } } },
+  // Written by the compiler for trace scenes: a state line is `state`, a mark change is `tint` (it can also clear).
+  { name: "state", version: 1, category: "relation", summary: "the whole contents of a collection from now on (a state line)", defaultDuration: 0, mustFinish: false, targets: "required", supportsFit: false, params: {}, internal: true },
+  { name: "tint", version: 1, category: "relation", summary: "set an element's status tint, or clear it", defaultDuration: 0.3, mustFinish: false, targets: "required", supportsFit: false, params: { to: { type: "number", min: 0, max: 1, default: 1 }, color: { type: "color", default: "accent" } }, internal: true },
 ];
 
 /**
@@ -155,7 +160,7 @@ export const THEME_SUMMARIES: Record<(typeof THEMES)[number], string> = {
 };
 export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
-export const SCENE_ATTRS = ["template", "grid", "compose", "in", "out", "keep", "carry", "frame", "variant", "emphasis", "density", "mirror"] as const;
+export const SCENE_ATTRS = ["template", "grid", "compose", "in", "out", "keep", "carry", "frame", "variant", "emphasis", "density", "mirror", "check"] as const;
 
 /** `compose=`: arrangements the constraint solver understands (`auto` tries them all). */
 export const COMPOSE_PATTERNS = ["auto", "hero-left", "hero-right", "hero-top", "hero-center", "columns", "rows", "pyramid", "z"] as const;
@@ -202,6 +207,8 @@ const VISUAL = ["icon", "asset", "shape", "box", "circle", "card", "chart", "for
 const TEXTUAL = ["title", "text", "label", "list"] as const;
 
 const TECH = ["code", "terminal"] as const;
+/** The collections of a trace scene: declared once, their contents written after each sentence. */
+export const COLLECTIONS = ["row", "stack", "queue", "set", "pairs"] as const;
 
 const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
@@ -226,6 +233,7 @@ const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
   { name: "states", version: 1, summary: "a state machine: states joined by the transitions you declare", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL, "node"], min: 2, max: 8 }, variants: ["across", "down"] },
   { name: "gitgraph", version: 1, summary: "commits on branch lanes: a zone starts a lane, the lines you declare join each commit to the next", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL, "zone"], min: 2, max: 14 }, variants: ["lanes"] },
   { name: "anatomy", version: 1, summary: "the parts of a message or format side by side; labels placed @below:<part> name them", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: ["box", "text", "label"], min: 2, max: 7 }, variants: ["bar", "stacked"] },
+  { name: "trace", version: 1, summary: "data that changes step by step (an algorithm run, a queue, a cache): declare collections, then write their whole contents after each sentence; the engine animates the difference", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...COLLECTIONS], min: 1, max: 3 }, variants: ["main"] },
   { name: "code", version: 1, summary: "a code or terminal panel with notes beside it", slots: [{ name: "code", accepts: [...TECH], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...TEXTUAL, "icon", "box", ...TECH], min: 0, max: 4 }, variants: ["notes", "stacked", "split"] },
 ];
 
@@ -265,6 +273,12 @@ export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "placeholder", version: 1, layer: "svg", summary: "labeled box standing in for a missing asset", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "code", version: 1, layer: "svg", summary: 'code panel (look=window|tabs|card|light, anim=type|lines|walk, file=name for tabs); lines split on \\n: code "const a = 1;\\nreturn a" lang=js', named: "none", texts: { min: 1, max: 1 }, link: false, params: { lang: { type: "string", default: "" }, file: { type: "string", default: "" }, look: { type: "enum", values: ["window", "tabs", "card", "light", "terminal"] }, anim: { type: "enum", values: ["type", "lines", "walk"], default: "type" } }, parts: "lines", drawable: true },
   { kind: "terminal", version: 1, layer: "svg", summary: 'terminal; lines starting "$ " are commands, the rest output: terminal "$ git status\\nOn branch main"', named: "none", texts: { min: 1, max: 1 }, link: false, params: { look: { type: "enum", values: ["window", "tabs", "card", "light", "terminal"] }, anim: { type: "enum", values: ["type", "lines", "walk"], default: "type" } }, parts: "lines", drawable: true },
+  // Collections of a trace scene. Never drawn as such: the compiler turns their states into cells.
+  { kind: "row", version: 1, layer: "svg", summary: "trace collection: an array of cells in a row, index numbers under the slots", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
+  { kind: "stack", version: 1, layer: "svg", summary: "trace collection: cells piled upward, the last one on top", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
+  { kind: "queue", version: 1, layer: "svg", summary: "trace collection: cells in line, front on the left, back on the right", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
+  { kind: "set", version: 1, layer: "svg", summary: "trace collection: a panel of values in the order they were added (visited nodes, a result list)", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
+  { kind: "pairs", version: 1, layer: "svg", summary: "trace collection: key and value rows (distances, counts, a cache); items are key:value", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: false },
   { kind: "zone", version: 1, layer: "svg", summary: "named group of components (architecture): the elements declared after it belong to it", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "chart", version: 1, layer: "svg", summary: "chart:bar|line|pie data=3,5,8 labels=A,B,C", named: "required", texts: { min: 0, max: 1 }, link: false, params: { data: { type: "string" }, data2: { type: "string" }, labels: { type: "string" } }, parts: "items", drawable: true },
   // Grid elements (Template Rule Book v2). Lists use `;`, fields within an item use `|`.

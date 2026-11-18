@@ -160,7 +160,7 @@ export function systemPrompt(assets: AssetManifest[], spec: LengthSpec = STANDAR
 }
 
 function baseSystemPrompt(assets: AssetManifest[], spec: LengthSpec, settings: PromptSettings): string {
-  const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
+  const verbs = VERBS.filter((v) => !v.internal).map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const templates = TEMPLATES.map((t) => {
     const slots = t.slots.map((s) => `${s.name}${s.required ? "" : "?"}`).join(",");
     return `  ${t.name.padEnd(10)} ${t.guide.useWhen}${slots ? ` [slots: ${slots}]` : ""}${itemsOf(t)} · variants: ${t.variants.join("|")}`;
@@ -250,6 +250,7 @@ const STORY: Record<string, string> = {
   architecture: "- Show traffic, not only boxes: send l1 along a link, stream l1 for steady load, mark <component> as=fail when it goes down, clone web,web2,web3 (replicas appear as copies), count <label> from=0 to=900 suffix=\"ms\" for a metric, frame a,b,c to bring a group closer (focus reset pulls out).",
   states: "- Move through the machine: visit s1, then visit s2 when the event happens (one ring of \"current state\" travels), send t1 along the transition, mark s3 as=fail|ok on an end state, set s1 to=\"…\" when a state renames itself.",
   tree: "- Walk the tree: visit root, then visit its child, and mark each finished node as=visited (a search or traversal); mark the found node as=ok.",
+  trace: "- Write the data, never the motion: after each sentence, give the whole contents of each collection as it is now (`1 arr: 7 2* 9 | i=1`). Marks: * the one being looked at, + done, ~ seen, ! rejected. Pointers are slot numbers (`i=2`). The engine animates the difference between states, so never use swap, move, drop, lift, set or pop on cells. One change per cue (a compare and a swap are two cues). The data must be correct: it is checked against the algorithm and against what you say.",
   structure: "- Operate on the cells: drop c4 to push onto a stack, lift c4 to pop, swap c1,c2 to sort, visit c3 to move a search to a cell, mark c3 as=ok when found, strike c2 to cross out a rejected value, merge c1,c2,c3 to combine cells into the last one.",
   stack: "- Move data through the layers: send a packet along an arrow between layers, mark a layer as=fail where it breaks, drop a new layer onto the stack.",
   flow: "- Follow the path: visit n1, visit n2, … along the route the data takes; mark the end node as=ok|fail.",
@@ -306,7 +307,7 @@ export function sceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canv
 
 function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas: boolean, spec: LengthSpec, settings: PromptSettings, usecase?: UseCase): string {
   if ("free" in kind) return baseSystemPrompt(assets, spec, settings);
-  const verbs = VERBS.map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
+  const verbs = VERBS.filter((v) => !v.internal).map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const grid = "grid" in kind;
   const flow = !grid && kind.template.name === "flow";
   const gridOnly = new Set(GRID_ELEMENTS.map((e) => e.kind).filter((k) => !["icon", "asset", "chart", "formula"].includes(k)));

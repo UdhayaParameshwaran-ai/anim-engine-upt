@@ -206,6 +206,13 @@ export const PRIMITIVES: Record<string, Primitive> = {
     return [{ prop: "tint", t0: c.t0, t1: c.t0 + Math.min(0.3, c.dur / 2), to: 1, ease: "out", meta: { color, style: "glow" } }];
   },
 
+  /** A status tint set or cleared by the compiler (trace scenes): `to=1` with a color, or `to=0` to clear. */
+  tint: (c) => {
+    const on = Number(c.params.to ?? 1) > 0;
+    const color = String(c.params.color ?? "accent");
+    return [{ prop: "tint", t0: c.t0, t1: c.t0 + Math.min(0.3, c.dur / 2), to: on ? 1 : 0, ease: "out", ...(on && { meta: { color, style: "glow" } }) }];
+  },
+
   /** The element's text changes in place: a small bump, and the new text from the peak on. */
   set: (c) => {
     const to = c.params.to === undefined ? undefined : String(c.params.to);

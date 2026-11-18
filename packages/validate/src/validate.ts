@@ -27,6 +27,7 @@ import {
 } from "@anim/registry";
 import { closest } from "./fuzzy.js";
 import { checkGrid } from "./grid.js";
+import { analyzeTrace } from "./trace.js";
 
 export interface ValidateOptions {
   assets?: AssetLibrary;
@@ -89,6 +90,17 @@ export const ValidateCodes = {
   TemplateSlot: "NAR407",
   AlreadyVisible: "NAR408",
   SamePlace: "NAR409",
+  // L6 trace scenes (state lines)
+  TraceNoTemplate: "NAR601",
+  TracePointer: "NAR603",
+  TraceDuplicate: "NAR605",
+  TraceStack: "NAR606",
+  TraceQueue: "NAR607",
+  TraceBusy: "NAR609",
+  TraceVerb: "NAR610",
+  TraceClaim: "NAR611",
+  TraceConserved: "NAR612",
+  TraceCapacity: "NAR615",
   OutsideTemplate: "NAR411",
   DanglingConnector: "NAR412",
 } as const;
@@ -297,6 +309,12 @@ class Validator {
       }
     });
     if (!hasSpeech) this.error(C.NoNarration, `scene \`${scene.id}\` has no narration`, scene.span);
+    // State lines: do they hold together, and are they true.
+    for (const t of analyzeTrace(scene)) {
+      const code = { NAR601: C.TraceNoTemplate, NAR603: C.TracePointer, NAR605: C.TraceDuplicate, NAR606: C.TraceStack, NAR607: C.TraceQueue, NAR609: C.TraceBusy, NAR610: C.TraceVerb, NAR611: C.TraceClaim, NAR612: C.TraceConserved, NAR615: C.TraceCapacity }[t.code];
+      if (t.severity === "error") this.error(code, t.message, t.span, t.fix);
+      else this.warn(code, t.message, t.span, t.fix);
+    }
 
     const visible = new Set([...prev.visible].filter((id) => keep.includes(id)));
     // A carried element is on screen from the first moment (when nothing precedes the scene, it is assumed to be).
@@ -809,6 +827,12 @@ class Validator {
 
   private visit(v: VerbManifest, id: string, call: VerbCall, action: Action, beat: Beat, visible: Set<string>, shown: Set<string>, declared: Map<string, ElementDecl>, chainEnters: Set<string>): void {
     if (!declared.has(id)) return;
+    if (v.name === "state") {
+      // The first state line of a collection is what puts it on stage.
+      visible.add(id);
+      shown.add(id);
+      return;
+    }
     if (v.name === "clone" || v.name === "merge") {
       // clone a,b,c: the first is the source, the others appear as copies. merge a,b,c: the last appears, the others fly into it.
       const ids = call.targets.map((t) => t.split(".")[0]!);

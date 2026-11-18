@@ -314,3 +314,72 @@ l1 = line c1->c2
     expect(r.diagnostics.some((d) => d.message.includes("`c1` is not joined"))).toBe(false);
   });
 });
+
+describe("trace scenes", () => {
+  const T = { scene: 'template=trace check=partition' };
+  const ok = ["arr = row", "> Here is {1}the row.", "1 arr: 7 2 9 1 4* | p=4", "> {1}Two comes first.", "1 arr: 2 7 9 1 4 | p=4"].join("\n");
+
+  it("accepts a trace scene without diagnostics", () => {
+    const r = check(ok, T);
+    expect(r.diagnostics).toEqual([]);
+  });
+
+  it("needs template=trace for state lines", () => {
+    const r = check(ok, { scene: "template=cards" });
+    expect(r.codes).toContain(C.TraceNoTemplate);
+  });
+
+  it("rejects a state line for something that is not declared", () => {
+    const r = check(["arr = row", "> Here is {1}the row.", "1 arr: 1 2", "> {1}Then.", "1 other: 1 2"].join("\n"), T);
+    expect(r.codes).toContain(C.UndeclaredElement);
+  });
+
+  it("rejects a state line for an element that is not a collection", () => {
+    const r = check(["arr = row", "sun = icon:sun", "> Here is {1}the row.", "1 arr: 1 2", "> {1}Then.", "1 sun: 1 2"].join("\n"), T);
+    expect(r.diagnostics.find((d) => d.code === C.TraceNoTemplate)?.message).toContain("`sun:`");
+  });
+
+  it("checks pointers against the cells", () => {
+    const r = check(["arr = row", "> Look {1}here.", "1 arr: 1 2 3 | i=7"].join("\n"), T);
+    expect(r.codes).toContain(C.TracePointer);
+    expect(check(["arr = row", "> Look {1}here.", "1 arr: 1 2 3 | i=3"].join("\n"), T).codes).not.toContain(C.TracePointer);
+  });
+
+  it("holds a stack to its top and a queue to its ends", () => {
+    const stack = check(["s = stack", "> A {1}stack.", "1 s: 1 2 3", "> {1}Change the bottom.", "1 s: 9 2 3"].join("\n"), T);
+    expect(stack.codes).toContain(C.TraceStack);
+    expect(check(["s = stack", "> A {1}stack.", "1 s: 1 2 3", "> {1}Pop one.", "1 s: 1 2"].join("\n"), T).codes).not.toContain(C.TraceStack);
+    const queue = check(["q = queue", "> A {1}queue.", "1 q: 1 2 3", "> {1}Skip one.", "1 q: 1 3"].join("\n"), T);
+    expect(queue.codes).toContain(C.TraceQueue);
+    expect(check(["q = queue", "> A {1}queue.", "1 q: 1 2 3", "> {1}Serve one, add one.", "1 q: 2 3 4"].join("\n"), T).codes).not.toContain(C.TraceQueue);
+  });
+
+  it("keeps the values of a sort the same", () => {
+    const r = check(["arr = row", "> Start {1}here.", "1 arr: 3 1 2", "> {1}Then.", "1 arr: 1 2 4"].join("\n"), T);
+    expect(r.diagnostics.find((d) => d.code === C.TraceConserved)?.message).toContain("lost or gained");
+  });
+
+  it("makes 'sorted' true when it is said", () => {
+    const bad = check(["arr = row", "> Start {1}here.", "1 arr: 3 1 2", "> Now {1}the row is sorted.", "1 arr: 3 1 2"].join("\n"), T);
+    expect(bad.codes).toContain(C.TraceClaim);
+    const good = check(["arr = row", "> Start {1}here.", "1 arr: 3 1 2", "> Now {1}the row is sorted.", "1 arr: 1 2 3"].join("\n"), T);
+    expect(good.codes).not.toContain(C.TraceClaim);
+    // "not sorted yet" is not a claim.
+    expect(check(["arr = row", "> Start {1}here.", "1 arr: 3 1 2", "> {1}The row is not sorted yet.", "1 arr: 3 1 2"].join("\n"), T).codes).not.toContain(C.TraceClaim);
+  });
+
+  it("removes a verb that moves cells, the states say it", () => {
+    const r = check(["arr = row", "> Start {1}here.", "1 arr: 3 1 2", "> {1}Swap them.", "1 swap arr", "1 arr: 1 3 2"].join("\n"), T);
+    expect(r.diagnostics.find((d) => d.code === C.TraceVerb)?.fixed).toContain("removed");
+    expect(r.printed).not.toMatch(/swap arr/);
+  });
+
+  it("warns when too much changes at once", () => {
+    const r = check(["arr = row", "> Start {1}here.", "1 arr: 1 2 3 4 5 6", "> {1}All new.", "1 arr: 7 8 9 10 11 12"].join("\n"), { scene: "template=trace" });
+    expect(r.codes).toContain(C.TraceBusy);
+  });
+
+  it("shows the collection with its first state: nothing is reported as never shown", () => {
+    expect(check(ok, T).codes).not.toContain(C.NeverShown);
+  });
+});

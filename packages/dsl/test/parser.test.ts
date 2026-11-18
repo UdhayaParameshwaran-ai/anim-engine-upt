@@ -189,3 +189,46 @@ describe("structure and recovery", () => {
     expect(seen).toEqual(["a", "b"]);
   });
 });
+
+describe("state lines", () => {
+  const SRC = [
+    'video 1 "T"',
+    'scene part "Partition" template=trace check=partition',
+    "arr = row",
+    "> We partition around {1}four, then {2}swap.",
+    "1 arr: 7 2* 9 1 4 | s=0 j=1 p=4",
+    "2 arr: b:2+ 7 \"fib(3)\" 1 4~",
+    "> {1}Empty now.",
+    "1 arr:",
+    "",
+  ].join("\n");
+
+  it("reads a snapshot into a state call on the collection", () => {
+    const { script, diagnostics } = parse(SRC);
+    expect(diagnostics).toEqual([]);
+    const beat = script.scenes[0]!.steps[0]!.beats[0] as SpeechBeat;
+    const [first, second] = beat.actions;
+    expect(first!.anchor).toBe("1");
+    expect(first!.calls[0]).toMatchObject({ verb: "state", targets: ["arr"] });
+    expect(first!.calls[0]!.state!.items.map((i) => i.value)).toEqual(["7", "2", "9", "1", "4"]);
+    expect(first!.calls[0]!.state!.items[1]!.mark).toBe("*");
+    expect(first!.calls[0]!.state!.pointers).toEqual([{ name: "s", at: "0" }, { name: "j", at: "1" }, { name: "p", at: "4" }]);
+    expect(second!.calls[0]!.state!.items[0]).toEqual({ id: "b", value: "2", mark: "+" });
+    expect(second!.calls[0]!.state!.items[2]).toEqual({ value: "fib(3)" });
+    const empty = (script.scenes[0]!.steps[0]!.beats[1] as SpeechBeat).actions[0]!.calls[0]!;
+    expect(empty.state).toEqual({ items: [], pointers: [] });
+  });
+
+  it("prints state lines back exactly", () => {
+    const printed = print(parse(SRC).script);
+    expect(printed).toContain("1 arr: 7 2* 9 1 4 | s=0 j=1 p=4");
+    expect(printed).toContain('2 arr: b:2+ 7 "fib(3)" 1 4~');
+    expect(printed).toContain("1 arr:\n");
+    expect(print(parse(printed).script)).toBe(printed);
+  });
+
+  it("reports a malformed pointer", () => {
+    const { diagnostics } = parse(SRC.replace("p=4", "p"));
+    expect(diagnostics.map((d) => d.code)).toContain(Codes.BadArgument);
+  });
+});

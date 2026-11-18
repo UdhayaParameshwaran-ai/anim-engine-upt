@@ -480,6 +480,31 @@ n4 = label "query" @below:p4
 1 fade p3 then fade n3 then visit p3
 2 fade p4 then fade n4 then visit p4`,
   },
+  trace: {
+    shape: "structure",
+    useWhen: "data that changes step by step: an algorithm run on values (sorting, searching, a heap, BFS with its queue), a stack or queue at work, a cache filling, distances being updated",
+    avoidWhen: "the data does not change (a static picture of a structure → structure); the idea is not about data → another shape",
+    variants: {
+      main: { when: "one main collection with up to two side panels (queue, visited set, distances) beside it", items: [1, 3] },
+    },
+    example: `scene part "Partitioning around a pivot" template=trace check=partition
+arr = row
+> We partition this row around {1}its last value, four.
+1 arr: 7 2 9 1 4* | p=4
+> {1}Seven is bigger than four, so it stays.
+1 arr: 7* 2 9 1 4 | s=0 j=0 p=4
+> {1}Two is smaller, so it {2}swaps to the front.
+1 arr: 7 2* 9 1 4 | s=0 j=1 p=4
+2 arr: 2+ 7 9 1 4 | s=1 j=1 p=4
+> {1}Nine is bigger, so we move on.
+1 arr: 2+ 7 9* 1 4 | s=1 j=2 p=4
+> {1}One is smaller, so it {2}swaps with seven.
+1 arr: 2+ 7 9 1* 4 | s=1 j=3 p=4
+2 arr: 2+ 1+ 9 7 4 | s=2 j=3 p=4
+> Finally {1}the pivot swaps into slot two, and {2}everything left of it is smaller.
+1 arr: 2+ 1+ 4 7 9 | p=2
+2 arr: 2+ 1+ 4+ 7 9`,
+  },
   code: {
     shape: "code",
     useWhen: "real code, a query, a config file or terminal commands, walked through line by line (up to 14 lines)",

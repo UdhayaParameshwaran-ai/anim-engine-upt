@@ -72,6 +72,7 @@ function itemCount(t: TemplateManifest, density: Density): number {
  */
 export function templateScript(t: TemplateManifest, variant: string, size: Density | number, long = false): string {
   if (t.name === "flow") return flowScript(variant, size, long);
+  if (t.name === "trace") return traceScript(variant, typeof size === "number" ? size : itemCount(t, size));
   if (TECH_TEMPLATES.has(t.name)) return techScript(t, variant, typeof size === "number" ? size : itemCount(t, size), long);
   const label = (l: string) => (long ? `${l} ${LONG}` : l);
   const decl: string[] = [];
@@ -120,6 +121,16 @@ export function templateScript(t: TemplateManifest, variant: string, size: Densi
 }
 
 const TECH_TEMPLATES = new Set(["exchange", "architecture", "stack", "structure", "code", "tree", "states", "gitgraph", "anatomy"]);
+
+/** A trace scene with `n` collections: a row of values with a pointer, and panels (a queue, a visited set) beside it. */
+function traceScript(variant: string, n: number): string {
+  const colls: [string, string, string][] = [["arr", "row", "Values"], ["line", "queue", "Queue"], ["seen", "set", "Visited"]];
+  const used = colls.slice(0, Math.max(1, Math.min(3, n)));
+  const decl = used.map(([id, kind, cap]) => `${id} = ${kind}${id === "arr" ? "" : ` "${cap}"`}`);
+  const first = used.map(([id, kind]) => `1 ${id}: ${kind === "row" ? "4 8 15 16 23 | i=0" : kind === "queue" ? "8 15" : "4"}`);
+  const second = used.map(([id, kind]) => `1 ${id}: ${kind === "row" ? "4* 8 15 16 23 | i=1" : kind === "queue" ? "15 16" : "4 8"}`);
+  return [`video 1 "Gallery"`, "", `scene s "Example" template=trace variant=${variant}`, ...decl, "> Here is {1}the data.", ...first, "> Then {1}one step.", ...second, ""].join("\n");
+}
 
 /** Example scenes for the software & tech templates: a real topic each, n items. */
 function techScript(t: TemplateManifest, variant: string, n: number, long: boolean): string {

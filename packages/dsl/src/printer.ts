@@ -92,6 +92,13 @@ function element(el: ElementDecl): string {
 }
 
 function action(a: Action): string {
+  const st = a.calls[0]?.state;
+  if (st) {
+    // Plain words and numbers stay bare; anything else is quoted so it reads back as the same value.
+    const items = st.items.map((it) => `${it.id ? `${it.id}:` : ""}${/^[A-Za-z0-9_.-]+$/.test(it.value) ? it.value : JSON.stringify(it.value)}${it.mark ?? ""}`);
+    const ptrs = st.pointers.map((p) => `${p.name}=${p.at}`);
+    return `${a.anchor} ${a.calls[0]!.targets[0]}:${items.length ? ` ${items.join(" ")}` : ""}${ptrs.length ? ` | ${ptrs.join(" ")}` : ""}`;
+  }
   const calls = a.calls.map((c) => {
     let s = c.verb;
     if (c.targets.length) s += " " + c.targets.join(",");

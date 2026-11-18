@@ -1,4 +1,4 @@
-import type { Action, Args, Beat, ElementDecl, Place, Scene, Script, Setting, Span, Step, VerbCall } from "./ast.js";
+import type { Action, Args, Beat, ElementDecl, Place, Scene, Script, Setting, Span, StateItem, Step, VerbCall } from "./ast.js";
 import { Codes, type Diagnostic } from "./diagnostics.js";
 import { CUE_ID, IDENT, parseNarration, tokenize, type Token } from "./lex.js";
 
@@ -106,10 +106,10 @@ export class Parser {
         return this.focusLine(toks, span);
       case "start":
       case "end":
-        return this.actionLine(toks, span);
+        return isStateLine(toks) ? this.stateLine(toks, span) : this.actionLine(toks, span);
     }
     if (SETTING_KEYS.has(head.text)) return this.settingLine(toks, span);
-    if (this.beat && CUE_ID.test(head.text)) return this.actionLine(toks, span);
+    if (this.beat && CUE_ID.test(head.text)) return isStateLine(toks) ? this.stateLine(toks, span) : this.actionLine(toks, span);
     if (/^\d+$/.test(head.text)) {
       this.err(Codes.ActionWithoutBeat, "action line must follow a `>` narration line", span);
       return;
@@ -345,6 +345,39 @@ export class Parser {
     this.beat.actions.push(action);
   }
 
+  /**
+   * `<anchor> <collection>: item item … [| pointer=at …]`: the whole contents of a collection from this moment on.
+   * Stored as an action with one `state` call on the collection, so cues and targets are checked like any action.
+   */
+  private stateLine(toks: Token[], span: Span): void {
+    if (!this.requireScene(span)) return;
+    if (!this.beat) {
+      this.err(Codes.ActionWithoutBeat, "a state line must follow a `>` narration line or `wait`", span);
+      return;
+    }
+    const coll = toks[1]!.text.slice(0, -1);
+    const items: StateItem[] = [];
+    const pointers: { name: string; at: string }[] = [];
+    let afterBar = false;
+    for (const t of toks.slice(2)) {
+      if (!t.quoted && t.text === "|") {
+        afterBar = true;
+        continue;
+      }
+      if (afterBar) {
+        const m = !t.quoted && /^([A-Za-z_][A-Za-z0-9_]*)=(\S+)$/.exec(t.text);
+        if (m) pointers.push({ name: m[1]!, at: m[2]! });
+        else this.err(Codes.BadArgument, `a pointer is name=index or name=item (\`i=2\`), not \`${t.text}\``, this.tokSpan(t));
+        continue;
+      }
+      const item = stateItem(t);
+      if (item) items.push(item);
+      else this.err(Codes.BadArgument, `invalid item \`${t.text}\` (a value, name:value or "quoted", with an optional mark * + ~ !)`, this.tokSpan(t));
+    }
+    const call: VerbCall = { verb: "state", targets: [coll], args: { params: {} }, state: { items, pointers }, span: this.tokSpan(toks[1]!) };
+    this.beat.actions.push({ anchor: toks[0]!.text, calls: [call], span });
+  }
+
   private arg(t: Token, args: Args): void {
     const s = t.text;
     if (!t.quoted) {
@@ -395,6 +428,30 @@ export class Parser {
   private tokSpan(t: Token): Span {
     return this.span(t.col, t.endCol);
   }
+}
+
+/** `1 arr: …`: the second word names a collection and ends with a colon. */
+function isStateLine(toks: Token[]): boolean {
+  const t = toks[1];
+  return !!t && !t.quoted && /^[A-Za-z_][A-Za-z0-9_]*:$/.test(t.text);
+}
+
+const MARKS = new Set(["*", "+", "~", "!"]);
+
+/** `7`, `7*`, `b:7+`, `"fib(3)"` → an item; undefined when nothing is left of it. */
+function stateItem(t: Token): StateItem | undefined {
+  if (t.quoted) return t.text ? { value: t.text } : undefined;
+  let text = t.text;
+  let mark: StateItem["mark"];
+  if (text.length > 1 && MARKS.has(text.at(-1)!)) {
+    mark = text.at(-1) as StateItem["mark"];
+    text = text.slice(0, -1);
+  }
+  const named = /^([A-Za-z_][A-Za-z0-9_]*):(.+)$/.exec(text);
+  const item: StateItem = named ? { id: named[1]!, value: named[2]! } : { value: text };
+  if (!item.value) return undefined;
+  if (mark) item.mark = mark;
+  return item;
 }
 
 function isArgLike(s: string): boolean {
