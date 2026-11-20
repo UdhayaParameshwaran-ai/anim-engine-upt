@@ -5,13 +5,20 @@ import type { PromptSettings } from "./settings.js";
  * example on data that stays on screen, a protocol is a conversation between the same parties, a comparison puts two
  * things on the same axes. The planner picks one (a `# usecase:` line in its plan); every scene call then gets that
  * use case's playbook. No extra LLM call: the choice rides on the planning call that already runs.
+ *
+ * A use case decides the pictures. The order of the ideas and how the words go belong to the teaching method
+ * (teaching.ts): each use case names the method it uses by default and when to take another.
  */
 export interface UseCase {
   name: string;
   /** When it applies, as the planner reads it. */
   when: string;
-  /** How to plan the video (the planner reads this next to `when`). */
+  /** How to plan the pictures of the video (the planner reads this next to `when`). The order of the ideas is the method's. */
   plan: string;
+  /** The teaching method this kind of video uses unless the topic or audience calls for another (teaching.ts). */
+  method: string;
+  /** When to take another method instead, for the planner. */
+  switch?: string;
   /** How to write each scene (every scene call of this video reads this). */
   scene: string;
   /** A free first guess from the topic's words; the planner confirms or changes it. */
@@ -56,7 +63,9 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "algorithm",
     when: "a procedure that runs step by step on data or values: sorting, searching, traversal, recursion, optimization (gradient descent), a cache or hash table at work, building a heap or tree, a pass over a list",
-    plan: "One small example (4 to 6 values) runs through the video. Open on the idea or the data, never on a statistic. The core is ONE growing scene that is ALWAYS template=trace with shape: structure (never flow, cycle, steps or structure: those cannot show data changing) and runs the example from start to finished result, one chapter per pass or round; then what it costs, then a recap.",
+    plan: "One small example (4 to 6 values) runs through the video. The core is ONE growing scene that is ALWAYS template=trace with shape: structure (never flow, cycle, steps or structure: those cannot show data changing) and runs the example from start to finished result, one chapter per pass or round. What it costs can have a scene of its own.",
+    method: "worked-example",
+    switch: "discovery when the next step can be predicted and the surprise teaches (the viewer guesses, then the run shows it)",
     scene: "Write the state after each sentence: one compare or one swap per cue, with the pointers (i, j, mid, best) where they are and the finished values marked +. Panels (a queue, a visited set, a table of distances) beside the main row show what the algorithm keeps. Run the example to its finished result, and say the actual values in the narration. No decorative icons beside the data.",
     example: { template: "trace", text: SCAN_EXAMPLE },
     keywords: /\b(sort(ing)?|bubble|quick ?sort|merge ?sort|insertion|selection sort|binary search|linear search|search algorithm|algorithms?|traversal|bfs|dfs|recursion|dynamic programming|dijkstra|heap ?sort)\b/i,
@@ -65,6 +74,8 @@ export const USE_CASES: readonly UseCase[] = [
     name: "protocol",
     when: "parties exchanging messages or requests over time: handshakes, authentication flows, request lifecycles, lookups",
     plan: "The same parties throughout. The core is ONE growing exchange scene (template=exchange), one chapter per phase: the setup, the main exchange, the failure or retry, the result.",
+    method: "causal",
+    switch: "socratic when most people hold a wrong idea about it (what blocks what, who decides)",
     scene:
       "template=exchange with the parties as items and one arrow per message, in time order. Show each message with send; a lost or slow one with send fail=true or wait=…; mark the outcome ok or fail. Label arrows with the real message names (SYN, GET /, 200 OK).",
     keywords: /\b(handshake|protocols?|oauth|sso|authentication flow|auth flow|request lifecycle|dns (lookup|resolution)|tls|three-way|3-way)\b/i,
@@ -72,21 +83,26 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "system",
     when: "how something is built from parts that work together: architectures, pipelines, compilers, operating systems",
-    plan: "The core is ONE growing scene that draws the whole system (architecture or flow), one chapter per part or stage, following one request or one piece of data through it; then how it behaves under load or when one part fails.",
+    plan: "The core is ONE growing scene that draws the whole system (architecture or flow), one chapter per part or stage, following one request or one piece of data through it; how it behaves under load or when one part fails can have a scene of its own.",
+    method: "causal",
+    switch: "problem-based for practitioners, starting from the failure they meet at work",
     scene: "",
     keywords: /\b(architecture|pipeline|components?|stages|how .* is built|how .* works internally|operating system|compiler)\b/i,
   },
   {
     name: "concept",
     when: "what something is and how it works as an idea: a token format, a data structure, a language feature, a field in a protocol",
-    plan: "Start with the problem it solves, then its parts, then one worked example end to end, then the common mistake or limit. Separate scenes are fine here.",
+    plan: "Show its parts on one picture, and run one example through it end to end on screen. Separate scenes are fine here.",
+    method: "feynman",
+    switch: "analogical for new viewers when an everyday thing has the same shape; socratic when a common wrong idea is the point",
     scene: "",
     keywords: /\b(what is|what are|explain|anatomy|structure of|format)\b/i,
   },
   {
     name: "comparison",
     when: "two or more options set against each other: A vs B, which to choose, before and after",
-    plan: "Two kinds. If the options CHANGE A PICTURE or can be RUN on data (branches, a data layout, two data structures, two algorithms, a diagram): ONE growing scene draws the shared starting point first, then applies each option to the SAME data in its own chapter (for data structures, each one's operations on the same row of values; for algorithms, both runs on the same input), so the viewer sees both results side by side; then a separate scene for when to choose each. Otherwise: what they share, the differences on the same few axes, when to choose each, a verdict. Never explain an option with generic icons.",
+    plan: "Two kinds. If the options CHANGE A PICTURE or can be RUN on data (branches, a data layout, two data structures, two algorithms, a diagram): ONE growing scene draws the shared starting point first, then applies each option to the SAME data in its own chapter (for data structures, each one's operations on the same row of values; for algorithms, both runs on the same input), so the viewer sees both results side by side; then a separate scene for when to choose each. Otherwise: put the options on the same few axes in one picture (template=compare, or a table page). Never explain an option with generic icons.",
+    method: "contrastive",
     scene: "",
     example: { template: "trace", text: ROW_EXAMPLE },
     keywords: /\b(vs\.?|versus|difference between|differences|compare|comparison|which (one )?to (use|choose))\b/i,
@@ -94,7 +110,9 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "howto",
     when: "doing something with commands or code, step by step: setting up, deploying, a workflow",
-    plan: "State the goal, then the steps in order (one scene per step or small group of steps), then the visible result, then one common mistake.",
+    plan: "One scene per step or small group of steps, each showing the real command or code and what it changes, up to the visible result.",
+    method: "worked-example",
+    switch: "problem-based when the viewer arrives with a failure to fix",
     scene:
       "Show the real commands or code (a code or terminal element), typed line by line. Each sentence is one step; show what the command changes and end on the visible result.",
     keywords: /\b(how to|set ?up|deploy(ing|ment)?|install|tutorial|step by step|commands?|workflow)\b/i,
@@ -102,21 +120,26 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "lifecycle",
     when: "stages or states something goes through over time: an order, a connection, a build, a traffic light",
-    plan: "The core is ONE growing scene (template=states or steps): the whole machine first, then one real item walked through it with visit, one chapter per stage; then the unusual path (failure, timeout, retry).",
+    plan: "The core is ONE growing scene (template=states or steps): the whole machine first, then one real item walked through it with visit, one chapter per stage, including the unusual path (failure, timeout, retry).",
+    method: "causal",
+    switch: "worked-example when one real item is followed through every state",
     scene: "",
     keywords: /\b(state machine|lifecycle|life cycle|states of|life of|stages of)\b/i,
   },
   {
     name: "data",
     when: "numbers and what they show: performance, growth, statistics, benchmarks",
-    plan: "The headline number first, then the trend or comparison that explains it, then what it means for the viewer. Separate scenes are fine here.",
+    plan: "Show the real numbers: a stat that counts up, a chart of the trend or the comparison. Separate scenes are fine here.",
+    method: "problem-based",
+    switch: "contrastive when the numbers compare two options",
     scene: "",
     keywords: /\b(statistics|stats|growth|trend|benchmark|percent|market share|revenue)\b/i,
   },
   {
     name: "history",
     when: "how something developed over time",
-    plan: "A short timeline, then the two or three turning points explained, then where it stands now.",
+    plan: "A timeline scene with the two or three turning points shown on it.",
+    method: "causal",
     scene: "",
     keywords: /\b(history of|timeline|evolution|origins? of)\b/i,
   },
@@ -136,7 +159,7 @@ export function useCaseOf(outline: string): UseCase | undefined {
 
 /** The planner's menu: each use case, when it applies and how to plan it. */
 export function useCaseCatalogue(): string {
-  return USE_CASES.map((u) => `  ${u.name.padEnd(10)} ${u.when}\n             → ${u.plan}`).join("\n");
+  return USE_CASES.map((u) => `  ${u.name.padEnd(10)} ${u.when}\n             → pictures: ${u.plan}\n             → method: ${u.method}${u.switch ? ` (or ${u.switch})` : ""}`).join("\n");
 }
 
 /** What every scene call of a video reads: the person's own playbook for the use case, else the built-in one. Empty when there is none. */

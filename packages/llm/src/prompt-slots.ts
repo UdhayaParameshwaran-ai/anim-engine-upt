@@ -67,8 +67,9 @@ export const PROMPT_INFO: Record<PromptId, PromptInfo> = {
 /** What each slot holds. A removed required slot is warned about: the model would lose that part. */
 export const SLOT_INFO: Record<string, { about: string; required?: boolean }> = {
   topic: { about: "the topic the person typed", required: true },
-  opening: { about: "how the video opens (chosen from the topic and the Director)" },
-  closing: { about: "how the video ends" },
+  level: { about: "the audience level the person chose (new, familiar or practitioner; default familiar)" },
+  teaching: { about: "the audience card, the teaching methods that suit it, and the devices the planner places", required: true },
+  audience_level: { about: "the audience card: vocabulary, sentence length and depth for the chosen level" },
   variety: { about: "templates the last videos used, with a nudge to vary" },
   planning_advice: { about: "planning advice (Planning settings; empty at standard length)" },
   usecases: { about: "the use cases the planner chooses from, each with how to plan it", required: true },

@@ -5,7 +5,6 @@ import { Director, type HistoryEntry } from "@anim/director";
 import { AssetLibrary, TEMPLATES } from "@anim/registry";
 import { describe, expect, it } from "vitest";
 import {
-  CLOSINGS,
   ClaudeCodeClient,
   clean,
   keepPlanned,
@@ -16,7 +15,6 @@ import {
   outlineSystemPrompt,
   LlmError,
   modelChoices,
-  OPENINGS,
   outlinePrompt,
   OpenAICompatibleClient,
   qualityIssues,
@@ -37,7 +35,6 @@ import {
   pruneCarry,
   sceneSystemPrompt,
   shapeTable,
-  storyArc,
   systemPrompt,
   templateCard,
   tidyOutline,
@@ -665,19 +662,6 @@ describe("pictures, structure and story arcs", () => {
     }
   });
 
-  it("asks each plan for one opening and one ending, picked by the topic", () => {
-    const arcs = ["water cycle", "how a bill becomes law", "plant and animal cells", "the fire triangle", "compound interest", "history of the internet", "the human heart", "renewable energy"].map((t) => storyArc(t));
-    // Stable for a topic, varied across topics.
-    expect(storyArc("Water cycle ")).toEqual(arcs[0]);
-    expect(new Set(arcs.map((a) => a.open.name)).size).toBeGreaterThan(2);
-    expect(new Set(arcs.map((a) => a.close.name)).size).toBeGreaterThan(2);
-    const forced = storyArc("water cycle", { open: "cold", close: "recap" });
-    const ask = outlinePrompt("water cycle", { min: 4, max: 6 }, forced);
-    expect(ask).toContain("Suggested opening: no title scene: open on the first idea itself");
-    expect(ask).toContain("Suggested ending: a diagram that pulls the main ideas into one picture");
-    expect(OPENINGS.map((o) => o.name)).toEqual(["title", "question", "cold", "number"]);
-    expect(CLOSINGS.map((c) => c.name)).toEqual(["bullets", "recap", "checklist", "takeaway"]);
-  });
 });
 
 describe("quality: story motion (Q4)", () => {
@@ -690,23 +674,6 @@ describe("quality: story motion (Q4)", () => {
 });
 
 describe("variety budget", () => {
-  it("never repeats the opening or ending of the last video, and is stable for the same history", () => {
-    for (const topic of ["water cycle", "how a bill becomes law", "dns lookup", "tcp handshake", "binary search", "git rebase"]) {
-      for (const open of OPENINGS_FOR_TEST) {
-        for (const close of CLOSINGS_FOR_TEST) {
-          const a = storyArc(topic, {}, { open: [open], close: [close] });
-          expect(a.open.name).not.toBe(open);
-          expect(a.close.name).not.toBe(close);
-          expect(storyArc(topic, {}, { open: [open], close: [close] })).toEqual(a);
-        }
-      }
-    }
-  });
-
-  it("an explicit pick still wins over the history", () => {
-    expect(storyArc("dns", { open: "cold", close: "recap" }, { open: ["cold"], close: ["recap"] })).toMatchObject({ open: { name: "cold" }, close: { name: "recap" } });
-  });
-
   it("the director remembers how videos opened and ended, and which templates they drew", () => {
     const d = new Director({ topic: "dns" });
     d.header("video 1\n");
@@ -718,14 +685,12 @@ describe("variety budget", () => {
   });
 
   it("the outline asks for other templates when recent videos leaned on some", () => {
-    const text = outlinePrompt("dns", { min: 3, max: 4 }, storyArc("dns"), { templates: ["exchange", "exchange", "tree"] });
+    const text = outlinePrompt("dns", { min: 3, max: 4 }, { templates: ["exchange", "exchange", "tree"] });
     expect(text).toContain("leaned on these templates: exchange, tree");
     expect(outlinePrompt("dns", { min: 3, max: 4 })).not.toContain("leaned on");
   });
 });
 
-const OPENINGS_FOR_TEST = ["title", "question", "cold", "number"];
-const CLOSINGS_FOR_TEST = ["bullets", "recap", "checklist", "takeaway"];
 
 describe("cast and carry", () => {
   const OUTLINE = [
@@ -935,10 +900,13 @@ describe("planner brief", () => {
     expect(b.problems).toContain("no # question: line");
     expect(b.problems).toContain("a scene has no valid role");
   });
-  it("offers the opening and ending as suggestions", () => {
+  it("asks for the brief, the method and a beat per scene, with no menu of openings", () => {
     const ask = outlinePrompt("How a stack works", { min: 4, max: 6 });
-    expect(ask).toContain("Suggested opening");
     expect(ask).toContain("# question:");
+    expect(ask).toContain("# method: <method>");
+    expect(ask).toContain("# beat: <beat of the method>");
+    expect(ask).toContain("Audience level: familiar.");
+    expect(ask).not.toContain("Suggested opening");
   });
 });
 

@@ -27,6 +27,7 @@ import {
 } from "@anim/registry";
 import { lengthSpec, type LengthSpec } from "./length.js";
 import { guessUseCase, playbook, useCaseCatalogue, type UseCase } from "./usecases.js";
+import { audienceLine, DEFAULT_LEVEL, deviceList, methodCatalogue, type Level } from "./teaching.js";
 import { PROMPT_IDS, Slots, type PromptId } from "./prompt-slots.js";
 import { DEFAULT_MAX_WORDS, planningAdvice, styleGuide, type PromptSettings } from "./settings.js";
 
@@ -399,6 +400,7 @@ cloud = icon:cloud "Clouds"
 > The warm water rises and {1}cools into clouds.
 1 pop cloud
 ${S.v("playbook", playbook(usecase, settings))}
+${S.v("audience_level", audienceLine(settings.level ?? DEFAULT_LEVEL))}
 RULES
 - One idea per sentence, at most ${S.v("max_words", words)} words. ${S.v("sentences", span(canvas ? spec.chapterSentences : spec.sentences))} sentences per ${canvas ? "chapter" : "scene"}.
 - Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).
@@ -484,6 +486,7 @@ ${elements}`;
  */
 export function outlineSystemPrompt(assets: AssetManifest[], domain?: Domain, settings: PromptSettings = {}): string {
   const S = new Slots("outline.system", settings);
+  const level = settings.level ?? DEFAULT_LEVEL;
   // Each layout with its slot sizes, and each page element with the smallest slot it needs:
   // enough to plan a page whose content fits.
   const mode = frameMode("title", false);
@@ -505,12 +508,16 @@ scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true 
 # question: <what the video answers>        the BRIEF: three comment lines right after the usecase line, written before any scene
 # example: <the one concrete case the video follows, with its real values, or "none">
 # outcome: <what the viewer can see, say or do at the end>
+# method: <method> · why: <one line>             the TEACHING METHOD, right after the brief (see TEACHING)
 # shape: <shape> · role: <role> · goal: <one line>   one comment line under each scene line; grid pages use shape: page
+# beat: <beat> [· via: <method>] [· device: <device>, …] · link: <how it follows from the scene before>   a second comment line under each scene line (see TEACHING)
 <role> is one of: problem, idea, example, limit, takeaway, context, result, misconception. Use the ones the story needs; no video needs all of them, and none is required. The roles together must answer the question and reach the outcome.
 <id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
 
-USE CASES (decide what the video is for, write it on the "# usecase:" line, and plan the scenes the way that use case says)
+USE CASES (decide what the video is for, write it on the "# usecase:" line, and plan the pictures the way that use case says)
 ${S.v("usecases", useCaseCatalogue())}
+
+${S.v("teaching", teachingSection(level))}
 
 ${S.v("style_menu", styleSection())}
 
@@ -528,46 +535,34 @@ ${S.v("domain_plan", domain ? `${DOMAINS[domain].plan}\n\n` : "")}PLANNING RULES
 - Teach, don't list: the video answers one question and builds toward it. Every scene has a job, and its goal says it: the problem, the idea, the worked example, the limit or trade-off, the takeaway.
 - A scene may be ONE GROWING PICTURE: when the video follows one example or one system that changes step by step (a run, a conversation, a request path, a branching history, a state machine, or two options applied one after the other to the same data), plan it as a single scene whose goal says what the finished picture shows, then 3 to 6 comment lines under it, "# chapter: <id> · <what this chapter adds or changes, and what it says>". The picture stays on screen and changes chapter by chapter. It counts as one scene of the budget; use at most one. Every other scene brings new items: never show the same items in two separate scenes.
 - Diagrams: label the scene's shape, then write the template shown after → for that shape (template=<template name>, never the shape name). Check its "not if".
-- Decide the brief first (question, example, outcome), then give each scene a role. Choose templates last: they carry the roles, they are not the plan.
-- The request suggests an opening and an ending. Use them when they fit; when the topic's story clearly needs another (for example a worked result as the ending), choose that. template=title is only ever the first scene.
+- Decide the brief first (question, example, outcome), then the method, then give each scene a role and a beat. Choose templates last: they carry the roles, they are not the plan.
+- The video opens and ends the way its method says. template=title is only ever the first scene.
 - Grid pages (shape: page) are for numbers, quotes, bullet text, charts and tables, with at most one icon. Several pictures of equal weight → template=cards.
 - Vary scene types across the video; mirror=true on some grid pages. Leave variant= out: the engine picks the arrangement that fits.
 - Plan only facts you are sure of.${S.v("house_style", styleGuide(settings))}`);
 }
 
-/** One way to open or end a video, as the plan request words it. */
-export interface ArcPart {
-  name: string;
-  ask: string;
+/** What the planner knows about teaching: the audience level it was given, the methods that suit it, and the devices. */
+export function teachingSection(level: Level = DEFAULT_LEVEL): string {
+  return `TEACHING (how the explanation is told; the use case decides the pictures)
+${audienceLine(level)}
+The audience level is given by the person: plan for it; never write it in the plan.
+
+METHODS (one for the whole video; its beats are the arc of the video)
+${methodCatalogue(level)}
+- Take the use case's method unless the topic or this audience calls for another: the one listed with the use case, or one the AUDIENCE LEVEL says this audience often needs. Say why on the "# method:" line.
+- Every scene gets one beat of the method on its "# beat:" line, in the method's order: the first scene has the first beat, the last scene the last beat. A beat may run over two scenes in a row; leave out at most one beat.
+- One scene may borrow another method for its beat (· via: analogical): methods combine, but the main method keeps the arc.
+- Only socratic and discovery open with a question to the viewer. The others open with what their "opens" says: a problem, a situation, common ground, something familiar; their first scene has no question or prediction device.
+- link: how the scene follows from the one before ("but the server already answered", "so the run starts at A"). The first scene has none.
+- device: the devices the scene's narration uses, only where they help (most scenes need none or one):
+${deviceList()}
+- A prediction gives the viewer time to answer before the picture shows it.
+- The last scene ends the way the method ends; it is never a recap.`;
 }
 
-/**
- * Ways to open and to end a video. Each plan is asked for one of each (the
- * topic picks, see storyArc), so videos don't all share one skeleton of
- * title scene, diagrams, bullet page.
- */
-export const OPENINGS: readonly ArcPart[] = [
-  { name: "title", ask: "a title scene (template=title): the headline as a statement, with 1–3 pictures of the topic" },
-  { name: "question", ask: "a title scene (template=title) whose headline is the question this video answers, with one picture" },
-  { name: "cold", ask: "no title scene: open on the first idea itself, as a diagram whose template has a title (compare, steps, cards, converge, diverge or process), so the viewer is inside the topic at once" },
-  { name: "number", ask: "one striking, well-known number about the topic on a grid page (grid=L2-04: a stat, with a callout beside it); if you are not sure of a real number, open with a title scene instead" },
-];
-export const CLOSINGS: readonly ArcPart[] = [
-  { name: "bullets", ask: "a grid page with the three points to remember (bullets)" },
-  { name: "recap", ask: "a diagram that pulls the main ideas into one picture (hub, cycle, steps or converge), not a page of text" },
-  { name: "checklist", ask: "a grid page with a checklist of what the viewer can now do or look for" },
-  { name: "takeaway", ask: "a grid page with the one idea to remember (grid=L2-08: a definition, with a callout under it)" },
-];
-
-export interface StoryArc {
-  open: ArcPart;
-  close: ArcPart;
-}
-
-/** What recent videos opened with, ended with and drew, oldest first. */
+/** What recent videos drew and how they looked, oldest first. */
 export interface RecentUse {
-  open?: string[];
-  close?: string[];
   templates?: string[];
   looks?: string[];
   motions?: string[];
@@ -583,40 +578,6 @@ The viewer's recent videos used the looks ${looks.join(", ") || "-"} and the mot
 `;
 }
 
-/** Newest use rules a name out; older ones count less and less (1 = never used). */
-function freshness(name: string, used: string[] = []): number {
-  let k = 1;
-  used.forEach((u, i) => {
-    const age = used.length - 1 - i;
-    if (u === name) k *= age === 0 ? 0 : 1 - 0.85 * 0.7 ** (age - 1);
-  });
-  return k;
-}
-
-/** One of `parts`, by topic hash, weighted by how fresh each is; if all are ruled out, the first. */
-function pickFresh(parts: readonly ArcPart[], hash: number, used: string[] | undefined): ArcPart {
-  const w = parts.map((p) => freshness(p.name, used));
-  const total = w.reduce((a, b) => a + b, 0);
-  if (total <= 0) return parts[0]!;
-  let r = ((hash % 10007) / 10007) * total;
-  for (let i = 0; i < parts.length; i++) if ((r -= w[i]!) < 0) return parts[i]!;
-  return parts[parts.length - 1]!;
-}
-
-/**
- * The opening and ending for a topic: stable for the topic and the history, varied across topics, and
- * not what the last videos used (`recent`). `pick` names them instead.
- */
-export function storyArc(topic: string, pick: { open?: string; close?: string } = {}, recent: RecentUse = {}): StoryArc {
-  let h = 2166136261;
-  for (const ch of topic.trim().toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  h >>>= 0;
-  return {
-    open: OPENINGS.find((o) => o.name === pick.open) ?? pickFresh(OPENINGS, h, recent.open),
-    close: CLOSINGS.find((c) => c.name === pick.close) ?? pickFresh(CLOSINGS, h >>> 8, recent.close),
-  };
-}
-
 /** Looks and motion personalities with one line each, so the model can match them to the topic. */
 function styleSection(): string {
   const looks = THEMES.map((t) => `  ${t.padEnd(14)} ${THEME_SUMMARIES[t]}`).join("\n");
@@ -630,8 +591,9 @@ Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS
 }
 
 /** First pass: plan the scenes without writing narration. */
-export function outlinePrompt(topic: string, scenes: { min: number; max: number }, arc: StoryArc = storyArc(topic), recent: RecentUse = {}, spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
+export function outlinePrompt(topic: string, scenes: { min: number; max: number }, recent: RecentUse = {}, spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
   const guess = guessUseCase(topic);
+  const level = settings.level ?? DEFAULT_LEVEL;
   const advice = planningAdvice(spec, settings);
   const S = new Slots("outline.user", settings);
   // The templates the last videos leaned on (most used first): a nudge, never a rule.
@@ -644,15 +606,14 @@ The viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefe
   return S.done(`Plan a narrated explainer video about:
 ${S.v("topic", topic)}
 
-Suggested opening: ${S.v("opening", arc.open.ask)}.
-Suggested ending: ${S.v("closing", arc.close.ask)}.
-(Use them when they fit the topic; choose better ones when the story needs it.)
-${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${S.v("usecase_hint", guess ? `Likely use case: ${guess.name} (change it if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
+Audience level: ${S.v("level", level)}.
+${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${S.v("usecase_hint", guess ? `Likely use case: ${guess.name}, whose method is ${guess.method} (change either if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - right after the "motion" line, one comment line "# usecase: <name>" from USE CASES
 - then the brief: "# question: …", "# example: …" (one concrete case with its real values, or none), "# outcome: …"
-- one "scene" line per scene (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>"
+- then the method: "# method: <method> · why: <one line>"
+- one "scene" line per scene (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>" and one comment line "# beat: <beat of the method> [· via: <method>] [· device: <devices>] · link: <how it follows from the scene before>" (the first scene has no link)
 - optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
 No elements, narration or actions yet.`);
 }
@@ -956,7 +917,7 @@ export function defaultPrompts(assets: AssetManifest[], domain?: Domain): Record
   const kind = sceneKindOf('scene s "S" template=exchange');
   const text: Record<PromptId, string> = {
     "outline.system": outlineSystemPrompt(assets, domain, tokens),
-    "outline.user": outlinePrompt("", { min: 2, max: 4 }, undefined, {}, undefined, tokens),
+    "outline.user": outlinePrompt("", { min: 2, max: 4 }, {}, undefined, tokens),
     "canvas.outline": canvasOutlinePrompt("", { min: 4, max: 6 }, {}, tokens),
     "choose.system": chooseSystemPrompt(tokens),
     "choose.user": canvasChoicePrompt("", tokens),

@@ -25,7 +25,7 @@ describe("length presets", () => {
     const deep = lengthSpec("deep");
     expect(systemPrompt([], deep)).toContain("4–7 sentences per scene");
     expect(sceneSystemPrompt(sceneKindOf(undefined), [], false, deep)).toContain("4–7 sentences per scene");
-    const ask = outlinePrompt("dns", deep.scenes, undefined, {}, deep);
+    const ask = outlinePrompt("dns", deep.scenes, {}, deep);
     expect(ask).toContain("10–14 scenes");
     expect(ask).toContain("No filler scenes");
     expect(outlinePrompt("dns", { min: 2, max: 4 })).not.toContain("No filler");

@@ -1,9 +1,10 @@
 import { compile, report } from "@anim/compiler";
 import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
-import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type Shape } from "@anim/registry";
+import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type AssetManifest, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { briefOf, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, storyArc, systemPrompt } from "./prompt.js";
+import { briefOf, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, systemPrompt, type RecentUse } from "./prompt.js";
+import { DEFAULT_LEVEL, teachingOf, type TeachingPlan } from "./teaching.js";
 import { qualityIssues, qualityReport } from "./quality.js";
 import { detectLength, type Length } from "./length.js";
 import { exampleFor, guessUseCase, useCaseOf, type UseCase } from "./usecases.js";
@@ -31,8 +32,6 @@ export interface GenerateOptions {
    * "auto": a short LLM call decides from the topic.
    */
   canvas?: boolean | "auto";
-  /** How the video opens and ends (names from OPENINGS and CLOSINGS); by default the topic picks. */
-  arc?: { open?: string; close?: string };
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
   qualityRepairs?: boolean;
   /**
@@ -178,24 +177,19 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       note(ctx, choice.trace, { verdict: canvas ? "one growing diagram" : "several scenes" });
       opts.onLog?.(`shape of the video: ${canvas ? "one growing diagram" : "several scenes"}`);
     }
-    const arc = storyArc(topic, opts.arc, recent);
-    if (!canvas) {
-      opts.director?.recordArc(arc.open.name, arc.close.name);
-      opts.onLog?.(`story: opens with ${arc.open.name}, ends with ${arc.close.name}`);
-    }
-    const ask = canvas ? canvasOutlinePrompt(topic, spec.chapters, recent, settings) : outlinePrompt(topic, range, arc, recent, spec, settings);
-    const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain, settings));
-    const routed = routeOutline(tidyOutline(clean(planned.text)));
-    const named0 = useCaseOf(routed.text);
-    const tracing = traceForAlgorithms(routed.text, (named0 ?? guessUseCase(topic))?.name);
-    if (tracing.changes.length) opts.onLog?.(`algorithm data scenes become traces: ${tracing.changes.join("; ")}`);
-    const outline = pruneCarry(tracing.text);
+    const { planned, outline, routed, tracing } = await planOutline(ctx, topic, canvas, recent, relevant);
+    if (tracing.length) opts.onLog?.(`algorithm data scenes become traces: ${tracing.join("; ")}`);
     const named = useCaseOf(outline);
     ctx.usecase = named ?? guessUseCase(topic);
     if (ctx.usecase) opts.onLog?.(`use case: ${ctx.usecase.name}${named ? "" : " (guessed from the topic; the plan named none)"}`);
-    if (routed.changes.length) opts.onLog?.(`routed by shape: ${routed.changes.join("; ")}`);
+    if (routed.length) opts.onLog?.(`routed by shape: ${routed.join("; ")}`);
     const brief = briefOf(outline);
     if (!canvas) opts.onLog?.(brief.problems.length ? `brief incomplete: ${brief.problems.join("; ")}` : `brief: ${brief.question} → ${brief.outcome}`);
+    if (!canvas) {
+      const teach = teachingOf(outline, settings.level ?? DEFAULT_LEVEL, ctx.usecase?.method, range);
+      const arc = `${teach.method?.name ?? teach.methodName ?? "no method"}: ${teach.scenes.map((s) => `${s.id}=${s.beat ?? "?"}${s.via ? `/${s.via}` : ""}`).join(" → ")}`;
+      opts.onLog?.(teach.problems.length ? `teaching plan (${arc}) has problems: ${teach.problems.join("; ")}` : `teaching plan: ${arc}`);
+    }
     const plan = split(outline);
     // The scene planned with chapters is the growing diagram (its chapters become the steps it is written with).
     // Any scene the plan gives chapters is a growing picture, in a video of separate scenes too.
@@ -205,7 +199,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       opts.onLog?.("outline had no scenes; falling back to a single pass");
       return run(topic, { ...opts, mode: "single" }, ctx);
     }
-    note(ctx, planned.trace, { verdict: `${plan.scenes.length} scenes: ${plan.scenes.map((s) => s.id).join(", ")}${routed.changes.length ? ` · routed ${routed.changes.join("; ")}` : ""}` });
+    note(ctx, planned.trace, { verdict: `${plan.scenes.length} scenes: ${plan.scenes.map((s) => s.id).join(", ")}${routed.length ? ` · routed ${routed.join("; ")}` : ""}` });
     header = direct(ensureHeader(plan.header, topic));
     opts.onLog?.(`outline: ${plan.scenes.map((s) => s.id).join(", ")}`);
     const written: string[] = [];
@@ -269,6 +263,53 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     usage: ctx.usage,
     quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text, ctx.usecase?.name, ctx.examples?.get(sc.id)).map((q) => `${sc.id}: ${q.message}`)),
     trace: ctx.trace,
+    ms: Math.round(performance.now() - ctx.started),
+  };
+}
+
+/**
+ * The planning call and the fixes every plan gets (tidied ids, templates routed by shape, algorithm data scenes as
+ * traces, carries pruned). Shared by the whole pipeline and by `plan`.
+ */
+async function planOutline(ctx: Ctx, topic: string, canvas: boolean, recent: RecentUse | undefined, relevant: AssetManifest[]) {
+  const { opts } = ctx;
+  const settings = opts.settings ?? {};
+  const spec = effectiveSpec(settings, settings.length ?? opts.length ?? detectLength(topic));
+  const range = opts.scenes ?? spec.scenes;
+  const ask = canvas ? canvasOutlinePrompt(topic, spec.chapters, recent, settings) : outlinePrompt(topic, range, recent, spec, settings);
+  const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain, settings));
+  const routed = routeOutline(tidyOutline(clean(planned.text)));
+  const tracing = traceForAlgorithms(routed.text, (useCaseOf(routed.text) ?? guessUseCase(topic))?.name);
+  return { planned, outline: pruneCarry(tracing.text), routed: routed.changes, tracing: tracing.changes, range };
+}
+
+/** The plan of a video and what it says about teaching, without writing any scene: one LLM call. */
+export interface PlanResult {
+  /** The outline as the scene writers would get it. */
+  outline: string;
+  usecase?: UseCase;
+  brief: ReturnType<typeof briefOf>;
+  teaching: TeachingPlan;
+  /** What the fixes changed (routing, traces). */
+  changes: string[];
+  trace: CallTrace[];
+  usage: Usage;
+  ms: number;
+}
+
+/** Runs only the planning step of `generate` (several separate scenes; the one-growing-diagram plan is not covered). */
+export async function plan(topic: string, opts: GenerateOptions): Promise<PlanResult> {
+  const ctx: Ctx = { opts, system: "", usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0, started: performance.now(), trace: [] };
+  const r = await planOutline(ctx, topic, false, opts.director?.recent(), (opts.assets ?? new AssetLibrary()).all());
+  const usecase = useCaseOf(r.outline) ?? guessUseCase(topic);
+  return {
+    outline: r.outline,
+    ...(usecase && { usecase }),
+    brief: briefOf(r.outline),
+    teaching: teachingOf(r.outline, opts.settings?.level ?? DEFAULT_LEVEL, usecase?.method, r.range),
+    changes: [...r.routed, ...r.tracing],
+    trace: ctx.trace,
+    usage: ctx.usage,
     ms: Math.round(performance.now() - ctx.started),
   };
 }

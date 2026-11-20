@@ -1,5 +1,6 @@
 import { isPromptId, type PromptId } from "./prompt-slots.js";
 import { isLength, lengthAdvice, lengthSpec, type Length, type LengthSpec } from "./length.js";
+import { isLevel, type Level } from "./teaching.js";
 
 /**
  * What a person may change about the prompts, one field per thing. Every field is optional:
@@ -8,7 +9,9 @@ import { isLength, lengthAdvice, lengthSpec, type Length, type LengthSpec } from
  */
 export interface PromptSettings {
   // 1. Everyone: added to the planning call and every scene call.
-  /** Who watches ("beginners", "backend developers"). */
+  /** How much the viewer already knows: new | familiar | practitioner. Unset = familiar. It sets vocabulary and depth. */
+  level?: Level;
+  /** Who watches, in words ("second-year CS students", "backend developers"); the level sets the depth. */
   audience?: string;
   /** How it sounds ("friendly", "dry and precise"). */
   tone?: string;
@@ -81,6 +84,7 @@ export function sanitizeSettings(raw: unknown): PromptSettings {
   const set = <K extends keyof PromptSettings>(k: K, v: PromptSettings[K] | undefined) => {
     if (v !== undefined) out[k] = v;
   };
+  if (isLevel(r.level)) out.level = r.level;
   set("audience", text(r.audience, 200));
   set("tone", text(r.tone, 200));
   set("language", text(r.language, 60));
@@ -127,7 +131,7 @@ export function planningAdvice(spec: LengthSpec, settings: PromptSettings): stri
 /** The lines every call gets for audience, tone, language and notes; empty when nothing is set. */
 export function styleGuide(settings: PromptSettings): string {
   const lines = [
-    settings.audience && `- Audience: ${settings.audience}. Choose the depth for them (this replaces any guess from the topic).`,
+    settings.audience && `- Audience: ${settings.audience}.`,
     settings.tone && `- Tone of the narration: ${settings.tone}.`,
     settings.language && `- Write the narration sentences in ${settings.language}. Keep the script syntax, ids, verbs and keywords exactly as specified; only the spoken words and the on-screen labels are ${settings.language}.`,
     settings.notes && `- Also: ${settings.notes.replace(/\n+/g, " ")}`,
