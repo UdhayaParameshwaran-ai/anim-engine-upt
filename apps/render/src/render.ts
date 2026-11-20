@@ -19,8 +19,8 @@ export interface Prepared {
   timeline: ResolvedTimeline;
 }
 
-/** Narration voice by name: "piper" (local, ~4x faster, the default), "kokoro" (local neural TTS, best quality) or "beeps" (instant mock that ticks on every word). */
-export function voiceProvider(name = "piper", speed = 1): TtsProvider {
+/** Narration voice by name: "kokoro" (local neural TTS, the most natural voice, the default), "piper" (local, ~4x faster) or "beeps" (instant mock that ticks on every word). */
+export function voiceProvider(name = "kokoro", speed = 1): TtsProvider {
   if (name === "beeps") return new MockTtsProvider({ audio: "beeps", speed });
   if (name === "piper") return new PiperTtsProvider({ speed, dir: join(repo, ".cache", "piper") });
   if (name !== "kokoro") throw new Error("unknown voice " + JSON.stringify(name) + " (kokoro, piper, beeps)");

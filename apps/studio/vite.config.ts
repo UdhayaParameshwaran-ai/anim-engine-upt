@@ -60,10 +60,10 @@ function api(): Plugin {
 /** Voice plus look/motion overrides ("" keeps what the script says). */
 type Tts = { name: "kokoro" | "piper" | "beeps"; speed: number; style: Record<string, string> };
 
-/** Narration voice: "piper" (local, ~4x faster, the default), "kokoro" (local neural TTS, best quality) or "beeps" (instant mock that ticks on every word). */
+/** Narration voice: "kokoro" (local neural TTS, the most natural voice, the default), "piper" (local, ~4x faster) or "beeps" (instant mock that ticks on every word). */
 function defaultTts(): Tts["name"] {
   const v = process.env.ANIM_TTS;
-  return v === "beeps" || v === "kokoro" ? v : "piper";
+  return v === "beeps" || v === "piper" ? v : "kokoro";
 }
 
 function ttsOf(url: URL): Tts {

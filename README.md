@@ -85,7 +85,7 @@ Rendering uses the installed Chrome or Edge (`CHROME_PATH` to override) and ffmp
 - **Inspector:** shows the current scene, step, beat and word, each element's values, and the tween driving it. Click to jump to the source.
 - **Bounds overlay** (O): shows each element's current box and id, following the camera.
 
-The Studio and the renderer narrate with the local Piper voice by default. **Kokoro** (`ANIM_TTS=kokoro`, `--voice=kokoro`) sounds better but is about 4x slower. Piper needs the Piper binary and a voice in `.cache/piper` (`piper/piper.exe` from the [Piper releases](https://github.com/rhasspy/piper/releases) and `en_US-lessac-medium.onnx` + `.onnx.json` from [piper-voices](https://huggingface.co/rhasspy/piper-voices)). **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
+The Studio and the renderer narrate with the local Kokoro voice by default: it sounds the most natural. It runs on the CPU on a thread of its own, so the Studio stays responsive while it speaks (`ANIM_KOKORO_THREADS` limits its threads). **Piper** (`ANIM_TTS=piper`, `--voice=piper`) is about 4x faster with a plainer voice; it needs the Piper binary and a voice in `.cache/piper` (`piper/piper.exe` from the [Piper releases](https://github.com/rhasspy/piper/releases) and `en_US-lessac-medium.onnx` + `.onnx.json` from [piper-voices](https://huggingface.co/rhasspy/piper-voices)). **Beeps** (Script tab, or `ANIM_TTS=beeps` in `.env`) swaps in the instant mock voice, which ticks at the start of every word: each visual should land on its tick.
 
 ## Looks and motion
 
