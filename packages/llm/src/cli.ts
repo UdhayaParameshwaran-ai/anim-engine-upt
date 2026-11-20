@@ -6,11 +6,12 @@ import { report } from "@anim/compiler";
 import { clientFromEnv, type ProviderName } from "./client.js";
 import { isLength } from "./length.js";
 import { sanitizeSettings } from "./settings.js";
+import { isLevel, LEVELS } from "./teaching.js";
 import { generate, type CallTrace } from "./generate.js";
 
 /**
  *   generate "<topic>" [-o out/topic.txt] [--provider=openrouter|gemini|anthropic|claude[,..]] [--model=<id>]
- *            [--single] [--scenes=2-4] [--length=short|standard|long|deep] [--settings=prompts.json] [--domain=tech] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
+ *            [--single] [--scenes=2-4] [--length=short|standard|long|deep] [--level=new|familiar|practitioner] [--settings=prompts.json] [--domain=tech] [--style=director|llm] [--render [--voice=kokoro|piper|beeps]] [--verbose]
  */
 const args = process.argv.slice(2);
 const value = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -42,7 +43,13 @@ try {
   process.exit(2);
 }
 const settingsFile = value("settings");
-const settings = settingsFile ? sanitizeSettings(JSON.parse(readFileSync(settingsFile, "utf8"))) : {};
+const level = value("level");
+if (level && !isLevel(level)) {
+  console.error(`--level must be ${LEVELS.join(", ")} (got ${level})`);
+  process.exit(2);
+}
+// --level wins over a level in the settings file; unset, the pipeline uses familiar.
+const settings = { ...(settingsFile ? sanitizeSettings(JSON.parse(readFileSync(settingsFile, "utf8"))) : {}), ...(level && isLevel(level) && { level }) };
 const verbose = args.includes("--verbose");
 
 // A fresh look per video, remembering past ones (`--style=llm` keeps the LLM's own style lines).
@@ -60,7 +67,7 @@ const result = await generate(topic, {
   ...(args.includes("--canvas") && { canvas: true }),
   ...(value("canvas") === "auto" && { canvas: "auto" as const }),
   ...(length && isLength(length) && { length }),
-  ...(settingsFile && { settings }),
+  ...((settingsFile || level) && { settings }),
   // An explicit --scenes wins over the length preset.
   ...(scenesArg && min && { scenes: { min, max: max ?? min } }),
   onScene: (_, i) => console.error(`  scene ${i + 1} ready`),

@@ -105,3 +105,34 @@ the letters as the first spoken word. A file path such as `C:\Users\Ana\Document
 Sonnet: 36 of 62 videos at 4 (21 in s1). The 1 is compiler-stages, whose script kept validation errors after three
 repairs (a quoted `"prod:"*` state item) and could not render. Haiku moved 3.02 to 3.16, back near h3 (3.21):
 within run-to-run noise. Trace scenes: h5 and s2 about half the videos; lanes/net/graph still rarely chosen.
+
+## Teaching arc (branch feature/teaching-arc): methods, audience levels, decide-then-fill, scenes in order
+
+Planner only (`plan-check.mjs`, 16 topics x 3 audience levels, no scenes written):
+
+| Planner | Plans passing every teaching rule | Method a teacher would accept |
+|---|---|---|
+| one call, Haiku / Sonnet | 75% / 96% | 94% / 92% |
+| decide, then fill, Haiku / Sonnet | 98% / 100% | 91% / 96% |
+
+The accepted methods were written down before the runs; they are a judgement, so read the second column as rough.
+
+Narration (`narration-check.mjs`, the 8 topics of topics-8: dijkstra, cors, jwt, bloom-filter, consistent-hashing,
+floating-point, cap-theorem, garbage-collection; same run settings as h5/s2). t-* = planner with methods only, v-* =
+decide-then-fill plus scenes written in order with their part of the arc and the Q11-Q14 checks.
+
+| | h5 | t-h | v-h | s2 | t-s | v-s |
+|---|---|---|---|---|---|---|
+| openings that take up their planned link | - | 12/31 | 28/29 | - | 10/32 | 30/31 |
+| planned predictions asked, then paused | - | 1/6 | 8/8 | - | 0/2 | 6/6 |
+| first scene asks a question its method does not use | - | 1 | 1 | - | 3 | 0 |
+| sentences that are questions | 0.0% | 4.1% | 11.5% | 0.0% | 1.7% | 6.4% |
+| sentences with you/your | 0.6% | 2.4% | 6.4% | 3.5% | 3.4% | 7.6% |
+| text pages in 8 videos / videos ending on one | 10 / 6 | 5 / 4 | 3 / 3 | 8 / 6 | 7 / 2 | 3 / 1 |
+| first scene ready (median) | 26s | 39s | 30s | 22s | 31s | 33s |
+| estimated playback wait after the first scene (median / worst) | 9s / 94s | 10s / 111s | 7s / 36s | 3s / 4s | 0s / 17s | 1s / 27s |
+| LLM calls per video | 8.8 | 8.6 | 9.6 | 9.1 | 9.9 | 10.9 |
+
+Not yet measured: reviewer scores (rubric.md) on these videos. Seen in the frames: the arc carries the pictures where
+the template fits (CORS: the guesses light up on the request path, the ending strikes the wrong model); a weighted
+graph planned as template=flow draws as a column with hidden edges (Dijkstra's new-map question).

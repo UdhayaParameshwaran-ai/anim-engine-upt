@@ -12,12 +12,12 @@ describe("prompt settings", () => {
   it("changes nothing when nothing is set", () => {
     expect(systemPrompt([], undefined, {})).toBe(systemPrompt([]));
     expect(sceneSystemPrompt(sceneKindOf(undefined), [], false, undefined, {})).toBe(sceneSystemPrompt(sceneKindOf(undefined), []));
-    expect(outlinePrompt("dns", { min: 2, max: 4 }, undefined, {}, undefined, {})).toBe(outlinePrompt("dns", { min: 2, max: 4 }));
+    expect(outlinePrompt("dns", { min: 2, max: 4 }, {}, undefined, {})).toBe(outlinePrompt("dns", { min: 2, max: 4 }));
   });
 
   it("adds the house style to planning and to scene calls", () => {
     const s = sanitizeSettings({ audience: "backend developers", tone: "dry", language: "Hindi", notes: "Say Acme, never ACME." });
-    const ask = outlinePrompt("dns", { min: 2, max: 4 }, undefined, {}, undefined, s);
+    const ask = outlinePrompt("dns", { min: 2, max: 4 }, {}, undefined, s);
     expect(ask).toContain("Audience: backend developers");
     expect(ask).toContain("Say Acme, never ACME.");
     const sys = sceneSystemPrompt(sceneKindOf(undefined), [], false, undefined, s);
@@ -31,7 +31,7 @@ describe("prompt settings", () => {
     expect(spec.scenes).toEqual({ min: 7, max: 7 });
     const sys = systemPrompt([], spec, s);
     expect(sys).toContain("at most 12 words. 5–8 sentences per scene");
-    expect(outlinePrompt("dns", spec.scenes, undefined, {}, spec, s)).toContain("7–7 scenes");
+    expect(outlinePrompt("dns", spec.scenes, {}, spec, s)).toContain("7–7 scenes");
   });
 
   it("replaces or silences the planning advice", () => {
@@ -54,7 +54,7 @@ describe("prompt settings", () => {
 });
 
 import { AssetLibrary } from "@anim/registry";
-import { canvasChoicePrompt, canvasOutlinePrompt, chooseSystemPrompt, defaultPrompts, fullPrompt, PROMPT_IDS, repairPrompt, scenePrompt, SLOT_INFO, storyArc } from "../src/index.js";
+import { canvasChoicePrompt, canvasOutlinePrompt, chooseSystemPrompt, defaultPrompts, fullPrompt, PROMPT_IDS, repairPrompt, scenePrompt, SLOT_INFO } from "../src/index.js";
 
 describe("whole prompts", () => {
   const assets = new AssetLibrary().all();
@@ -76,11 +76,11 @@ describe("whole prompts", () => {
   });
 
   it("an unedited default text builds exactly the built-in prompt", () => {
-    const arc = storyArc("dns");
     const kind = sceneKindOf('scene s "S" template=tree');
     expect(sceneSystemPrompt(kind, assets, false, undefined, own("scene.system"))).toBe(sceneSystemPrompt(kind, assets));
     expect(sceneSystemPrompt(sceneKindOf('scene s "S" grid=L2-01'), assets, false, undefined, own("scene.system"))).toBe(sceneSystemPrompt(sceneKindOf('scene s "S" grid=L2-01'), assets));
-    expect(outlinePrompt("dns", { min: 3, max: 5 }, arc, { templates: ["tree"] }, undefined, own("outline.user"))).toBe(outlinePrompt("dns", { min: 3, max: 5 }, arc, { templates: ["tree"] }));
+    expect(outlinePrompt("dns", { min: 3, max: 5 }, { templates: ["tree"] }, undefined, own("outline.user"))).toBe(outlinePrompt("dns", { min: 3, max: 5 }, { templates: ["tree"] }));
+    for (const level of ["new", "practitioner"] as const) expect(outlineSystemPrompt(assets, undefined, sanitizeSettings({ level, prompts: { "outline.system": defaultPrompts(assets, undefined)["outline.system"].text } }))).toBe(outlineSystemPrompt(assets, undefined, { level }));
     expect(canvasOutlinePrompt("dns", { min: 4, max: 6 }, {}, own("canvas.outline"))).toBe(canvasOutlinePrompt("dns", { min: 4, max: 6 }));
     expect(scenePrompt("scene s \"S\" template=tree", "s", "said", false, own("scene.user"))).toBe(scenePrompt("scene s \"S\" template=tree", "s", "said"));
     expect(canvasChoicePrompt("dns", own("choose.user"))).toBe(canvasChoicePrompt("dns"));
@@ -91,7 +91,7 @@ describe("whole prompts", () => {
 
   it("uses the person's text and fills in its slots", () => {
     const mine = sanitizeSettings({ prompts: { "outline.user": "Plan {{scenes}} scenes about {{topic}}. Be brief.", "scene.system": "Scene writer. Verbs:\n{{verbs}}" } });
-    expect(outlinePrompt("dns", { min: 3, max: 5 }, undefined, {}, undefined, mine)).toBe("Plan 3–5 scenes about dns. Be brief.");
+    expect(outlinePrompt("dns", { min: 3, max: 5 }, {}, undefined, mine)).toBe("Plan 3–5 scenes about dns. Be brief.");
     const sys = sceneSystemPrompt(sceneKindOf('scene s "S" template=tree'), assets, false, undefined, mine);
     expect(sys.startsWith("Scene writer. Verbs:\n")).toBe(true);
     expect(sys).toContain("pop");
@@ -106,15 +106,15 @@ describe("whole prompts", () => {
 
   it("house style is a slot, so a prompt can leave it out", () => {
     const style = { audience: "kids" };
-    expect(outlinePrompt("dns", { min: 2, max: 4 }, undefined, {}, undefined, sanitizeSettings(style))).toContain("Audience: kids");
+    expect(outlinePrompt("dns", { min: 2, max: 4 }, {}, undefined, sanitizeSettings(style))).toContain("Audience: kids");
     const without = sanitizeSettings({ ...style, prompts: { "outline.user": "Plan {{scenes}} scenes about {{topic}}." } });
-    expect(outlinePrompt("dns", { min: 2, max: 4 }, undefined, {}, undefined, without)).not.toContain("kids");
+    expect(outlinePrompt("dns", { min: 2, max: 4 }, {}, undefined, without)).not.toContain("kids");
   });
 });
 
 describe("recent looks", () => {
   it("the plan request names the looks and motions to vary", () => {
-    const ask = outlinePrompt("dns", { min: 2, max: 4 }, undefined, { looks: ["chalk", "dark"], motions: ["minimal"] });
+    const ask = outlinePrompt("dns", { min: 2, max: 4 }, { looks: ["chalk", "dark"], motions: ["minimal"] });
     expect(ask).toContain("looks chalk, dark");
     expect(ask).toContain("motions minimal");
     expect(outlinePrompt("dns", { min: 2, max: 4 })).not.toContain("recent videos used");

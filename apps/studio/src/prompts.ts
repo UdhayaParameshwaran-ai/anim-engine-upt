@@ -107,7 +107,7 @@ export function promptSettings(): { value(): Values } {
 
   /** A dot on each tab that holds something the person changed. */
   const TAB_KEYS: Record<string, string[]> = {
-    wording: ["audience", "tone", "language", "notes"],
+    wording: ["level", "audience", "tone", "language", "notes"],
     planning: ["scenes", "planningAdvice"],
     writing: ["maxWords", "sentences", "motionHints", "templateNotes", "playbooks"],
     prompts: ["prompts"],
@@ -155,6 +155,27 @@ export function promptSettings(): { value(): Values } {
       changed();
     });
     return el("label", { class: "pfield" }, el("span", { class: "plabel" }, label, reset), input, el("small", {}, hint));
+  }
+
+  /** A choice from a fixed list, with the default named in its first option and its own reset. */
+  function choice(label: string, key: string, hint: string, options: readonly string[], fallback: string) {
+    const select = el("select", {}, el("option", { value: "" }, `${fallback} (default)`), ...options.filter((o) => o !== fallback).map((o) => el("option", { value: o }, o)));
+    select.value = typeof values[key] === "string" ? String(values[key]) : "";
+    const reset = el("button", { type: "button", class: "reset", title: "Back to the default" }, "↺");
+    const sync = () => (reset.hidden = select.value === "");
+    sync();
+    select.addEventListener("change", () => {
+      values[key] = select.value || undefined;
+      sync();
+      changed();
+    });
+    reset.addEventListener("click", () => {
+      select.value = "";
+      values[key] = undefined;
+      sync();
+      changed();
+    });
+    return el("label", { class: "pfield" }, el("span", { class: "plabel" }, label, reset), select, el("small", {}, hint));
   }
 
   /** Two numbers (min and max) kept as one range setting. */
@@ -283,7 +304,8 @@ export function promptSettings(): { value(): Values } {
     const spec = d.lengths[length] ?? d.lengths.standard!;
     panes.wording.replaceChildren(
       el("p", { class: "sheet-intro" }, "Who the video is for and how it sounds. Added to every call, so the plan and every scene follow it."),
-      text("Audience", "audience", "Who watches. It sets the depth.", { placeholder: "chosen from the topic" }),
+      choice("Audience level", "level", "How much the viewer already knows: it sets vocabulary and depth, and which teaching methods the plan may use.", ["new", "familiar", "practitioner"], "familiar"),
+      text("Audience", "audience", "Who watches, in words.", { placeholder: "e.g. second-year CS students" }),
       text("Tone", "tone", "How the narration sounds.", { placeholder: "neutral" }),
       text("Language", "language", "Narration language. Script syntax and ids stay as they are.", { placeholder: "English" }),
       text("Notes", "notes", "Anything else: product names, words to use or avoid.", { area: true }),

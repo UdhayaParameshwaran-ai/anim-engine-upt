@@ -61,6 +61,16 @@ export function detectLength(topic: string): Length | undefined {
   return undefined;
 }
 
+/**
+ * The length the teaching decision read from the request: its "# length:" line. `said` is false when the reply has no
+ * such line (then the topic's words are the fallback); "none" means the request asks for no particular length.
+ */
+export function readLengthLine(reply: string): { said: boolean; length?: Length } {
+  const v = /^\s*#\s*length:\s*([a-z]+)/im.exec(reply)?.[1]?.toLowerCase();
+  if (!v) return { said: false };
+  return isLength(v) ? { said: true, length: v } : { said: true };
+}
+
 /** Planning advice that only matters when there are many scenes: no filler, new ground each time. */
 export function lengthAdvice(spec: LengthSpec): string {
   if (spec.name === "long" || spec.name === "deep") {

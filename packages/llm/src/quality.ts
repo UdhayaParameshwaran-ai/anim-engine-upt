@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12" | "Q13" | "Q14";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -41,7 +41,69 @@ export function copiedFrom(example: string, sceneText: string): string[] {
   return copied;
 }
 
-export function qualityIssues(header: string, sceneText: string, usecase?: string, example?: string): QualityIssue[] {
+/** A scene's place in the teaching arc, for the narration checks (Q11–Q14). */
+export interface SceneArc {
+  first: boolean;
+  last: boolean;
+  method: string;
+  /** How the method opens, and whether that is a question to the viewer. */
+  opens: string;
+  opensWithQuestion: boolean;
+  devices: string[];
+  /** How the plan says this scene follows from the one before. */
+  link?: string;
+  /** The scene before (its script text) and every earlier scene's, for the link and the ending. */
+  previous?: string;
+  earlier?: string;
+}
+
+const STOP = new Set("the a an and or but so of to in on at for with by is are was were be it its this that these those then than as from into now each one two only not no can will would could should has have had do does did what which who how why when where you your we our they their there here just also more most very".split(" "));
+const contentWords = (s: string) => new Set(s.toLowerCase().replace(/\{\w+\s?/g, " ").replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
+const trigrams = (s: string) => {
+  const w = s.toLowerCase().replace(/\{\w+\s?/g, " ").replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
+  const out = new Set<string>();
+  for (let i = 0; i + 2 < w.length; i++) out.add(w.slice(i, i + 3).join(" "));
+  return out;
+};
+/** Words a spoken sentence opens with when it carries on from what came before. */
+const CARRIES_ON = /^(so|but|and|that|this|these|those|now|then|which|because|still|yet|once|with|back|here|instead|after|before|meanwhile|even|only|remember|again|at this|at that)\b/i;
+
+/** Narration checks against the scene's place in the teaching arc. */
+function arcIssues(sceneId: string, sceneText: string, arc: SceneArc): QualityIssue[] {
+  const said = narrationLines(sceneText).map((l) => l.replace(/\{\w+\s?/g, "").replace(/\}/g, "").trim());
+  if (!said.length) return [];
+  const issues: QualityIssue[] = [];
+  const asks = said.some((l) => /\?\s*$/.test(l));
+  // Q11: only methods that open with a question put one to the viewer in the first scene.
+  if (arc.first && !arc.opensWithQuestion && asks) {
+    issues.push({ code: "Q11", message: `scene \`${sceneId}\` opens the video with a question, but ${arc.method} opens with ${arc.opens}; say it as a statement, no question to the viewer` });
+  }
+  // Q12: a later scene restarts cold: its first sentence neither carries on nor picks up the scene before or the planned link.
+  if (!arc.first && (arc.previous || arc.link)) {
+    const first = said[0]!;
+    const words = [...contentWords(first)];
+    const before = contentWords(narrationLines(arc.previous ?? "").slice(-2).join(" "));
+    const link = contentWords(arc.link ?? "");
+    const picksUp = words.filter((w) => before.has(w)).length >= 2 || words.filter((w) => link.has(w)).length >= 2;
+    if (!CARRIES_ON.test(first) && !picksUp) {
+      issues.push({ code: "Q12", message: `scene \`${sceneId}\` starts cold ("${first.slice(0, 60)}"); its first sentence should pick up where the scene before left off${arc.link ? `: ${arc.link}` : ""}` });
+    }
+  }
+  // Q13: a planned prediction is a question the viewer gets time to answer before the reveal.
+  if (arc.devices.includes("prediction") && (!asks || !/^\s*wait\s+\d/m.test(sceneText))) {
+    issues.push({ code: "Q13", message: `scene \`${sceneId}\` is planned with a prediction: ask the viewer what will happen in a sentence of its own, then put \`wait 1.5\` on its own line before the sentence that shows the answer` });
+  }
+  // Q14: the last scene ends the way the method ends, not by repeating earlier lines.
+  if (arc.last && arc.earlier) {
+    const mine = [...trigrams(said.join(" "))];
+    const before = trigrams(narrationLines(arc.earlier).join(" "));
+    const repeated = mine.filter((t) => before.has(t)).length / Math.max(1, mine.length);
+    if (repeated > 0.3) issues.push({ code: "Q14", message: `scene \`${sceneId}\` repeats ${Math.round(repeated * 100)}% of its phrases from earlier scenes; end the way ${arc.method} ends instead of recapping` });
+  }
+  return issues;
+}
+
+export function qualityIssues(header: string, sceneText: string, usecase?: string, example?: string, arc?: SceneArc): QualityIssue[] {
   const offset = header.split("\n").length;
   const { script, diagnostics } = compile(`${header}\n${sceneText}\n`);
   const scene = script.scenes[0];
@@ -155,6 +217,7 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
   if (scene.attrs.grid && !verbsOf(scene).some((v) => STORY_VERBS.has(v)) && elements.some((e) => ["stat", "multistat", "gauge", "progress"].includes(e.kind))) {
     issues.push({ code: "Q4", message: `scene \`${scene.id}\` only makes things appear; let the numbers move: count a stat from=0 to=<value> (suffix="%" or prefix="$")` });
   }
+  if (arc) issues.push(...arcIssues(scene.id, sceneText, arc));
   return issues;
 }
 
