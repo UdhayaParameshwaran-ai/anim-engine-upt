@@ -31,6 +31,15 @@ const RE = {
 };
 const tri = (t) => { const w = t.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean); const s = new Set(); for (let i = 0; i + 2 < w.length; i++) s.add(w.slice(i, i + 3).join(" ")); return s; };
 
+const STOP = new Set("the a an and or but so of to in on at for with by is are was were be it its this that these those then than as from into now each one two only not no can will would could should has have had do does did what which who how why when where you your we our they their there here just also more most very".split(" "));
+const contentWords = (s) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
+
+/** One scene's source text from the final script (for wait lines and other non-spoken parts). */
+function scriptBlock(arm, t, id) {
+  const text = readFileSync(join(root, "out/eval", arm, `${t}.txt`), "utf8");
+  return llm.split(text).scenes.find((x) => x.id === id)?.text ?? "";
+}
+
 /** Each scene's spoken sentences, in order, from the final script. */
 function scenesOf(arm, t) {
   const f = join(root, "out/eval", arm, `${t}.txt`);
@@ -43,14 +52,22 @@ function scenesOf(arm, t) {
 function teachingFor(arm, t) {
   const f = join(root, "out/eval", arm, `${t}.trace.json`);
   if (!existsSync(f)) return undefined;
-  const reply = JSON.parse(readFileSync(f, "utf8")).calls.find((c) => c.kind === "outline")?.reply ?? "";
-  if (!/^\s*#\s*method:/im.test(reply)) return undefined;
-  const outline = llm.clean(reply);
-  return llm.teachingOf(outline, "familiar", (llm.useCaseOf(outline) ?? llm.guessUseCase(t))?.method);
+  const calls = JSON.parse(readFileSync(f, "utf8")).calls;
+  const reply = calls.find((c) => c.kind === "outline")?.reply ?? "";
+  let outline = llm.clean(reply);
+  // A plan written to a decision is held to it, as the pipeline does before any scene is written.
+  const decided = calls.find((c) => c.kind === "decide")?.reply;
+  if (decided !== undefined) {
+    const d = llm.parseDecision(decided, "familiar", { min: 4, max: 6 }, llm.USE_CASES, llm.guessUseCase(t)?.name ?? "concept");
+    if (d) outline = llm.applyDecision(outline, d);
+  }
+  if (!/^\s*#\s*method:/im.test(outline)) return undefined;
+  const uc = llm.useCaseOf(outline) ?? llm.guessUseCase(t);
+  return llm.teachingOf(outline, "familiar", llm.defaultMethodFor(uc, "familiar"));
 }
 
 function stats(arm) {
-  const S = { n: 0, sent: 0, words: 0, sd: [], q: 0, you: 0, link: 0, screen: 0, openers: 0, linked: 0, firstQ: 0, firstQAllowed: 0, endQ: 0, closeTri: [], devices: {}, firstQWrong: [] };
+  const S = { predictions: 0, paused: 0, links: 0, linkUsed: 0, n: 0, sent: 0, words: 0, sd: [], q: 0, you: 0, link: 0, screen: 0, openers: 0, linked: 0, firstQ: 0, firstQAllowed: 0, endQ: 0, closeTri: [], devices: {}, firstQWrong: [] };
   for (const t of topics) {
     const sc = scenesOf(arm, t);
     if (!sc?.length) continue;
@@ -85,6 +102,19 @@ function stats(arm) {
         k.planned++;
         if (ok) k.shown++;
       }
+      // A planned prediction also needs its pause before the reveal.
+      if (p.devices.includes("prediction")) {
+        S.predictions++;
+        const block = scriptBlock(arm, t, p.id);
+        if (/^\s*wait\s+\d/m.test(block) && s.said.some((x) => RE.question.test(x))) S.paused++;
+      }
+      // The scene's first sentence takes up its planned link (two content words in common).
+      const i = sc.findIndex((x) => x.id === p.id);
+      if (i > 0 && p.link) {
+        S.links++;
+        const lw = contentWords(p.link);
+        if ([...contentWords(s.said[0])].filter((w) => lw.has(w)).length >= 2) S.linkUsed++;
+      }
     }
   }
   const avg = (a) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length);
@@ -103,6 +133,8 @@ function stats(arm) {
       "sentences with but/so/because…": pct(S.link),
       "screen/structure talk": pct(S.screen),
       "closing: 3-word phrases already said": avg(S.closeTri).toFixed(2),
+      "openings that take up their planned link": S.links ? `${S.linkUsed}/${S.links}` : "—",
+      "planned predictions asked, with a pause": S.predictions ? `${S.paused}/${S.predictions}` : "—",
       "planned devices the narration shows": Object.keys(S.devices).length ? Object.entries(S.devices).map(([d, k]) => `${d} ${k.shown}/${k.planned}`).join(", ") : "—",
     },
   };
