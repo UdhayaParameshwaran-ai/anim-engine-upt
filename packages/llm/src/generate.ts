@@ -6,7 +6,7 @@ import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
 import { briefOf, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, decidePrompt, decideSystemPrompt, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, systemPrompt, type RecentUse } from "./prompt.js";
 import { applyDecision, arcBrief, DEFAULT_LEVEL, opensWithQuestion, parseDecision, teachingOf, type Decision, type TeachingPlan } from "./teaching.js";
 import { qualityIssues, qualityReport, type SceneArc } from "./quality.js";
-import { detectLength, type Length } from "./length.js";
+import { detectLength, readLengthLine, type Length } from "./length.js";
 import { defaultMethodFor, exampleFor, guessUseCase, USE_CASES, useCaseOf, type UseCase } from "./usecases.js";
 import { effectiveSpec, type PromptSettings } from "./settings.js";
 
@@ -169,9 +169,10 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     : { opts, system: systemPrompt(relevant, effectiveSpec(opts.settings ?? {}, opts.length ?? detectLength(topic)), opts.settings ?? {}), usage: { prompt: 0, completion: 0 }, calls: 0, repairs: 0, started: performance.now(), trace: [] };
   const settings = opts.settings ?? {};
   const length = settings.length ?? opts.length ?? detectLength(topic);
-  const spec = effectiveSpec(settings, length);
-  const range = opts.scenes ?? spec.scenes;
-  if (length || settings.scenes) opts.onLog?.(`length: ${spec.name} (${range.min}–${range.max} scenes)${opts.length || settings.length ? "" : " · from the topic"}`);
+  // With several scenes the planning step settles the length (it may read it from the request); the one-call mode uses the topic's words.
+  let spec = effectiveSpec(settings, length);
+  let range = opts.scenes ?? spec.scenes;
+  if ((opts.mode ?? "outline") === "single" && (length || settings.scenes)) opts.onLog?.(`length: ${spec.name} (${range.min}–${range.max} scenes)${opts.length || settings.length ? "" : " · from the topic"}`);
   let header = "";
   // The look is set on the header, before the first scene plays; scenes are arranged as they arrive.
   const direct = (h: string) => (opts.director ? opts.director.header(h).trim() : h);
@@ -189,7 +190,11 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
       note(ctx, choice.trace, { verdict: canvas ? "one growing diagram" : "several scenes" });
       opts.onLog?.(`shape of the video: ${canvas ? "one growing diagram" : "several scenes"}`);
     }
-    const { planned, outline, routed, tracing } = await planOutline(ctx, topic, canvas, recent, relevant);
+    const planning = await planOutline(ctx, topic, canvas, recent, relevant);
+    const { planned, outline, routed, tracing } = planning;
+    spec = planning.spec;
+    range = planning.range;
+    if (planning.lengthFrom !== "default" || settings.scenes) opts.onLog?.(`length: ${spec.name} (${range.min}–${range.max} scenes) · ${planning.lengthFrom === "request" ? "read from the request" : planning.lengthFrom === "topic words" ? "from the topic" : "set"}`);
     if (tracing.length) opts.onLog?.(`algorithm data scenes become traces: ${tracing.join("; ")}`);
     const named = useCaseOf(outline);
     ctx.usecase = named ?? guessUseCase(topic);
@@ -300,13 +305,24 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
 async function planOutline(ctx: Ctx, topic: string, canvas: boolean, recent: RecentUse | undefined, relevant: AssetManifest[]) {
   const { opts } = ctx;
   const settings = opts.settings ?? {};
-  const spec = effectiveSpec(settings, settings.length ?? opts.length ?? detectLength(topic));
-  const range = opts.scenes ?? spec.scenes;
+  const explicit = settings.length ?? opts.length;
+  let length: Length | undefined = explicit;
+  let lengthFrom: PlanResult["lengthFrom"] = explicit ? "setting" : "default";
   const level = settings.level ?? DEFAULT_LEVEL;
-  // The teaching decision first (a small call), so the plan fills the method's arc instead of inventing one.
+  // The teaching decision first (a small call), so the plan fills the method's arc instead of inventing one. It also
+  // reads how long the request asks the video to be, in any wording; the topic's words are only the fallback.
   let decision: Decision | undefined;
-  if (!canvas && opts.decideTeaching !== false) {
-    const asked = await chat(ctx, [{ role: "user", content: decidePrompt(topic, settings) }], { kind: "decide" }, undefined, decideSystemPrompt(settings));
+  let asked: { text: string; trace: CallTrace } | undefined;
+  if (!canvas && opts.decideTeaching !== false) asked = await chat(ctx, [{ role: "user", content: decidePrompt(topic, settings) }], { kind: "decide" }, undefined, decideSystemPrompt(settings));
+  if (!explicit) {
+    const read = asked ? readLengthLine(asked.text) : { said: false };
+    const words = read.said ? undefined : detectLength(topic);
+    length = read.length ?? words;
+    lengthFrom = read.length ? "request" : words ? "topic words" : "default";
+  }
+  const spec = effectiveSpec(settings, length);
+  const range = opts.scenes ?? spec.scenes;
+  if (asked) {
     decision = parseDecision(asked.text, level, range, USE_CASES, guessUseCase(topic)?.name ?? "concept");
     note(ctx, asked.trace, { verdict: decision ? `${decision.usecase} · ${decision.method.name}: ${decision.slots.join(" → ")}` : "no decision; the plan chooses" });
   }
@@ -315,7 +331,7 @@ async function planOutline(ctx: Ctx, topic: string, canvas: boolean, recent: Rec
   const written = clean(planned.text);
   const routed = routeOutline(tidyOutline(decision ? applyDecision(written, decision) : written));
   const tracing = traceForAlgorithms(routed.text, (useCaseOf(routed.text) ?? guessUseCase(topic))?.name);
-  return { planned, outline: pruneCarry(tracing.text), routed: routed.changes, tracing: tracing.changes, range, decision };
+  return { planned, outline: pruneCarry(tracing.text), routed: routed.changes, tracing: tracing.changes, range, decision, spec, lengthFrom };
 }
 
 /** The plan of a video and what it says about teaching, without writing any scene: one LLM call. */
@@ -327,6 +343,9 @@ export interface PlanResult {
   teaching: TeachingPlan;
   /** What the fixes changed (routing, traces). */
   changes: string[];
+  /** The length the plan was made for, and where it came from. */
+  length: Length;
+  lengthFrom: "setting" | "request" | "topic words" | "default";
   trace: CallTrace[];
   usage: Usage;
   ms: number;
@@ -343,6 +362,8 @@ export async function plan(topic: string, opts: GenerateOptions): Promise<PlanRe
     brief: briefOf(r.outline),
     teaching: teachingOf(r.outline, opts.settings?.level ?? DEFAULT_LEVEL, defaultMethodFor(usecase, opts.settings?.level ?? DEFAULT_LEVEL), r.range),
     changes: [...r.routed, ...r.tracing],
+    length: r.spec.name,
+    lengthFrom: r.lengthFrom,
     trace: ctx.trace,
     usage: ctx.usage,
     ms: Math.round(performance.now() - ctx.started),

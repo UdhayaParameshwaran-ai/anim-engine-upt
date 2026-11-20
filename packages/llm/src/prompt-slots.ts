@@ -74,6 +74,7 @@ export const SLOT_INFO: Record<string, { about: string; required?: boolean }> = 
   audience_level: { about: "the audience card: vocabulary, sentence length and depth for the chosen level" },
   methods: { about: "the teaching methods that suit the audience level, with their beats", required: true },
   arc: { about: "this scene's part in the teaching arc: the method's voice, its beat and job, the link to the scene before, what to leave for the next, its devices" },
+  lengths: { about: "the lengths a request can ask for, with the words that point to each, and the topic names that are not about length" },
   teaching_plan: { about: "the decided use case, method and the beat of every scene, which the plan fills in" },
   variety: { about: "templates the last videos used, with a nudge to vary" },
   planning_advice: { about: "planning advice (Planning settings; empty at standard length)" },

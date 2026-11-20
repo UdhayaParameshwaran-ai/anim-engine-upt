@@ -101,7 +101,7 @@ export const USE_CASES: readonly UseCase[] = [
     byLevel: { new: "analogical", practitioner: "problem-based" },
     switch: "socratic when a common wrong idea is the point",
     scene: "",
-    keywords: /\b(what is|what are|explain|anatomy|structure of|format)\b/i,
+    keywords: /\b(what is|what are|anatomy|structure of|format)\b/i,
   },
   {
     name: "comparison",

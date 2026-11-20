@@ -25,7 +25,7 @@ import {
   type Shape,
   type TemplateManifest,
 } from "@anim/registry";
-import { lengthSpec, type LengthSpec } from "./length.js";
+import { LENGTH_SPECS, LENGTHS, lengthSpec, type Length, type LengthSpec } from "./length.js";
 import { defaultMethodFor, guessUseCase, playbook, useCaseCatalogue, type UseCase } from "./usecases.js";
 import { audienceLine, DEFAULT_LEVEL, deviceList, methodCatalogue, type Decision, type Level } from "./teaching.js";
 import { PROMPT_IDS, Slots, type PromptId } from "./prompt-slots.js";
@@ -669,7 +669,7 @@ A beat is the scene's job, not its name: the scene id and title say what the sce
 }
 
 /** The system prompt of the call that decides how a video teaches: what kind of video it is and the method. */
-export const DECIDE_SYSTEM = "You decide how a narrated explainer video teaches its topic: what kind of video it is and which teaching method it uses. Reply with exactly two lines, nothing else.";
+export const DECIDE_SYSTEM = "You decide how a narrated explainer video teaches its topic: what kind of video it is, which teaching method it uses, and how long the request asks it to be. Reply with exactly three lines, nothing else.";
 
 export function decideSystemPrompt(settings: PromptSettings = {}): string {
   return new Slots("decide.system", settings).done(DECIDE_SYSTEM);
@@ -693,11 +693,27 @@ ${S.v("usecases", useCaseCatalogue(level, false))}
 METHODS
 ${S.v("methods", methodCatalogue(level))}
 ${S.v("usecase_hint", guess ? `\nLikely use case, from the topic's words: ${guess.name} (change it only if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
-Keep the use case's usual method. Take another only when this topic clearly needs it: the one listed with the use case (a common wrong idea calls for socratic), or one that fits this topic much better than the usual one.
+Keep the use case's usual method. Take another only when this topic clearly needs it: the one listed with the use case (a common wrong idea calls for socratic), or one that fits this topic much better than the usual one. How long the video should be never changes the use case or the method.
 
-Reply with exactly these two lines:
+${S.v("lengths", lengthMenu())}
+
+Reply with exactly these three lines:
 # usecase: <name>
-# method: <method> · why: <one line: why this method fits this topic and this audience>`);
+# method: <method> · why: <one line: why this method fits this topic and this audience>
+# length: <none | short | standard | long | deep>`);
+}
+
+/** The lengths the decision call reads the request against, with the words that point to each. */
+function lengthMenu(): string {
+  const words: Record<Length, string> = {
+    short: '"briefly", "quick", "in short", "in a nutshell", a minute or less',
+    standard: '"a normal explanation", about two minutes',
+    long: '"in detail", "a detailed explanation", "a long narration", about three minutes',
+    deep: '"in depth", "deep dive", "a complete guide", "everything about", five minutes or more',
+  };
+  return `HOW LONG (only what the request itself asks for)
+${LENGTHS.map((l) => `  ${l.padEnd(9)} ${LENGTH_SPECS[l].summary}: ${words[l]}`).join("\n")}
+Write "none" when the request says nothing about length or detail. Words that are part of the topic's name are not about length: long polling, quick sort, short-circuit evaluation, long division, a short position.`;
 }
 
 /** The system prompt of the call that decides between one growing diagram and several scenes. */
