@@ -1,7 +1,10 @@
 import { exposeForRender, Player, Stage } from "@anim/engine";
 import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { Editor } from "./editor.js";
-import { createEvaluator, inspect, lineAt, type Evaluator } from "./inspect.js";
+import { createEvaluator, inspect, lineAt, sceneAt, type Evaluator } from "./inspect.js";
+import { choices } from "./choices.js";
+import { SceneGrid } from "./scene-grid.js";
+import { VideoControls } from "./video-controls.js";
 import { renderInspector } from "./inspector.js";
 import { Overlay } from "./overlay.js";
 import { TimelinePanel } from "./timeline-panel.js";
@@ -72,14 +75,58 @@ const modelSel = $<HTMLSelectElement>("model");
 let modelMenus: Record<string, { default: string; models: string[] }> = {};
 const replayExample = $<HTMLSelectElement>("replay-example");
 
+// The menus remember the person's picks across reloads. Menus whose options arrive from the server (provider,
+// replay example) and the voice (whose default comes from the server) are restored in loadProviders.
+const remembered = choices();
+const kept: [HTMLSelectElement | HTMLInputElement, string][] = [
+  [$<HTMLSelectElement>("domain"), "domain"],
+  [$<HTMLSelectElement>("length"), "length"],
+  [$<HTMLSelectElement>("mode"), "mode"],
+  [speed, "speed"],
+  [tts, "voice"],
+  [provider, "provider"],
+  [replayExample, "replay"],
+];
+for (const [control, name] of kept) {
+  remembered.restore(control, name);
+  remembered.keep(control, name);
+}
+
 const editor = new Editor($<HTMLTextAreaElement>("source"), $<HTMLPreElement>("gutter"));
 const panel = new TimelinePanel($<HTMLDivElement>("timeline"), {
   seek: (t) => session?.player.seek(t),
   select: (line) => selectLine(line),
 });
 
+/** Seconds the on-video buttons and the arrow keys skip. */
+const SKIP = 10;
+const controls = new VideoControls($<HTMLDivElement>("vc"), {
+  toggle: () => playBtn.click(),
+  skip: (s) => skip(s),
+});
+/** Every scene of the built video; a card jumps to its scene and pauses there, so the inspector shows it. */
+const sceneGrid = new SceneGrid(
+  $<HTMLDivElement>("scene-grid"),
+  {
+    seek: (t) => {
+      if (!session) return;
+      session.player.pause();
+      session.player.seek(t);
+    },
+    select: (line) => selectLine(line),
+  },
+  $<HTMLSpanElement>("scenes-count"),
+);
+
 let session: Session | undefined;
 let lastInspect = 0;
+
+/** Moves playback by `seconds` (the player clamps to the video), showing which way on the video. */
+function skip(seconds: number): void {
+  if (!session) return;
+  session.player.seek(session.player.time + seconds);
+  controls.flash(seconds);
+}
 
 // ------------------------------------------------------------- sessions ---
 
@@ -134,6 +181,8 @@ function teardown(): void {
   session = undefined;
   waiting.hidden = true;
   setPlaying(false);
+  controls.setEnabled(false);
+  sceneGrid.clear();
 }
 
 async function loadAudio(player: Player): Promise<void> {
@@ -149,6 +198,11 @@ function showTimeline(): void {
   scrub.max = String(tl.duration);
   scrub.step = String(1 / tl.fps);
   panel.set(tl);
+  if (!renderMode) {
+    controls.setEnabled(true);
+    document.getElementById("app")!.classList.add("has-scenes");
+    sceneGrid.set(session!.ir, tl);
+  }
   cuesList.innerHTML = tl.cues
     .map((c) => `<li data-t="${c.t}" data-line="${c.line}">${c.t.toFixed(2)}s · ${c.scene} · L${c.line} {${c.id}}${c.precision === "interpolated" ? " ≈" : ""}</li>`)
     .join("");
@@ -178,6 +232,8 @@ function update(t: number): void {
   narration.innerHTML = inBeat.map((w) => (w === words[i] ? `<span class="now">${escape(w.text)}</span>` : escape(w.text))).join(" ") || "&nbsp;";
   cuesList.querySelectorAll("li").forEach((li) => li.classList.toggle("passed", Number(li.dataset.t) <= t));
   panel.update(t, s.player.isPlaying);
+  const playing = sceneAt(tl, t);
+  sceneGrid.setActive(playing ? tl.scenes.indexOf(playing) : undefined);
 
   // Inspector, overlay and editor line follow at ~15 fps while playing.
   const now = performance.now();
@@ -193,6 +249,7 @@ function update(t: number): void {
 function setPlaying(playing: boolean): void {
   playBtn.dataset.state = playing ? "playing" : "paused";
   playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+  controls.setPlaying(playing);
 }
 
 function fmtTime(t: number): string {
@@ -376,12 +433,14 @@ let providersLoaded = false;
 
 async function loadProviders(): Promise<void> {
   const p: { llm: Record<string, boolean>; models?: Record<string, { default: string; models: string[] }>; tts: string; examples: string[]; themes: Choice[]; motions: Choice[] } = await (await fetch("/api/providers")).json();
-  tts.value = p.tts;
+  // The server's default voice, unless the person picked one before.
+  if (!remembered.restore(tts, "voice")) tts.value = p.tts;
   const options = (list: Choice[]) => list.map((c) => `<option value="${c.name}" title="${c.summary}">${c.name}</option>`).join("");
   if (!providersLoaded) {
     look.insertAdjacentHTML("beforeend", options(p.themes));
     motion.insertAdjacentHTML("beforeend", options(p.motions));
     replayExample.innerHTML = p.examples.map((f) => `<option>${f}</option>`).join("");
+    remembered.restore(replayExample, "replay");
     providersLoaded = true;
   }
   const labels: Record<string, string> = { openrouter: "OpenRouter", gemini: "Gemini", anthropic: "Claude API", claude: "Claude subscription" };
@@ -391,6 +450,9 @@ async function loadProviders(): Promise<void> {
       .map(([name, ok]) => `${labels[name] ?? name} ${ok ? "connected" : "not set"}`)
       .join(" · ") + (any ? "" : ` — add keys to <code>.env</code>, or replay an example offline.`);
   for (const option of provider.options) if (option.value in p.llm) option.disabled = !p.llm[option.value];
+  // The provider picked last time, if it is still set up; else one that is.
+  remembered.restore(provider, "provider");
+  if (provider.selectedOptions[0]?.disabled) provider.value = "auto";
   if (!any) provider.value = "replay";
   $<HTMLLabelElement>("replay-row").hidden = provider.value !== "replay";
   modelMenus = p.models ?? {};
@@ -517,8 +579,13 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     playBtn.click();
   }
-  if (e.key === "ArrowRight") jumpCue(1);
-  if (e.key === "ArrowLeft") jumpCue(-1);
+  // ← / → skip 10 s, like a video player; Shift + ← / → step from cue to cue.
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    e.preventDefault();
+    const dir = e.key === "ArrowRight" ? 1 : -1;
+    if (e.shiftKey) jumpCue(dir);
+    else skip(dir * SKIP);
+  }
   if (e.key === "o" || e.key === "O") overlayToggle.click();
 });
 

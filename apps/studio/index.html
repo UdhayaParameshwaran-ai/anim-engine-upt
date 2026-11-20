@@ -114,18 +114,41 @@
 
       <section class="viewer">
         <div class="stage-card">
-          <div id="stage"><div id="waiting" hidden><span class="dot"></span><span id="waiting-text">Writing the next scene</span></div></div>
+          <div id="stage">
+            <div id="waiting" hidden><span class="dot"></span><span id="waiting-text">Writing the next scene</span></div>
+            <div id="vc" class="vc" data-state="paused" hidden>
+              <div class="vc-zone" data-zone="left"></div>
+              <div class="vc-zone" data-zone="middle"></div>
+              <div class="vc-zone" data-zone="right"></div>
+              <div class="vc-center">
+                <button type="button" class="vc-btn vc-skip" data-skip="-10" title="Back 10 s (←)" aria-label="Back 10 seconds">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.7h3.7" /></svg>
+                  <span>10</span>
+                </button>
+                <button type="button" class="vc-btn vc-play" title="Play / pause (Space)" aria-label="Play">
+                  <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" /></svg>
+                  <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+                </button>
+                <button type="button" class="vc-btn vc-skip" data-skip="10" title="Forward 10 s (→)" aria-label="Forward 10 seconds">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v3.7h-3.7" /></svg>
+                  <span>10</span>
+                </button>
+              </div>
+              <div class="vc-flash vc-flash-left" aria-hidden="true"></div>
+              <div class="vc-flash vc-flash-right" aria-hidden="true"></div>
+            </div>
+          </div>
         </div>
 
         <div class="transport">
-          <button id="prev" class="icon-btn" title="Previous cue (←)" aria-label="Previous cue">
+          <button id="prev" class="icon-btn" title="Previous cue (Shift + ←)" aria-label="Previous cue">
             <svg viewBox="0 0 24 24"><path d="M7 6v12M18 6l-8 6 8 6z" /></svg>
           </button>
           <button id="play" class="play" data-state="paused" title="Play / pause (Space)" aria-label="Play">
             <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" /></svg>
             <svg class="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" /></svg>
           </button>
-          <button id="next" class="icon-btn" title="Next cue (→)" aria-label="Next cue">
+          <button id="next" class="icon-btn" title="Next cue (Shift + →)" aria-label="Next cue">
             <svg viewBox="0 0 24 24"><path d="M17 6v12M6 6l8 6-8 6z" /></svg>
           </button>
           <input id="scrub" type="range" min="0" max="1" step="0.001" value="0" aria-label="Timeline" />
@@ -155,6 +178,12 @@
           <div class="card"><div class="card-head"><h2>Sync report</h2></div><ul id="report" class="list"></ul></div>
         </div>
       </section>
+
+      <aside id="scenes" class="scenes" aria-label="Scenes">
+        <div class="scenes-head"><h2>Scenes</h2><span id="scenes-count" class="hint"></span></div>
+        <div id="scene-grid" class="scene-grid" role="list"></div>
+        <p class="hint scenes-empty">Build a script to see its scenes here.</p>
+      </aside>
     </main>
 
     <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>

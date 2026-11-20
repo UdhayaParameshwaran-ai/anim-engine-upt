@@ -192,6 +192,8 @@ select option { background: var(--surface); color: var(--fg); }
   display: grid;
   grid-template-columns: minmax(360px, 30%) 1fr;
 }
+/* After the first build, a third column lists the scenes. */
+#app.has-scenes { grid-template-columns: minmax(340px, 28%) 1fr minmax(240px, 280px); }
 
 .side {
   display: flex;
@@ -397,6 +399,73 @@ select option { background: var(--surface); color: var(--fg); }
 #waiting .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.2; transform: scale(0.7); } }
 
+/* On-video controls: back 10 s, play/pause, forward 10 s; click to play/pause, double click a side to skip. */
+.vc { position: absolute; inset: 0; z-index: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; cursor: pointer; user-select: none; }
+.vc[hidden] { display: none; }
+.vc.idle { cursor: none; }
+.vc-zone { min-width: 0; }
+.vc-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  transition: opacity 0.25s ease;
+}
+.vc.idle .vc-center { opacity: 0; pointer-events: none; }
+.vc[data-state="playing"]:not(:hover):not(:focus-within) .vc-center { opacity: 0; }
+.vc-btn {
+  display: grid;
+  place-items: center;
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s, transform 0.15s;
+}
+.vc-btn:hover { background: rgba(0, 0, 0, 0.72); }
+.vc-btn:active { transform: scale(0.94); }
+.vc-btn:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+.vc-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vc-skip span { position: absolute; font: 600 9px/1 var(--font); top: 50%; left: 50%; transform: translate(-50%, -38%); }
+.vc-play { width: 68px; height: 68px; }
+.vc-play svg { width: 30px; height: 30px; }
+.vc-play .i-play path { fill: currentColor; stroke: none; }
+.vc-play .i-pause { display: none; stroke-width: 3; }
+.vc[data-state="playing"] .vc-play .i-play { display: none; }
+.vc[data-state="playing"] .vc-play .i-pause { display: block; }
+.vc-flash {
+  position: absolute;
+  top: 50%;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  font: 600 14px var(--font);
+  opacity: 0;
+  transform: translateY(-50%) scale(0.9);
+  pointer-events: none;
+}
+.vc-flash-left { left: 12%; }
+.vc-flash-right { right: 12%; }
+.vc-flash.on { animation: vc-flash 0.65s ease-out; }
+@keyframes vc-flash {
+  15% { opacity: 1; transform: translateY(-50%) scale(1); }
+  70% { opacity: 1; transform: translateY(-50%) scale(1); }
+  100% { opacity: 0; transform: translateY(-50%) scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vc-center, .vc-btn { transition: none; }
+  .vc-flash.on { animation: none; opacity: 1; transform: translateY(-50%); }
+}
+
 .studio-overlay rect { fill: none; stroke-width: 2; }
 .studio-overlay text { font: 500 15px var(--mono); stroke: none; }
 .studio-overlay .shown rect { stroke: rgba(255, 255, 255, 0.85); stroke-dasharray: 6 6; }
@@ -565,15 +634,63 @@ select option { background: var(--surface); color: var(--fg); }
 #inspector tr.hidden td { opacity: 0.35; }
 #inspector tr.active td:first-child a { font-weight: 600; border-bottom: 2px solid var(--fg); }
 
+/* ------------------------------------------------------------------ scenes */
+
+.scenes { display: none; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
+#app.has-scenes .scenes { display: flex; }
+.scenes-head { display: flex; align-items: baseline; gap: 10px; padding: 16px 16px 10px; }
+.scenes-head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.scenes-empty { padding: 0 16px; }
+.scene-grid:not(:empty) + .scenes-empty { display: none; }
+.scene-grid {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 12px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+.sg-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.sg-card:hover { border-color: var(--line-strong); }
+.sg-card.on { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
+.sg-open { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; color: inherit; }
+.sg-open:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+.sg-thumb { display: block; position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--stage-bg); }
+.sg-thumb .sg-shot { transform: scale(var(--sg-k, 0.125)); transform-origin: 0 0; pointer-events: none; }
+.sg-meta { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px 0; }
+.sg-n { font: 600 11px var(--mono); color: var(--fg-3); flex: none; }
+.sg-title { font-size: 13px; font-weight: 500; line-height: 1.3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-sub { display: flex; align-items: center; gap: 6px; padding: 4px 10px 8px; font-size: 11px; color: var(--fg-3); }
+.sg-time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.sg-tpl { padding: 1px 6px; border-radius: 999px; background: var(--muted-bg); color: var(--fg-2); }
+.sg-src { margin-left: auto; padding: 1px 6px; border: 1px solid var(--line); border-radius: 6px; background: none; font: 11px var(--mono); color: var(--fg-2); cursor: pointer; }
+.sg-src:hover { border-color: var(--line-strong); color: var(--fg); }
+
+@media (max-width: 1400px) {
+  #app.has-scenes { grid-template-columns: minmax(320px, 27%) 1fr 220px; }
+  .scene-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1100px) {
-  #app { grid-template-columns: 1fr; }
+  #app, #app.has-scenes { grid-template-columns: 1fr; }
+  .scenes { border-left: 0; border-top: 1px solid var(--line); }
+  .scene-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); overflow: visible; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); min-height: 420px; }
   .panels { grid-template-columns: 1fr; }
 }
 
 /* Render mode: the bare stage at native size, for the video exporter. */
 body.render { overflow: hidden; }
-body.render .topbar, body.render .side, body.render .transport, body.render #narration, body.render .card, body.render .panels { display: none; }
+body.render .topbar, body.render .side, body.render .transport, body.render #narration, body.render .card, body.render .panels, body.render .scenes, body.render .vc { display: none; }
 body.render #app { display: block; }
 body.render .viewer { padding: 0; background: none; }
 body.render .stage-card { border: 0; border-radius: 0; box-shadow: none; }
