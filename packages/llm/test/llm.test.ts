@@ -5,6 +5,7 @@ import { Director, type HistoryEntry } from "@anim/director";
 import { AssetLibrary, TEMPLATES } from "@anim/registry";
 import { describe, expect, it } from "vitest";
 import {
+  DECIDE_SYSTEM,
   ClaudeCodeClient,
   clean,
   keepPlanned,
@@ -71,6 +72,11 @@ class ScriptedLlm implements LlmClient {
   async chat(req: ChatRequest): Promise<ChatResult> {
     this.requests.push(req);
     const last = [...req.messages].reverse().find((m) => m.role === "user")!.content;
+    // The teaching decision is answered as a sensible model would: the use case the topic's words suggest, and its usual method.
+    if (req.messages[0]?.content === DECIDE_SYSTEM) {
+      const hint = /Likely use case, from the topic's words: (\w+)/.exec(last)?.[1] ?? "concept";
+      return { text: `# usecase: ${hint}`, provider: "scripted", model: "m", usage: { prompt: 10, completion: 5 } };
+    }
     return { text: this.respond(last, req), provider: "scripted", model: "m", usage: { prompt: 10, completion: 5 } };
   }
   async stream(req: ChatRequest, onDelta: (t: string) => void): Promise<ChatResult> {
@@ -90,12 +96,12 @@ water = icon:droplet "Water"
 const LEAF_BROKEN = `Here is the scene:
 scene leaf "Leaf" template=spotlight
 main = asset:leaf
-> Look closely at {1 the leaf}.
+> So look closely at {1 the leaf}.
 1 draw mian
 3 visit main`;
 const LEAF_OK = `scene leaf "Leaf" template=spotlight
 main = asset:leaf
-> Look closely at {1 the leaf}.
+> So look closely at {1 the leaf}.
 1 draw main
 end visit main`;
 
@@ -236,11 +242,11 @@ describe("generate", () => {
     const r = await generate("how plants make food", { client: llm, onScene: (_, i) => ready.push(i) });
     expect(r.ok).toBe(true);
     expect(r.repairs).toBe(1);
-    expect(r.calls).toBe(4); // outline + 2 scenes + 1 repair
+    expect(r.calls).toBe(5); // teaching decision + outline + 2 scenes + 1 repair
     expect(ready).toEqual([0, 1]);
     expect(r.diagnostics).toEqual([]);
     expect(r.script).toContain("1 draw main");
-    expect(r.usage).toEqual({ prompt: 40, completion: 20 });
+    expect(r.usage).toEqual({ prompt: 50, completion: 25 });
 
     // The repair prompt carried scene-relative line numbers and the compiler's messages.
     const repair = llm.requests.find((q) => q.messages.at(-1)!.content.startsWith("This scene has errors"))!;
@@ -255,12 +261,14 @@ describe("generate", () => {
     const seen: CallTrace[] = [];
     const r = await generate("how plants make food", { client: new ScriptedLlm(respond(true)), concurrency: 1, onCall: (c) => seen.push(c) });
     expect(r.trace.map((c) => [c.kind, c.scene, c.attempt])).toEqual([
+      ["decide", undefined, undefined],
       ["outline", undefined, undefined],
       ["scene", "need", undefined],
       ["scene", "leaf", undefined],
       ["repair", "leaf", 1],
     ]);
-    const [outline, need, leaf, repair] = r.trace;
+    const [decide, outline, need, leaf, repair] = r.trace;
+    expect(decide).toMatchObject({ status: "done", system: "outline", verdict: "concept · feynman: familiar → simple → gap → refine" });
     expect(outline).toMatchObject({ status: "done", system: "outline", verdict: "2 scenes: need, leaf", usage: { prompt: 10, completion: 5 }, provider: "scripted", model: "m" });
     expect(need).toMatchObject({ system: "scene", check: { errors: 0 }, verdict: "valid" });
     expect(leaf!.check!.errors).toBe(2);
@@ -272,7 +280,7 @@ describe("generate", () => {
     expect(repair!.reply).toContain("1 draw main");
     for (const c of r.trace) expect(c.ms).toBeGreaterThanOrEqual(0);
     // Each call is reported when it starts, when it ends and once validated (same id, so consumers upsert).
-    expect(seen.filter((c) => c.id === 3).map((c) => c.status)).toEqual(["running", "done", "done"]);
+    expect(seen.filter((c) => c.id === 4).map((c) => c.status)).toEqual(["running", "done", "done"]);
     expect(seen.find((c) => c.id === 3 && c.status === "running")!.reply).toBeUndefined();
   });
 
@@ -384,19 +392,39 @@ describe("generation fixes from the traced run", () => {
     expect(waits).toEqual([2000, 2000, 2000, 2000, 2000]);
   });
 
+  it("with a teaching plan, writes scenes in order: each reads the scenes before it and its part in the arc", async () => {
+    const llm = new ScriptedLlm((last) => (last.startsWith("Plan a narrated") ? OUTLINE : last.includes('Write scene "need"') ? NEED_OK : LEAF_OK));
+    await generate("how plants make food", { client: llm, concurrency: 3 });
+    const prompts = llm.requests.map((q) => q.messages.at(-1)!.content);
+    const plan = prompts.find((p) => p.startsWith("Plan a narrated"))!;
+    expect(plan).toContain("THE TEACHING PLAN IS DECIDED: use case concept, method feynman");
+    const leaf = prompts.find((p) => p.includes('Write scene "leaf"'))!;
+    // Scene 2 waited for scene 1's draft and reads it, although three calls could run at once.
+    expect(leaf).toContain("Already narrated in earlier scenes");
+    expect(leaf).toContain("need: Plants need light and water.");
+    expect(leaf).toContain("YOUR PART IN THE TEACHING ARC (the video teaches by feynman");
+    expect(leaf).toContain("This scene's beat is simple");
+    const need = prompts.find((p) => p.includes('Write scene "need"'))!;
+    expect(need).toContain("It opens the video: start with a familiar starting point");
+    expect(need).not.toContain("Already narrated");
+  });
+
   it("writes scenes one at a time on providers with a concurrency limit", async () => {
     const limited = tracker(new ScriptedLlm(plain), 1);
     await generate("plants", { client: limited });
     expect(limited.peak).toBe(1);
+    // Scenes written in order (a teaching plan) start one after another; without that, two run at once.
     const open = tracker(new ScriptedLlm(plain));
-    await generate("plants", { client: open });
+    await generate("plants", { client: open, inOrder: false });
     expect(open.peak).toBe(2);
   });
 
   it("plans with what choosing needs, and writes each scene with what its kind needs", async () => {
     const llm = new ScriptedLlm(plain);
     await generate("plants", { client: llm });
-    const [outline, scene] = llm.requests.map((q) => q.messages[0]!.content);
+    const [decide, outline, scene] = llm.requests.map((q) => q.messages[0]!.content);
+    // The teaching decision is a small call of its own, before the plan.
+    expect(decide).toBe(DECIDE_SYSTEM);
     expect(outline).toContain("PLANNING RULES");
     // Planning sees how much each template holds and what fits each page layout.
     expect(outline).toMatch(/template=converge \[2–5 items \+ result\]/);
@@ -445,7 +473,7 @@ describe("generation fixes from the traced run", () => {
 
     const off = new ScriptedLlm(answer(NEED_OK));
     await generate("plants", { client: off, qualityRepairs: false });
-    expect(off.requests).toHaveLength(3);
+    expect(off.requests).toHaveLength(4);
   });
 });
 

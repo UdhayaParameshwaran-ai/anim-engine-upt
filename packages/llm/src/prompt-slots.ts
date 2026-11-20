@@ -5,7 +5,7 @@ import type { PromptSettings } from "./settings.js";
  * (the verb list, the templates, the pictures, the numbers a setting controls) are slots written {{name}};
  * an edited text keeps its slots, so it follows the registry when it changes.
  */
-export const PROMPT_IDS = ["outline.system", "outline.user", "canvas.outline", "scene.system", "scene.user", "repair", "improve", "choose.system", "choose.user"] as const;
+export const PROMPT_IDS = ["decide.system", "decide.user", "outline.system", "outline.user", "canvas.outline", "scene.system", "scene.user", "repair", "improve", "choose.system", "choose.user"] as const;
 export type PromptId = (typeof PROMPT_IDS)[number];
 
 /** Prompts of the one-call mode: built the same way but not offered for editing (every scene is written by its own call). */
@@ -58,6 +58,8 @@ export const PROMPT_INFO: Record<PromptId, PromptInfo> = {
   "canvas.outline": { title: "Planner: one growing diagram", stage: "Planning", about: "The request when the whole video is one diagram that grows chapter by chapter." },
   "choose.system": { title: "Shape choice: system prompt", stage: "Planning", about: "The short call that picks one growing diagram or several scenes (mode Auto)." },
   "choose.user": { title: "Shape choice: request", stage: "Planning", about: "Its question about the topic." },
+  "decide.system": { title: "Teaching decision: system prompt", stage: "Planning", about: "The short call before the plan that picks the use case and the teaching method." },
+  "decide.user": { title: "Teaching decision: request", stage: "Planning", about: "The topic, the audience level, the use cases with their usual methods, and the methods." },
   "scene.system": { title: "Scene writer: system prompt", stage: "Writing scenes", about: "What each scene call knows: the script language, the rules for the chosen template, the verbs and the pictures." },
   "scene.user": { title: "Scene writer: request", stage: "Writing scenes", about: "The message that asks for one scene: the outline, what earlier scenes said, the template card." },
   repair: { title: "Repair: errors", stage: "Checking", about: "Sent with a scene that has errors." },
@@ -70,6 +72,9 @@ export const SLOT_INFO: Record<string, { about: string; required?: boolean }> = 
   level: { about: "the audience level the person chose (new, familiar or practitioner; default familiar)" },
   teaching: { about: "the audience card, the teaching methods that suit it, and the devices the planner places", required: true },
   audience_level: { about: "the audience card: vocabulary, sentence length and depth for the chosen level" },
+  methods: { about: "the teaching methods that suit the audience level, with their beats", required: true },
+  arc: { about: "this scene's part in the teaching arc: the method's voice, its beat and job, the link to the scene before, what to leave for the next, its devices" },
+  teaching_plan: { about: "the decided use case, method and the beat of every scene, which the plan fills in" },
   variety: { about: "templates the last videos used, with a nudge to vary" },
   planning_advice: { about: "planning advice (Planning settings; empty at standard length)" },
   usecases: { about: "the use cases the planner chooses from, each with how to plan it", required: true },

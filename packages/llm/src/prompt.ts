@@ -26,8 +26,8 @@ import {
   type TemplateManifest,
 } from "@anim/registry";
 import { lengthSpec, type LengthSpec } from "./length.js";
-import { guessUseCase, playbook, useCaseCatalogue, type UseCase } from "./usecases.js";
-import { audienceLine, DEFAULT_LEVEL, deviceList, methodCatalogue, type Level } from "./teaching.js";
+import { defaultMethodFor, guessUseCase, playbook, useCaseCatalogue, type UseCase } from "./usecases.js";
+import { audienceLine, DEFAULT_LEVEL, deviceList, methodCatalogue, type Decision, type Level } from "./teaching.js";
 import { PROMPT_IDS, Slots, type PromptId } from "./prompt-slots.js";
 import { DEFAULT_MAX_WORDS, planningAdvice, styleGuide, type PromptSettings } from "./settings.js";
 
@@ -515,7 +515,7 @@ scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true 
 <id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
 
 USE CASES (decide what the video is for, write it on the "# usecase:" line, and plan the pictures the way that use case says)
-${S.v("usecases", useCaseCatalogue())}
+${S.v("usecases", useCaseCatalogue(level))}
 
 ${S.v("teaching", teachingSection(level))}
 
@@ -550,7 +550,7 @@ The audience level is given by the person: plan for it; never write it in the pl
 
 METHODS (one for the whole video; its beats are the arc of the video)
 ${methodCatalogue(level)}
-- Take the use case's method unless the topic or this audience calls for another: the one listed with the use case, or one the AUDIENCE LEVEL says this audience often needs. Say why on the "# method:" line.
+- Take the method the use case lists for this audience unless the topic clearly needs another: the one listed with it (a common wrong idea calls for socratic), or one that fits this topic much better. Say why on the "# method:" line.
 - Every scene gets one beat of the method on its "# beat:" line, in the method's order: the first scene has the first beat, the last scene the last beat. A beat may run over two scenes in a row; leave out at most one beat.
 - One scene may borrow another method for its beat (· via: analogical): methods combine, but the main method keeps the arc.
 - Only socratic and discovery open with a question to the viewer. The others open with what their "opens" says: a problem, a situation, common ground, something familiar; their first scene has no question or prediction device.
@@ -591,7 +591,11 @@ Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS
 }
 
 /** First pass: plan the scenes without writing narration. */
-export function outlinePrompt(topic: string, scenes: { min: number; max: number }, recent: RecentUse = {}, spec: LengthSpec = STANDARD, settings: PromptSettings = {}): string {
+/**
+ * First pass: plan the scenes without writing narration. With `decided`, the use case, the method and every scene's
+ * beat are already chosen (decidePrompt), and the plan fills that arc in.
+ */
+export function outlinePrompt(topic: string, scenes: { min: number; max: number }, recent: RecentUse = {}, spec: LengthSpec = STANDARD, settings: PromptSettings = {}, decided?: Decision): string {
   const guess = guessUseCase(topic);
   const level = settings.level ?? DEFAULT_LEVEL;
   const advice = planningAdvice(spec, settings);
@@ -607,13 +611,13 @@ The viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefe
 ${S.v("topic", topic)}
 
 Audience level: ${S.v("level", level)}.
-${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${S.v("usecase_hint", guess ? `Likely use case: ${guess.name}, whose method is ${guess.method} (change either if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
+${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${decided ? S.v("teaching_plan", decidedBlock(decided)) : S.v("usecase_hint", guess ? `Likely use case: ${guess.name}, whose method is ${defaultMethodFor(guess, level)} (change either if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
-- right after the "motion" line, one comment line "# usecase: <name>" from USE CASES
+- right after the "motion" line, one comment line "# usecase: ${decided ? decided.usecase : "<name>"}"${decided ? "" : " from USE CASES"}
 - then the brief: "# question: …", "# example: …" (one concrete case with its real values, or none), "# outcome: …"
-- then the method: "# method: <method> · why: <one line>"
-- one "scene" line per scene (${S.v("scenes", `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>" and one comment line "# beat: <beat of the method> [· via: <method>] [· device: <devices>] · link: <how it follows from the scene before>" (the first scene has no link)
+- then the method: "# method: ${decided ? `${decided.method.name} · why: ${decided.why}` : "<method> · why: <one line>"}"
+- one "scene" line per scene (${S.v("scenes", decided ? `exactly ${decided.slots.length}` : `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>" and one comment line "# beat: <${decided ? "its beat from the list above" : "beat of the method"}> [· via: <method>] [· device: <devices>] · link: <how it follows from the scene before>" (the first scene has no link)
 - optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
 No elements, narration or actions yet.`);
 }
@@ -622,7 +626,7 @@ No elements, narration or actions yet.`);
  * Second pass: one complete scene, written against the whole outline and,
  * when earlier scenes are already written, what they say.
  */
-export function scenePrompt(outline: string, sceneId: string, earlier = "", canvas = false, settings: PromptSettings = {}, example = ""): string {
+export function scenePrompt(outline: string, sceneId: string, earlier = "", canvas = false, settings: PromptSettings = {}, example = "", arc = ""): string {
   const S = new Slots("scene.user", settings);
   const said = earlier ? `\n\nAlready narrated in earlier scenes (don't repeat it; build on it):\n${earlier}` : "";
   const plan = castPlan(outline);
@@ -643,7 +647,7 @@ export function scenePrompt(outline: string, sceneId: string, earlier = "", canv
 ${S.v("outline", outline)}${S.v("earlier_scenes", said)}${S.v("template_card", card)}${S.v("scene_example", example ? `
 
 A finished scene of this kind, for its pattern only (never copy its topic or numbers):
-${example}` : "")}${S.v("recurring", castBlock)}${S.v("carried", carried)}
+${example}` : "")}${S.v("recurring", castBlock)}${S.v("carried", carried)}${S.v("arc", arc ? `\n\n${arc}` : "")}
 
 ${S.v("task", canvas
     ? `Write scene "${sceneId}" in full: its scene line, ALL element declarations, then one step per "# chapter:" line with its narration lines (with cues) and actions.
@@ -651,6 +655,49 @@ Output only this scene, starting with its "scene" line.`
     : `Write scene "${sceneId}" in full: its scene line, element declarations, narration lines with cues, and actions.
 Cover only this scene's goal; other scenes cover the rest.
 Output only this scene, starting with its "scene" line.`)}`);
+}
+
+/** The decided teaching plan, as the plan request states it: the method and the beat of every scene, in order. */
+function decidedBlock(d: Decision): string {
+  const list = d.slots.map((b, i) => `  ${i + 1}. ${b}${i === 0 ? ` (the video opens with ${d.method.opens})` : i === d.slots.length - 1 ? ` (the video ends with ${d.method.ends})` : ""}`).join("\n");
+  return `THE TEACHING PLAN IS DECIDED: use case ${d.usecase}, method ${d.method.name} (${d.why}).
+Write exactly ${d.slots.length} scenes, in this order; each scene's "# beat:" line starts with its beat:
+${list}
+Each scene does its beat's job in the ${d.method.name} arc (${d.method.beats.join(" → ")}); a scene may borrow another method for its beat (· via: <method>).
+A beat is the scene's job, not its name: the scene id and title say what the scene is about ("The cheapest road first", never "The Problem" or "Steps").
+`;
+}
+
+/** The system prompt of the call that decides how a video teaches: what kind of video it is and the method. */
+export const DECIDE_SYSTEM = "You decide how a narrated explainer video teaches its topic: what kind of video it is and which teaching method it uses. Reply with exactly two lines, nothing else.";
+
+export function decideSystemPrompt(settings: PromptSettings = {}): string {
+  return new Slots("decide.system", settings).done(DECIDE_SYSTEM);
+}
+
+/**
+ * The teaching decision, made before the plan: the use case (it decides the pictures) and the method (it decides the
+ * order of the ideas), for the audience level the person chose. A small call: no pictures, templates or layouts.
+ */
+export function decidePrompt(topic: string, settings: PromptSettings = {}): string {
+  const level = settings.level ?? DEFAULT_LEVEL;
+  const guess = guessUseCase(topic);
+  const S = new Slots("decide.user", settings);
+  return S.done(`Topic: ${S.v("topic", topic)}
+
+${S.v("audience_level", audienceLine(level))}
+
+USE CASES (what kind of video this is, and the method it usually teaches with for this audience)
+${S.v("usecases", useCaseCatalogue(level, false))}
+
+METHODS
+${S.v("methods", methodCatalogue(level))}
+${S.v("usecase_hint", guess ? `\nLikely use case, from the topic's words: ${guess.name} (change it only if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
+Keep the use case's usual method. Take another only when this topic clearly needs it: the one listed with the use case (a common wrong idea calls for socratic), or one that fits this topic much better than the usual one.
+
+Reply with exactly these two lines:
+# usecase: <name>
+# method: <method> · why: <one line: why this method fits this topic and this audience>`);
 }
 
 /** The system prompt of the call that decides between one growing diagram and several scenes. */
@@ -920,6 +967,8 @@ export function defaultPrompts(assets: AssetManifest[], domain?: Domain): Record
     "outline.user": outlinePrompt("", { min: 2, max: 4 }, {}, undefined, tokens),
     "canvas.outline": canvasOutlinePrompt("", { min: 4, max: 6 }, {}, tokens),
     "choose.system": chooseSystemPrompt(tokens),
+    "decide.system": decideSystemPrompt(tokens),
+    "decide.user": decidePrompt("", tokens),
     "choose.user": canvasChoicePrompt("", tokens),
     "scene.system": sceneSystemPrompt(kind, assets, false, undefined, tokens),
     "scene.user": scenePrompt("", "s", "", false, tokens),

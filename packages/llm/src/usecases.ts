@@ -1,4 +1,5 @@
 import type { PromptSettings } from "./settings.js";
+import type { Level } from "./teaching.js";
 
 /**
  * What a video is for. The kind of explanation decides how it is planned and written: an algorithm is a run of an
@@ -17,6 +18,8 @@ export interface UseCase {
   plan: string;
   /** The teaching method this kind of video uses unless the topic or audience calls for another (teaching.ts). */
   method: string;
+  /** A different usual method for an audience level (concepts are taught to newcomers by analogy, to practitioners from a problem). */
+  byLevel?: Partial<Record<Level, string>>;
   /** When to take another method instead, for the planner. */
   switch?: string;
   /** How to write each scene (every scene call of this video reads this). */
@@ -85,6 +88,7 @@ export const USE_CASES: readonly UseCase[] = [
     when: "how something is built from parts that work together: architectures, pipelines, compilers, operating systems",
     plan: "The core is ONE growing scene that draws the whole system (architecture or flow), one chapter per part or stage, following one request or one piece of data through it; how it behaves under load or when one part fails can have a scene of its own.",
     method: "causal",
+    byLevel: { practitioner: "problem-based" },
     switch: "problem-based for practitioners, starting from the failure they meet at work",
     scene: "",
     keywords: /\b(architecture|pipeline|components?|stages|how .* is built|how .* works internally|operating system|compiler)\b/i,
@@ -94,7 +98,8 @@ export const USE_CASES: readonly UseCase[] = [
     when: "what something is and how it works as an idea: a token format, a data structure, a language feature, a field in a protocol",
     plan: "Show its parts on one picture, and run one example through it end to end on screen. Separate scenes are fine here.",
     method: "feynman",
-    switch: "analogical for new viewers when an everyday thing has the same shape; socratic when a common wrong idea is the point",
+    byLevel: { new: "analogical", practitioner: "problem-based" },
+    switch: "socratic when a common wrong idea is the point",
     scene: "",
     keywords: /\b(what is|what are|explain|anatomy|structure of|format)\b/i,
   },
@@ -112,6 +117,7 @@ export const USE_CASES: readonly UseCase[] = [
     when: "doing something with commands or code, step by step: setting up, deploying, a workflow",
     plan: "One scene per step or small group of steps, each showing the real command or code and what it changes, up to the visible result.",
     method: "worked-example",
+    byLevel: { practitioner: "problem-based" },
     switch: "problem-based when the viewer arrives with a failure to fix",
     scene:
       "Show the real commands or code (a code or terminal element), typed line by line. Each sentence is one step; show what the command changes and end on the visible result.",
@@ -147,6 +153,11 @@ export const USE_CASES: readonly UseCase[] = [
 
 export const findUseCase = (name: string | undefined): UseCase | undefined => USE_CASES.find((u) => u.name === (name ?? "").trim().toLowerCase());
 
+/** The method a use case usually teaches with, for this audience level. */
+export function defaultMethodFor(uc: UseCase | undefined, level: Level): string | undefined {
+  return uc ? (uc.byLevel?.[level] ?? uc.method) : undefined;
+}
+
 /** The use case a topic's words suggest (a hint for the planner), or undefined. The order above is the order of precedence. */
 export function guessUseCase(topic: string): UseCase | undefined {
   return USE_CASES.find((u) => u.keywords.test(topic));
@@ -158,8 +169,13 @@ export function useCaseOf(outline: string): UseCase | undefined {
 }
 
 /** The planner's menu: each use case, when it applies and how to plan it. */
-export function useCaseCatalogue(): string {
-  return USE_CASES.map((u) => `  ${u.name.padEnd(10)} ${u.when}\n             → pictures: ${u.plan}\n             → method: ${u.method}${u.switch ? ` (or ${u.switch})` : ""}`).join("\n");
+export function useCaseCatalogue(level: Level = "familiar", pictures = true): string {
+  return USE_CASES.map((u) => {
+    const usual = defaultMethodFor(u, level)!;
+    // The alternative is left out where the level already made it the usual method.
+    const other = u.switch && !u.switch.startsWith(usual) ? ` (or ${u.switch})` : "";
+    return `  ${u.name.padEnd(10)} ${u.when}${pictures ? `\n             → pictures: ${u.plan}` : ""}\n             → method: ${usual}${other}`;
+  }).join("\n");
 }
 
 /** What every scene call of a video reads: the person's own playbook for the use case, else the built-in one. Empty when there is none. */

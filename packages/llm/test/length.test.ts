@@ -39,10 +39,15 @@ describe("length presets", () => {
       chat: async (req) => (asked.push(req.messages.map((m) => m.content).join(" | ")), reply),
       stream: async () => reply,
     };
+    const plan = () => asked.find((a) => a.includes("Plan a narrated"))!;
+    // With the teaching decision first, the plan gets the method's scenes, as many as the range allows.
     await generate("how DNS works", { client, length: "long", qualityRepairs: false }).catch(() => undefined);
-    expect(asked[0]).toContain("6–9 scenes");
+    expect(plan()).toContain("exactly 6 scenes");
     asked.length = 0;
     await generate("how DNS works", { client, length: "long", scenes: { min: 3, max: 3 }, qualityRepairs: false }).catch(() => undefined);
-    expect(asked[0]).toContain("3–3 scenes");
+    expect(plan()).toContain("exactly 3 scenes");
+    asked.length = 0;
+    await generate("how DNS works", { client, length: "long", qualityRepairs: false, decideTeaching: false }).catch(() => undefined);
+    expect(asked[0]).toContain("6–9 scenes");
   });
 });

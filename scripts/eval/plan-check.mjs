@@ -66,13 +66,13 @@ const results = await pool(jobs, Number(par), async ({ t, level }) => {
   }
   const outline = readFileSync(file, "utf8");
   const usecase = llm.useCaseOf(outline) ?? llm.guessUseCase(TOPICS[t]);
-  const teach = llm.teachingOf(outline, level, usecase?.method, { min: 4, max: 6 });
+  const teach = llm.teachingOf(outline, level, llm.defaultMethodFor(usecase, level), { min: 4, max: 6 });
   const method = teach.method?.name ?? teach.methodName ?? "";
   return {
     t,
     level,
     usecase: usecase?.name,
-    defaultMethod: usecase?.method,
+    defaultMethod: llm.defaultMethodFor(usecase, level),
     method,
     why: teach.why,
     accepted: ACCEPT[t][level].includes(method),

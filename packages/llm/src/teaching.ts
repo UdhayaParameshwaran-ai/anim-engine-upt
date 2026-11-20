@@ -19,8 +19,6 @@ export interface AudienceCard {
   vocabulary: string;
   sentences: string;
   depth: string;
-  /** Methods this audience often needs, which the plan may take instead of the use case's default (with a why). */
-  methods: readonly string[];
 }
 
 export const AUDIENCES: Record<Level, AudienceCard> = {
@@ -30,7 +28,6 @@ export const AUDIENCES: Record<Level, AudienceCard> = {
     vocabulary: "accessible: everyday words first; a technical term only after the viewer has seen the thing it names, defined in that sentence, then used the same way every time",
     sentences: "short, one idea at a time",
     depth: "intuitive: what it does and why, every step shown, one familiar comparison welcome",
-    methods: ["analogical", "feynman", "discovery"],
   },
   familiar: {
     level: "familiar",
@@ -38,7 +35,6 @@ export const AUDIENCES: Record<Level, AudienceCard> = {
     vocabulary: "intermediate: the field's ordinary terms without definitions; this topic's own terms defined where they first appear",
     sentences: "short to moderate",
     depth: "conceptual: how it works and why it is built that way, with one real example",
-    methods: [],
   },
   practitioner: {
     level: "practitioner",
@@ -46,7 +42,6 @@ export const AUDIENCES: Record<Level, AudienceCard> = {
     vocabulary: "advanced: precise technical names, commands and numbers; no everyday comparisons",
     sentences: "direct and precise",
     depth: "technical: the mechanism, its trade-offs and where it fails in practice",
-    methods: ["problem-based", "worked-example", "contrastive"],
   },
 };
 
@@ -81,6 +76,8 @@ export interface Method {
   when: string;
   /** The beats of the arc, in order; every scene of the video carries one of them. */
   beats: readonly string[];
+  /** What a scene with each beat does in its narration, as the scene writer is told. */
+  jobs: Readonly<Record<string, string>>;
   /** How the video opens and ends with this method. */
   opens: string;
   ends: string;
@@ -94,6 +91,12 @@ export const METHODS: readonly Method[] = [
     name: "feynman",
     when: "an abstract or technical idea that can be said simply first and then made precise",
     beats: ["familiar", "simple", "gap", "refine"],
+    jobs: {
+      "familiar": "Start from something the viewer already understands, named plainly; the topic's own terms come later.",
+      "simple": "Explain the idea in the simplest true words, on the picture.",
+      "gap": "Show, on a concrete case, what the simple version leaves out or gets wrong.",
+      "refine": "Give the precise version that closes that gap, in the real terms."
+    },
     opens: "a familiar starting point the viewer already understands",
     ends: "the refined, precise version of the idea",
     tone: "conversational",
@@ -102,6 +105,13 @@ export const METHODS: readonly Method[] = [
     name: "socratic",
     when: "reasoning, or a topic where people hold a common wrong idea that a question can expose",
     beats: ["question", "prediction", "evidence", "follow-up", "conclusion"],
+    jobs: {
+      "question": "Put one concrete question to the viewer and leave it open: no answer, no definition.",
+      "prediction": "Say the guess most people make and why it seems right, so the viewer commits to it.",
+      "evidence": "Show what really happens on the example, step by step, so the guess can be checked against it.",
+      "follow-up": "Ask the next question the evidence raises, and answer it.",
+      "conclusion": "Give the answer the questions led to, and tie it back to the opening question."
+    },
     opens: "a question to the viewer, with time to guess",
     ends: "the conclusion the questions led to",
     tone: "curious",
@@ -110,6 +120,13 @@ export const METHODS: readonly Method[] = [
     name: "worked-example",
     when: "a procedure, algorithm or calculation shown step by step on real values",
     beats: ["problem", "steps", "reasoning", "result", "apply"],
+    jobs: {
+      "problem": "State the concrete problem with its real values; no definition and no rule yet.",
+      "steps": "Solve it on the real values, one step per sentence, saying the values aloud.",
+      "reasoning": "Say why the key step is the right move: the rule behind what the viewer just watched.",
+      "result": "Show the finished result and check it.",
+      "apply": "Give a new small case, ask the viewer to apply the same steps, then give the answer. Do not restate the procedure."
+    },
     opens: "the concrete problem to solve",
     ends: "a new case the viewer can now solve the same way",
     tone: "authoritative",
@@ -118,6 +135,12 @@ export const METHODS: readonly Method[] = [
     name: "contrastive",
     when: "two or more things set against each other (A vs B, which to choose)",
     beats: ["common-ground", "dimensions", "difference", "when-to-use"],
+    jobs: {
+      "common-ground": "Say what the options share and the job they both do.",
+      "dimensions": "Put the options on the same axes, one axis at a time, on the same case.",
+      "difference": "Show the one difference that matters most, on that case.",
+      "when-to-use": "Say when to choose each, as a rule the viewer can apply to their own case."
+    },
     opens: "what the options share",
     ends: "when to use each",
     tone: "analytical",
@@ -126,6 +149,12 @@ export const METHODS: readonly Method[] = [
     name: "causal",
     when: "one event leads to another: what happens when, how a system or protocol behaves",
     beats: ["condition", "trigger", "mechanism", "consequence"],
+    jobs: {
+      "condition": "Set up the starting situation, as it is before anything happens.",
+      "trigger": "Show the event that starts the chain.",
+      "mechanism": "Follow the chain: each step causes the next (so, which means, that is why).",
+      "consequence": "Show where the chain leads and what that means for the viewer."
+    },
     opens: "the starting situation",
     ends: "the consequence and what it means",
     tone: "conversational",
@@ -134,6 +163,13 @@ export const METHODS: readonly Method[] = [
     name: "problem-based",
     when: "a real problem the viewer meets, with the concepts introduced as the tools that solve it",
     beats: ["problem", "constraints", "investigation", "concepts", "solution"],
+    jobs: {
+      "problem": "Show the problem the way the viewer meets it: the real symptom, not the textbook name.",
+      "constraints": "Say what makes it hard: what any fix has to respect.",
+      "investigation": "Try the obvious fix or follow the evidence, and show where it fails.",
+      "concepts": "Bring in the concept as the tool that fixes exactly that failure.",
+      "solution": "Show the solution working on the original problem, and why it works."
+    },
     opens: "the problem as the viewer would meet it",
     ends: "the solution, and why it works",
     tone: "investigative",
@@ -142,6 +178,13 @@ export const METHODS: readonly Method[] = [
     name: "discovery",
     when: "an outcome that can be watched before it is explained, an intuitive or surprising behaviour",
     beats: ["observation", "prediction", "experiment", "discovery", "formal"],
+    jobs: {
+      "observation": "Show something to watch before any explanation.",
+      "prediction": "Ask the viewer what will happen next and give them a moment to guess.",
+      "experiment": "Run it and show what really happens.",
+      "discovery": "Point out the pattern in what happened.",
+      "formal": "Name the rule and state it precisely."
+    },
     opens: "something to observe, then a prediction to make",
     ends: "the formal rule behind what was observed",
     tone: "curious",
@@ -151,6 +194,12 @@ export const METHODS: readonly Method[] = [
     name: "analogical",
     when: "an abstract idea for viewers new to the field, where an everyday thing has the same shape",
     beats: ["familiar", "mapping", "new-concept", "limits"],
+    jobs: {
+      "familiar": "Start inside the everyday thing and make its rule clear.",
+      "mapping": "Carry each part of the everyday thing over to the real one, part by part.",
+      "new-concept": "Explain the real thing in its own terms, leaning on the mapping.",
+      "limits": "Say plainly where the comparison stops being true."
+    },
     opens: "the familiar everyday thing",
     ends: "where the comparison stops being true",
     tone: "conversational",
@@ -162,6 +211,7 @@ export const findMethod = (name: string | undefined): Method | undefined => METH
 
 /** Methods that open by putting a question to the viewer; the others open with a problem, a situation or something familiar. */
 const OPENS_WITH_QUESTION = new Set(["socratic", "discovery"]);
+export const opensWithQuestion = (m: Method): boolean => OPENS_WITH_QUESTION.has(m.name);
 
 /** The planner's menu of methods, for the level the person chose. */
 export function methodCatalogue(level: Level = DEFAULT_LEVEL): string {
@@ -173,11 +223,122 @@ export function methodCatalogue(level: Level = DEFAULT_LEVEL): string {
 /** The audience card as the prompts state it. */
 export function audienceLine(level: Level = DEFAULT_LEVEL): string {
   const a = AUDIENCES[level];
-  return `AUDIENCE LEVEL: ${level} (${a.who})\n- Vocabulary: ${a.vocabulary}.\n- Sentences: ${a.sentences}.\n- Depth: ${a.depth}.${a.methods.length ? `\n- Methods this audience often needs: ${a.methods.join(", ")}.` : ""}`;
+  return `AUDIENCE LEVEL: ${level} (${a.who})\n- Vocabulary: ${a.vocabulary}.\n- Sentences: ${a.sentences}.\n- Depth: ${a.depth}.`;
 }
 
 export function deviceList(): string {
   return Object.entries(DEVICES).map(([k, v]) => `  ${k.padEnd(14)} ${v}`).join("\n");
+}
+
+/** The teaching decision a plan is written to: the use case, the method and why, and the beat of every scene. */
+export interface Decision {
+  usecase: string;
+  method: Method;
+  why: string;
+  /** One beat per scene, in order. */
+  slots: string[];
+}
+
+/**
+ * The method's beats spread over a scene count within `range`: one scene per beat when the range allows it, extra
+ * scenes going to the middle beats in turn (a long video runs its mechanism over several scenes), never fewer beats
+ * than the first and the last.
+ */
+export function skeleton(method: Method, range: { min: number; max: number }): string[] {
+  const beats = [...method.beats];
+  const n = Math.max(2, Math.min(Math.max(beats.length, range.min), range.max));
+  const counts = beats.map(() => 1);
+  const middle = beats.map((_, i) => i).slice(1, -1);
+  for (let extra = n - beats.length, k = 0; extra > 0 && middle.length; extra--, k++) counts[middle[k % middle.length]!]!++;
+  const slots = beats.flatMap((b, i) => Array<string>(counts[i]!).fill(b));
+  // Fewer scenes than beats: keep the first and the last beat, drop from the middle.
+  while (slots.length > n) slots.splice(Math.floor(slots.length / 2), 1);
+  return slots;
+}
+
+/**
+ * The decision call's reply (`# usecase: …` and `# method: … · why: …`), checked: an unknown use case falls back to
+ * `fallback`, an unknown method or one that does not suit the level to the use case's usual method.
+ */
+export function parseDecision(reply: string, level: Level, range: { min: number; max: number }, usecases: readonly { name: string; method: string; byLevel?: Partial<Record<Level, string>> }[], fallback?: string): Decision | undefined {
+  const named = /^\s*#\s*usecase:\s*([a-z-]+)/im.exec(reply)?.[1]?.toLowerCase();
+  const uc = usecases.find((u) => u.name === named) ?? usecases.find((u) => u.name === fallback);
+  if (!uc) return undefined;
+  const usual = findMethod(uc.byLevel?.[level] ?? uc.method)!;
+  const m = /^\s*#\s*method:\s*([a-z-]+)\s*(?:·\s*why:\s*(.+))?$/im.exec(reply);
+  let method = findMethod(m?.[1]) ?? usual;
+  if (method.avoid?.includes(level)) method = usual;
+  const why = method === usual ? (m?.[2]?.trim() || "the usual method for this kind of video and audience") : m?.[2]?.trim() || `chosen over ${usual.name}`;
+  return { usecase: uc.name, method, why, slots: skeleton(method, range) };
+}
+
+/**
+ * Holds a written plan to its decision: the use case and method lines are the decided ones, every scene's beat is
+ * the one its place in the skeleton gives it (the planner's via, devices and link stay), a scene without a beat line
+ * gets one, and the last scene is never a recap (its ending is the method's).
+ */
+export function applyDecision(outline: string, d: Decision): string {
+  const lines = outline.split("\n").filter((l) => !/^\s*#\s*(usecase|method):/i.test(l));
+  const motion = lines.findIndex((l) => /^\s*motion\s/.test(l));
+  const video = lines.findIndex((l) => /^\s*video\s/.test(l));
+  lines.splice(motion >= 0 ? motion + 1 : video + 1, 0, `# usecase: ${d.usecase}`, `# method: ${d.method.name} · why: ${d.why}`);
+  const scenes = lines.map((l, i) => (/^\s*scene\s/.test(l) ? i : -1)).filter((i) => i >= 0);
+  const out: string[] = [];
+  let k = -1;
+  lines.forEach((l, i) => {
+    if (/^\s*scene\s/.test(l)) k++;
+    const slot = d.slots[Math.min(k, d.slots.length - 1)];
+    const last = k === scenes.length - 1;
+    if (k >= 0 && slot && /^\s*#\s*beat:/i.test(l)) {
+      let beat = l.replace(/^(\s*#\s*beat:\s*)[^·]*/i, `$1${slot} `).replace(/ +·/, " ·").trimEnd();
+      // The method fixes how the video opens and ends: no question to the viewer in an opening that is not one, no recap at the end.
+      const drop = [...(last ? ["recap"] : []), ...(k === 0 && !opensWithQuestion(d.method) ? ["question", "prediction"] : [])];
+      if (drop.length) beat = beat.replace(/(·\s*devices?:\s*)([^·]*)/i, (_, p: string, v: string) => `${p}${v.split(/,\s*/).filter((x) => !drop.some((w) => new RegExp(`^${w}\\b`, "i").test(x.trim()))).join(", ")} `).replace(/·\s*devices?:\s*(?=·|$)/i, "").replace(/\s+·/g, " ·").trimEnd();
+      out.push(beat);
+      return;
+    }
+    out.push(l);
+    // A scene whose comment lines carry no beat gets one after them.
+    const end = scenes.find((s) => s > i) ?? lines.length;
+    if (k >= 0 && slot && i === end - 1 && !lines.slice(scenes[k]!, end).some((x) => /^\s*#\s*beat:/i.test(x))) out.push(`# beat: ${slot}`);
+  });
+  return out.join("\n");
+}
+
+/** How a scene writer carries out a device the plan put on its scene. */
+const DEVICE_HOW: Partial<Record<Device, string>> = {
+  prediction: "ask the viewer what will happen, in a sentence of its own, then write `wait 1.5` on its own line before the sentence that shows the answer",
+  question: "one real question to the viewer that the next sentences answer",
+  misconception: "say the plausible wrong idea as the viewer's own reasonable guess, let it fail on the example, then give the right one",
+  analogy: "one everyday comparison, mapped onto the real parts, and say where it stops being true",
+};
+
+/**
+ * What one scene's writer is told about the teaching plan: the method's voice, this scene's beat and its job, how
+ * its first sentence joins the scene before, what it leaves for the next scene, and how to carry out its devices.
+ * Empty when the plan names no known method or does not plan this scene.
+ */
+export function arcBrief(plan: TeachingPlan, sceneId: string): string {
+  const m = plan.method;
+  const i = plan.scenes.findIndex((s) => s.id === sceneId);
+  if (!m || i < 0) return "";
+  const s = plan.scenes[i]!;
+  const next = plan.scenes[i + 1];
+  const via = s.via ? findMethod(s.via) : undefined;
+  const job = s.beat ? m.jobs[s.beat] : undefined;
+  const lines = [
+    `YOUR PART IN THE TEACHING ARC (the video teaches by ${m.name}: ${m.beats.join(" → ")})`,
+    `- Voice: ${TONES[m.tone]}.`,
+    `- This scene's beat is ${s.beat ?? "?"}${job ? `: ${job}` : "."}${via ? ` It borrows ${via.name} for that: ${via.when}.` : ""}`,
+    i === 0
+      ? `- It opens the video: start with ${m.opens}.${OPENS_WITH_QUESTION.has(m.name) ? "" : " Do not open with a question to the viewer."}`
+      : `- Its first sentence picks up where the scene before left off${s.link ? `: ${s.link}` : ""}. Never restart cold with a definition.`,
+    next
+      ? `- Leave the next scene its part (${next.beat ?? "what comes next"}${next.beat && m.jobs[next.beat] ? `: ${m.jobs[next.beat]!.charAt(0).toLowerCase()}${m.jobs[next.beat]!.slice(1)}` : ""}); do not do it here.`
+      : `- It is the last scene: end with ${m.ends}. No recap of earlier scenes and no list of points to remember.`,
+    ...s.devices.filter((d): d is Device => d in DEVICES).map((d) => `- ${d}: ${DEVICE_HOW[d] ?? DEVICES[d]}.`),
+  ];
+  return lines.join("\n");
 }
 
 /** What the plan says about teaching: the method, and per scene its beat, a borrowed method, devices and link. */

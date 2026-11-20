@@ -3,11 +3,11 @@ import { print, printScene, type Diagnostic } from "@anim/dsl";
 import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type AssetManifest, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
-import { briefOf, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, systemPrompt, type RecentUse } from "./prompt.js";
-import { DEFAULT_LEVEL, teachingOf, type TeachingPlan } from "./teaching.js";
-import { qualityIssues, qualityReport } from "./quality.js";
+import { briefOf, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, decidePrompt, decideSystemPrompt, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, systemPrompt, type RecentUse } from "./prompt.js";
+import { applyDecision, arcBrief, DEFAULT_LEVEL, opensWithQuestion, parseDecision, teachingOf, type Decision, type TeachingPlan } from "./teaching.js";
+import { qualityIssues, qualityReport, type SceneArc } from "./quality.js";
 import { detectLength, type Length } from "./length.js";
-import { exampleFor, guessUseCase, useCaseOf, type UseCase } from "./usecases.js";
+import { defaultMethodFor, exampleFor, guessUseCase, USE_CASES, useCaseOf, type UseCase } from "./usecases.js";
 import { effectiveSpec, type PromptSettings } from "./settings.js";
 
 export interface GenerateOptions {
@@ -32,6 +32,16 @@ export interface GenerateOptions {
    * "auto": a short LLM call decides from the topic.
    */
   canvas?: boolean | "auto";
+  /**
+   * Decide the use case and the teaching method in a small call before the plan, so the plan is written to the
+   * method's beats (one per scene, in order) instead of choosing and following them at once. Default true.
+   */
+  decideTeaching?: boolean;
+  /**
+   * With a teaching plan, write the scenes in order: each starts once the scene before has its first draft and reads
+   * what the earlier scenes say, so it can pick up where they left off (repairs still overlap). Default true.
+   */
+  inOrder?: boolean;
   /** One extra LLM pass for a scene that is valid but weak (box-only, placeholders, vague quotes). Default true. */
   qualityRepairs?: boolean;
   /**
@@ -55,7 +65,7 @@ export interface GenerateOptions {
   onCall?: (call: CallTrace) => void;
 }
 
-export type CallKind = "outline" | "scene" | "repair" | "quality" | "single" | "choose";
+export type CallKind = "decide" | "outline" | "scene" | "repair" | "quality" | "single" | "choose";
 
 /** One LLM call: what was asked, what came back, how long it took and what it cost. */
 export interface CallTrace {
@@ -128,6 +138,8 @@ interface Ctx {
   usecase?: UseCase;
   /** The finished example each growing scene was shown, so its wording can be kept out of the scene. */
   examples?: Map<string, string>;
+  /** The plan's teaching lines; scenes are written and checked against their place in the arc. */
+  teach?: TeachingPlan;
 }
 
 interface CallMeta {
@@ -185,8 +197,8 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     if (routed.length) opts.onLog?.(`routed by shape: ${routed.join("; ")}`);
     const brief = briefOf(outline);
     if (!canvas) opts.onLog?.(brief.problems.length ? `brief incomplete: ${brief.problems.join("; ")}` : `brief: ${brief.question} → ${brief.outcome}`);
-    if (!canvas) {
-      const teach = teachingOf(outline, settings.level ?? DEFAULT_LEVEL, ctx.usecase?.method, range);
+    const teach = (ctx.teach = canvas ? undefined : teachingOf(outline, settings.level ?? DEFAULT_LEVEL, defaultMethodFor(ctx.usecase, settings.level ?? DEFAULT_LEVEL), range));
+    if (teach) {
       const arc = `${teach.method?.name ?? teach.methodName ?? "no method"}: ${teach.scenes.map((s) => `${s.id}=${s.beat ?? "?"}${s.via ? `/${s.via}` : ""}`).join(" → ")}`;
       opts.onLog?.(teach.problems.length ? `teaching plan (${arc}) has problems: ${teach.problems.join("; ")}` : `teaching plan: ${arc}`);
     }
@@ -203,28 +215,42 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     header = direct(ensureHeader(plan.header, topic));
     opts.onLog?.(`outline: ${plan.scenes.map((s) => s.id).join(", ")}`);
     const written: string[] = [];
+    // With a teaching plan, scene i starts once scene i-1 has its first draft, and reads every earlier draft: the arc
+    // runs through the narration, not only through the plan. The pool hands scenes out in order, so this never waits
+    // on a scene that has not started.
+    const inOrder = Boolean(teach?.method) && opts.inOrder !== false;
+    const drafts: string[] = [];
+    const drafted = plan.scenes.map(() => deferred());
     scenes = await pool(plan.scenes, opts.concurrency ?? opts.client.concurrency ?? 3, async (s, i) => {
-      // Earlier scenes that are already written (all of them when scenes run one at a time).
-      const earlier = narrationOf(written.slice(0, i).filter((x) => x !== undefined));
-      const planned = s.text.split("\n")[0]!;
-      // A growing scene is shown a finished one of its kind (one per use case); no other scene gets an example.
-      const example = isCanvas(s.text) ? exampleFor(ctx.usecase, /\btemplate=(\S+)/.exec(planned)?.[1]) : "";
-      if (example) (ctx.examples ??= new Map()).set(s.id, example);
-      const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text), settings, example) };
-      // Only what this scene's kind needs, and the pictures that match its words.
-      const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets, undefined, opts.domain), isCanvas(s.text), spec, settings, ctx.usecase);
-      const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
-      // The plan's template or grid layout is binding: a scene line that changed it gets it back.
-      const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);
-      if (kept.changed) {
-        opts.onLog?.(`scene ${s.id}: kept the planned ${kept.changed}`);
-        note(ctx, reply.trace, { reason: `kept the planned ${kept.changed}` });
+      if (inOrder && i > 0) await drafted[i - 1]!.promise;
+      try {
+        // Earlier scenes: their first drafts in order, else the ones already finished.
+        const earlier = narrationOf((inOrder ? drafts : written).slice(0, i).filter((x) => x !== undefined));
+        const planned = s.text.split("\n")[0]!;
+        // A growing scene is shown a finished one of its kind (one per use case); no other scene gets an example.
+        const example = isCanvas(s.text) ? exampleFor(ctx.usecase, /\btemplate=(\S+)/.exec(planned)?.[1]) : "";
+        if (example) (ctx.examples ??= new Map()).set(s.id, example);
+        const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text), settings, example, teach ? arcBrief(teach, s.id) : "") };
+        // Only what this scene's kind needs, and the pictures that match its words.
+        const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets, undefined, opts.domain), isCanvas(s.text), spec, settings, ctx.usecase);
+        const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
+        // The plan's template or grid layout is binding: a scene line that changed it gets it back.
+        const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);
+        if (kept.changed) {
+          opts.onLog?.(`scene ${s.id}: kept the planned ${kept.changed}`);
+          note(ctx, reply.trace, { reason: `kept the planned ${kept.changed}` });
+        }
+        drafts[i] = kept.text;
+        drafted[i]!.resolve();
+        // What the plan carries from the previous scene is binding too (a repair may have dropped it).
+        const fixed = arrange(bindCarry(await repairLoop(ctx, header, kept.text, [first], s.id, reply.trace, system, sceneArc(teach, s.id, inOrder ? drafts : written)), castPlan(outline).carry.get(s.id) ?? []));
+        written[i] = fixed;
+        emit(fixed, i);
+        return fixed;
+      } finally {
+        // A scene that failed still lets the next one start.
+        drafted[i]!.resolve();
       }
-      // What the plan carries from the previous scene is binding too (a repair may have dropped it).
-      const fixed = arrange(bindCarry(await repairLoop(ctx, header, kept.text, [first], s.id, reply.trace, system), castPlan(outline).carry.get(s.id) ?? []));
-      written[i] = fixed;
-      emit(fixed, i);
-      return fixed;
     });
   } else {
     const request: ChatMessage = { role: "user", content: fullPrompt(topic, range, settings) };
@@ -261,7 +287,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     repairs: ctx.repairs,
     calls: ctx.calls,
     usage: ctx.usage,
-    quality: split(raw).scenes.flatMap((sc) => qualityIssues(header, sc.text, ctx.usecase?.name, ctx.examples?.get(sc.id)).map((q) => `${sc.id}: ${q.message}`)),
+    quality: split(raw).scenes.flatMap((sc, _i, all) => qualityIssues(header, sc.text, ctx.usecase?.name, ctx.examples?.get(sc.id), sceneArc(ctx.teach, sc.id, all.map((x) => x.text))).map((q) => `${sc.id}: ${q.message}`)),
     trace: ctx.trace,
     ms: Math.round(performance.now() - ctx.started),
   };
@@ -276,11 +302,20 @@ async function planOutline(ctx: Ctx, topic: string, canvas: boolean, recent: Rec
   const settings = opts.settings ?? {};
   const spec = effectiveSpec(settings, settings.length ?? opts.length ?? detectLength(topic));
   const range = opts.scenes ?? spec.scenes;
-  const ask = canvas ? canvasOutlinePrompt(topic, spec.chapters, recent, settings) : outlinePrompt(topic, range, recent, spec, settings);
+  const level = settings.level ?? DEFAULT_LEVEL;
+  // The teaching decision first (a small call), so the plan fills the method's arc instead of inventing one.
+  let decision: Decision | undefined;
+  if (!canvas && opts.decideTeaching !== false) {
+    const asked = await chat(ctx, [{ role: "user", content: decidePrompt(topic, settings) }], { kind: "decide" }, undefined, decideSystemPrompt(settings));
+    decision = parseDecision(asked.text, level, range, USE_CASES, guessUseCase(topic)?.name ?? "concept");
+    note(ctx, asked.trace, { verdict: decision ? `${decision.usecase} · ${decision.method.name}: ${decision.slots.join(" → ")}` : "no decision; the plan chooses" });
+  }
+  const ask = canvas ? canvasOutlinePrompt(topic, spec.chapters, recent, settings) : outlinePrompt(topic, range, recent, spec, settings, decision);
   const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain, settings));
-  const routed = routeOutline(tidyOutline(clean(planned.text)));
+  const written = clean(planned.text);
+  const routed = routeOutline(tidyOutline(decision ? applyDecision(written, decision) : written));
   const tracing = traceForAlgorithms(routed.text, (useCaseOf(routed.text) ?? guessUseCase(topic))?.name);
-  return { planned, outline: pruneCarry(tracing.text), routed: routed.changes, tracing: tracing.changes, range };
+  return { planned, outline: pruneCarry(tracing.text), routed: routed.changes, tracing: tracing.changes, range, decision };
 }
 
 /** The plan of a video and what it says about teaching, without writing any scene: one LLM call. */
@@ -306,7 +341,7 @@ export async function plan(topic: string, opts: GenerateOptions): Promise<PlanRe
     outline: r.outline,
     ...(usecase && { usecase }),
     brief: briefOf(r.outline),
-    teaching: teachingOf(r.outline, opts.settings?.level ?? DEFAULT_LEVEL, usecase?.method, r.range),
+    teaching: teachingOf(r.outline, opts.settings?.level ?? DEFAULT_LEVEL, defaultMethodFor(usecase, opts.settings?.level ?? DEFAULT_LEVEL), r.range),
     changes: [...r.routed, ...r.tracing],
     trace: ctx.trace,
     usage: ctx.usage,
@@ -319,7 +354,7 @@ export async function plan(topic: string, opts: GenerateOptions): Promise<PlanRe
  * maxRepairs times. A scene without errors but with quality problems gets
  * one improvement pass, kept only if it stays error-free and gets better.
  */
-async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[], scene?: string, written?: CallTrace, system = ctx.system): Promise<string> {
+async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatMessage[], scene?: string, written?: CallTrace, system = ctx.system, arc?: SceneArc): Promise<string> {
   const ask = async (current: string, report: string, kind: "errors" | "quality", attempt?: number) => {
     ctx.repairs++;
     const meta: CallMeta = { kind: kind === "errors" ? "repair" : "quality", reason: report, ...(scene && { scene }), ...(attempt && { attempt }) };
@@ -354,7 +389,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
     judge(last, errors, 0, "still has errors → auto-fix");
     return current;
   }
-  const issues = qualityIssues(header, current, ctx.usecase?.name, ctx.examples?.get(scene ?? ""));
+  const issues = qualityIssues(header, current, ctx.usecase?.name, ctx.examples?.get(scene ?? ""), arc);
   if (!qualityOn || !issues.length) {
     judge(last, errors, issues.length, "valid");
     return current;
@@ -364,7 +399,7 @@ async function repairLoop(ctx: Ctx, header: string, text: string, history: ChatM
   ctx.opts.onLog?.(`improving scene:\n${report}`);
   const better = await ask(current, report, "quality");
   const after = checkScene(header, better.text);
-  const left = qualityIssues(header, better.text, ctx.usecase?.name, ctx.examples?.get(scene ?? "")).length;
+  const left = qualityIssues(header, better.text, ctx.usecase?.name, ctx.examples?.get(scene ?? ""), arc).length;
   if (after.errors || left >= issues.length) {
     judge(better.trace, after, left, after.errors ? "rejected: introduced errors" : "rejected: no better");
     ctx.opts.onLog?.("the improvement didn't help; keeping the previous version");
@@ -426,7 +461,7 @@ async function chat(
     ...meta,
     status: "running",
     start: Math.round(t0 - ctx.started),
-    system: system === ctx.system ? "full" : meta.kind === "outline" ? "outline" : "scene",
+    system: system === ctx.system ? "full" : meta.kind === "outline" || meta.kind === "decide" ? "outline" : "scene",
     systemChars: system.length,
     history: messages.length - 1,
     prompt: messages[messages.length - 1]!.content,
@@ -681,6 +716,36 @@ function orderedEmitter(fn: (text: string, i: number) => void) {
       ready.delete(next++);
     }
   };
+}
+
+/**
+ * A scene's place in the teaching arc for the narration checks: first or last, the method, its devices and link, and
+ * the scenes before it (by position in the plan; `texts` holds each scene's text, in plan order, where known).
+ */
+function sceneArc(teach: TeachingPlan | undefined, id: string, texts: (string | undefined)[]): SceneArc | undefined {
+  const m = teach?.method;
+  const i = teach ? teach.scenes.findIndex((s) => s.id === id) : -1;
+  if (!m || !teach || i < 0) return undefined;
+  const s = teach.scenes[i]!;
+  const before = texts.slice(0, i).filter((t): t is string => t !== undefined);
+  return {
+    first: i === 0,
+    last: i === teach.scenes.length - 1,
+    method: m.name,
+    opens: m.opens,
+    opensWithQuestion: opensWithQuestion(m),
+    devices: s.devices,
+    ...(s.link && { link: s.link }),
+    ...(texts[i - 1] !== undefined && { previous: texts[i - 1] }),
+    ...(before.length && { earlier: before.join("\n") }),
+  };
+}
+
+/** A promise with its resolve function outside it. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
 }
 
 /** Maps with a concurrency limit, keeping result order. */
