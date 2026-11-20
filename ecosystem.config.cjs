@@ -9,6 +9,8 @@ module.exports = {
       script: "node_modules/vite/bin/vite.js",
       args: "--config apps/studio/vite.config.ts",
       autorestart: true,
+      // Kokoro (on the CPU) grows to about 1.3 GB while it speaks; restart the Studio rather than let it creep up.
+      max_memory_restart: "3G",
       // No live reload for the hosted Studio: restart it (pm2 restart animation-studio) after a git pull.
       env: { ANIM_HMR: "off" },
     },

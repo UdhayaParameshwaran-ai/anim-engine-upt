@@ -87,8 +87,9 @@ async function voice(server: ViteDevServer, name: Tts["name"], speed = 1) {
     const { PiperTtsProvider } = await server.ssrLoadModule("@anim/tts-piper");
     return new PiperTtsProvider({ dir: join(repo, ".cache", "piper") });
   }
-  kokoro ??= server.ssrLoadModule("@anim/tts-kokoro").then(async ({ KokoroTtsProvider }) => {
-    const p = new KokoroTtsProvider({ cacheDir: join(repo, ".cache", "models") });
+  kokoro ??= server.ssrLoadModule("@anim/tts-kokoro").then(async ({ ThreadedKokoroProvider }) => {
+    // On a thread of its own: the model call would otherwise freeze every other request for seconds at a time.
+    const p = new ThreadedKokoroProvider({ cacheDir: join(repo, ".cache", "models") });
     await p.warmup();
     return p;
   });

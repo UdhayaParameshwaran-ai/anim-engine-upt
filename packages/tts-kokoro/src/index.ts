@@ -23,6 +23,12 @@ export interface KokoroOptions {
   modelId?: string;
   /** Tokens per model call (default 400). */
   maxTokens?: number;
+  /**
+   * CPU threads the model may use. Default: `ANIM_KOKORO_THREADS` if set, else ONNX Runtime's choice, which is every
+   * core. Fewer leaves room for other work on the machine and, measured, costs no speed (4 threads used under half
+   * the CPU time of all 16 for the same speech).
+   */
+  threads?: number;
 }
 
 const MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX-timestamped";
@@ -54,9 +60,11 @@ interface Loaded {
 export class KokoroTtsProvider implements TtsProvider {
   readonly id: string;
   readonly capabilities: TtsCapabilities = { timing: "word", ssml: false, maxChars: 200_000 };
-  private readonly opts: Required<Omit<KokoroOptions, "cacheDir" | "maxTokens">> & { cacheDir: string; maxTokens: number };
+  private readonly opts: Required<Omit<KokoroOptions, "cacheDir" | "maxTokens" | "threads">> & { cacheDir: string; maxTokens: number; threads?: number };
   private loaded?: Promise<Loaded>;
   private backup?: Promise<StyleTextToSpeech2Model>;
+  /** How many chunks the main weights failed on and the 8-bit weights had to redo (each costs about 3× the time). */
+  fallbacks = 0;
   private readonly voices = new Map<string, Float32Array>();
   private readonly phonemes = new Map<string, Promise<string>>();
   /** One ONNX session: requests run one at a time. */
@@ -70,6 +78,7 @@ export class KokoroTtsProvider implements TtsProvider {
       cacheDir: opts.cacheDir ?? join(process.cwd(), ".cache", "models"),
       modelId: opts.modelId ?? MODEL,
       maxTokens: opts.maxTokens ?? MAX_TOKENS,
+      ...((opts.threads ?? (Number(process.env.ANIM_KOKORO_THREADS) || undefined)) && { threads: opts.threads ?? Number(process.env.ANIM_KOKORO_THREADS) }),
     };
     // The trailing 2 retires speech cached before silent chunks were detected (see `audible`).
     this.id = `kokoro:${this.opts.dtype}:${this.opts.speed}:2`;
@@ -86,9 +95,13 @@ export class KokoroTtsProvider implements TtsProvider {
     return run;
   }
 
+  private sessionOptions() {
+    return this.opts.threads ? { session_options: { intraOpNumThreads: this.opts.threads } } : {};
+  }
+
   /** The same model with 8-bit weights, loaded only when the main one fails on an input (see run). */
   private fallback(): Promise<StyleTextToSpeech2Model> {
-    this.backup ??= StyleTextToSpeech2Model.from_pretrained(this.opts.modelId, { dtype: "q8", device: "cpu" });
+    this.backup ??= StyleTextToSpeech2Model.from_pretrained(this.opts.modelId, { dtype: "q8", device: "cpu", ...this.sessionOptions() });
     return this.backup;
   }
 
@@ -96,7 +109,7 @@ export class KokoroTtsProvider implements TtsProvider {
     this.loaded ??= (async () => {
       env.cacheDir = this.opts.cacheDir;
       const [model, tokenizer] = await Promise.all([
-        StyleTextToSpeech2Model.from_pretrained(this.opts.modelId, { dtype: this.opts.dtype, device: "cpu" }),
+        StyleTextToSpeech2Model.from_pretrained(this.opts.modelId, { dtype: this.opts.dtype, device: "cpu", ...this.sessionOptions() }),
         AutoTokenizer.from_pretrained(this.opts.modelId),
       ]);
       const space = (tokenizer(" ", { add_special_tokens: false }).input_ids as Tensor).data;
@@ -136,6 +149,7 @@ export class KokoroTtsProvider implements TtsProvider {
       // The 4-bit/fp16 weights overflow to NaN on some inputs (whatever the length), and the whole chunk would
       // become silence while its durations, a separate output, still look fine. Say it again with the 8-bit weights.
       if (!audible(wave) && this.opts.dtype !== "q8") {
+        this.fallbacks++;
         out = await (await this.fallback())(inputs);
         wave = out.waveform!.data as Float32Array;
       }
@@ -322,3 +336,5 @@ function chunks(words: Word[], max = MAX_TOKENS): Word[][] {
 function round(n: number): number {
   return Math.round(n * 1e4) / 1e4;
 }
+
+export { ThreadedKokoroProvider } from "./threaded.js";
