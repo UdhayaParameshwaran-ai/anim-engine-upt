@@ -198,3 +198,18 @@ Follow-up (wording only, not yet measured): worked-example reasoning now says "p
 run; never replay the run", result says "show the finished result once; do not retell the steps", discovery's pattern
 beat says "without running it again", and the planner keeps step-by-step values in the run's scene only. Aimed at
 Haiku re-running the example in its reasoning and result scenes; check it in the next eval batch (no new check added).
+
+Measured (d-* = the wording follow-up, default length, topics-8):
+
+| | c-h | d-h | c-s | d-s |
+|---|---|---|---|---|
+| reasoning/result scenes that replay the run (read by hand: dijkstra, garbage collection, bloom filter) | 3/3 | 1/3 (gc) | 0/3 | 0/3 |
+| plan words spoken aloud / questions asked twice | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| planned predictions asked, then paused | 4/4 | 5/5 | 8/8 | 8/8 |
+| scene-writing completion tokens per video | 22.7k | 16.7k | 7.5k | 8.1k |
+| prompt / completion tokens per video | 77k / 38k | 81k / 38k | 73k / 12k | 73k / 13k |
+
+Still seen in Haiku: the opening question gives the answer away (CORS, both runs); an unanswered "try it yourself"
+question at the end (consistent hashing); a new map's costs left to the screen before the question (Dijkstra).
+The 3-word retelling measure in narration-check does not match the reading (it flags legitimate recall), so it is
+reported as a rough signal only.

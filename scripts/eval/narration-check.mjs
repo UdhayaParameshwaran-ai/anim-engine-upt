@@ -64,7 +64,7 @@ function teachingFor(arm, t) {
 }
 
 function stats(arm) {
-  const S = { predictions: 0, paused: 0, links: 0, linkUsed: 0, n: 0, scenes: 0, sent: 0, words: 0, sd: [], q: 0, qPaused: 0, you: 0, link: 0, screen: 0, openers: 0, linked: 0, firstQ: 0, firstQAllowed: 0, endQ: 0, closeTri: [], devices: {}, firstQWrong: [], scaffold: [], askedTwice: [], thinCore: [], dupes: [], prompt: 0, completion: 0, ms: 0, calls: {}, methods: [] };
+  const S = { predictions: 0, paused: 0, links: 0, linkUsed: 0, n: 0, scenes: 0, sent: 0, words: 0, sd: [], q: 0, qPaused: 0, you: 0, link: 0, screen: 0, openers: 0, linked: 0, firstQ: 0, firstQAllowed: 0, endQ: 0, closeTri: [], devices: {}, firstQWrong: [], scaffold: [], askedTwice: [], thinCore: [], dupes: [], retell: [], retold: [], prompt: 0, completion: 0, ms: 0, calls: {}, methods: [] };
   for (const t of topics) {
     const sc = scenesOf(arm, t);
     if (!sc?.length) continue;
@@ -100,6 +100,15 @@ function stats(arm) {
       else if (teach?.method) S.firstQWrong.push(`${t} (${teach.method.name})`);
     }
     if (sc.at(-1).said.some((s) => RE.question.test(s))) S.endQ++;
+    // Retelling: a later scene whose 3-word phrases were mostly said already (a replay of the run, not a recall).
+    sc.forEach((s, i) => {
+      if (i === 0) return;
+      const before = tri(sc.slice(0, i).flatMap((x) => x.said).join(" "));
+      const mine = [...tri(s.said.join(" "))];
+      const share = mine.filter((x) => before.has(x)).length / Math.max(1, mine.length);
+      S.retell.push(share);
+      if (share > 0.15) S.retold.push(`${t}/${s.id}: ${Math.round(share * 100)}%`);
+    });
     const earlier = tri(sc.slice(0, -1).flatMap((s) => s.said).join(" "));
     const last = [...tri(sc.at(-1).said.join(" "))];
     S.closeTri.push(last.filter((x) => earlier.has(x)).length / Math.max(1, last.length));
@@ -166,6 +175,8 @@ function stats(arm) {
       "a question asked twice in a row": S.askedTwice.length,
       "core scenes under 3 sentences": S.thinCore.length,
       "sentences repeated word for word": S.dupes.length,
+      "later scenes: share of phrases already said (avg)": `${Math.round(100 * avg(S.retell))}%`,
+      "later scenes retelling earlier ones (>15%)": `${S.retold.length}/${S.retell.length}`,
       "prompt tokens / video": per(S.prompt),
       "completion tokens / video": per(S.completion),
       "seconds / video": Math.round(S.ms / 1000 / Math.max(1, S.n)),
@@ -180,5 +191,5 @@ for (const [a, r] of res) {
   const calls = Object.entries(r.S.calls).map(([k, v]) => `${k} ${(v.n / Math.max(1, r.S.n)).toFixed(1)} calls, ${Math.round(v.p / Math.max(1, r.S.n))}+${Math.round(v.c / Math.max(1, r.S.n))} tokens`).join(" · ");
   console.log(`\n### ${a}\n- per video: ${calls}`);
   if (r.S.methods.length) console.log(`- arcs: ${r.S.methods.join("; ")}`);
-  for (const [label, list] of [["first scene asks a question although the method opens otherwise", r.S.firstQWrong], ["plan words spoken aloud", r.S.scaffold], ["a question asked twice", r.S.askedTwice], ["core scenes under 3 sentences", r.S.thinCore], ["repeated sentences", r.S.dupes]]) if (list.length) console.log(`- ${label}:\n${list.map((x) => `  - ${x}`).join("\n")}`);
+  for (const [label, list] of [["first scene asks a question although the method opens otherwise", r.S.firstQWrong], ["plan words spoken aloud", r.S.scaffold], ["a question asked twice", r.S.askedTwice], ["core scenes under 3 sentences", r.S.thinCore], ["repeated sentences", r.S.dupes], ["scenes retelling earlier ones", r.S.retold]]) if (list.length) console.log(`- ${label}:\n${list.map((x) => `  - ${x}`).join("\n")}`);
 }
