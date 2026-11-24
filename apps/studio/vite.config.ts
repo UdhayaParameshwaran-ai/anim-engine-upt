@@ -35,6 +35,7 @@ function api(): Plugin {
           if (url.pathname === "/api/examples") return json(res, readdirSync(examples).filter((f) => f.endsWith(".txt")));
           if (url.pathname === "/api/source") return send(res, "text/plain; charset=utf-8", readFileSync(join(examples, basename(url.searchParams.get("file") ?? "")), "utf8"));
           if (url.pathname === "/api/build" && req.method === "POST") return json(res, await build(server, await body(req), ttsOf(url), url.searchParams.get("variants") === "exact" ? "exact" : "fit"));
+          if (url.pathname === "/api/build-stream" && req.method === "POST") return await buildStream(server, await body(req), ttsOf(url), res);
           if (url.pathname === "/api/settings" && req.method === "POST") return json(res, stashSettings(await body(req)));
           if (url.pathname === "/api/prompt-defaults") return json(res, await promptDefaults(server));
           if (url.pathname === "/api/keys" && req.method === "POST") return json(res, saveKeys(await body(req)));
@@ -98,19 +99,65 @@ async function voice(server: ViteDevServer, name: Tts["name"], speed = 1) {
 }
 
 async function build(server: ViteDevServer, source: string, tts: Tts, variants: "fit" | "exact" = "fit") {
+  const { compiled, diagnostics } = await compileScript(server, source, tts, variants);
+  if (!compiled.ir) return { ok: false, diagnostics };
+  return { ok: true, diagnostics, ir: compiled.ir, timeline: await speak(server, compiled.ir, tts) };
+}
+
+async function compileScript(server: ViteDevServer, source: string, tts: Tts, variants: "fit" | "exact" = "fit") {
   const { compile, report } = await server.ssrLoadModule("@anim/compiler");
-  const { FileCache, speakVideo } = await server.ssrLoadModule("@anim/tts");
-  const { resolve } = await server.ssrLoadModule("@anim/timeline");
   const compiled = compile(source, { settings: tts.style, variants });
   const diagnostics: string[] = compiled.diagnostics.length ? report(compiled.diagnostics).split("\n") : [];
-  if (!compiled.ir) return { ok: false, diagnostics };
+  return { compiled, diagnostics };
+}
+
+/** Speaks a compiled video's narration (cached sentence by sentence) and resolves its timeline. */
+async function speak(server: ViteDevServer, ir: { scenes: unknown[] }, tts: Tts) {
+  const { FileCache, speakVideo } = await server.ssrLoadModule("@anim/tts");
+  const { resolve } = await server.ssrLoadModule("@anim/timeline");
   const provider = await voice(server, tts.name, tts.speed);
   // Kokoro's rate is a request setting (part of the cache key); the mock bakes it into its id.
   const settings = tts.name !== "beeps" && tts.speed !== 1 ? { speed: tts.speed } : undefined;
-  const speech = await speakVideo(compiled.ir, { provider, cache: new FileCache(ttsDir), ...(settings && { settings }) });
-  const timeline = resolve(compiled.ir, speech);
+  const speech = await speakVideo(ir, { provider, cache: new FileCache(ttsDir), ...(settings && { settings }) });
+  const timeline = resolve(ir, speech);
   timeline.audio = timeline.audio.map((a: { src: string }) => ({ ...a, src: `/audio/${basename(a.src)}` }));
-  return { ok: true, diagnostics, ir: compiled.ir, timeline };
+  return timeline;
+}
+
+/**
+ * Builds a script progressively, like generation plays: the whole script is compiled first (mistakes show at
+ * once), then the video is spoken and sent one scene longer at a time, so the page plays scene 1 while the rest
+ * is spoken. Earlier scenes resolve to the same times when scenes are appended, and their narration comes from
+ * the cache, so each step only speaks the new scene. Events: start, scene, done (or fail).
+ */
+async function buildStream(server: ViteDevServer, source: string, tts: Tts, res: ServerResponse) {
+  res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+  // The request's own "close" fires once a POST body is read; the response's fires when the page goes away.
+  let closed = false;
+  res.on("close", () => (closed = true));
+  const send = (event: string, data: unknown) => {
+    if (!closed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  try {
+    const { compiled, diagnostics } = await compileScript(server, source, tts);
+    if (!compiled.ir) {
+      send("done", { ok: false, diagnostics });
+      return res.end();
+    }
+    const ir = compiled.ir as { scenes: unknown[] };
+    const total = ir.scenes.length;
+    send("start", { diagnostics, scenes: total });
+    let timeline: unknown;
+    for (let i = 0; i < total && !closed; i++) {
+      const part = { ...ir, scenes: ir.scenes.slice(0, i + 1) };
+      timeline = await speak(server, part, tts);
+      if (i < total - 1) send("scene", { index: i, total, ir: part, timeline });
+    }
+    if (!closed) send("done", { ok: true, diagnostics, ir, timeline });
+  } catch (e) {
+    send("fail", { error: e instanceof Error ? e.message : String(e) });
+  }
+  res.end();
 }
 
 /**
