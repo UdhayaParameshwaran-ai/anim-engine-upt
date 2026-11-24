@@ -136,3 +136,60 @@ decide-then-fill plus scenes written in order with their part of the arc and the
 Not yet measured: reviewer scores (rubric.md) on these videos. Seen in the frames: the arc carries the pictures where
 the template fits (CORS: the guesses light up on the request path, the ending strikes the wrong model); a weighted
 graph planned as template=flow draws as a column with hidden edges (Dijkstra's new-map question).
+
+## Teaching arc v2 (branch feature/teaching-arc-2): intent picks the method, arcs written per length, cleaner hand-off
+
+What changed: the decision call reads the use case (pictures), what the learner asks (intent: what, how, do, differ,
+fix, predict, believe, evolve) and the wrong idea to bring out; code maps intent x use case x level to the method. Each
+method's arc is written out per length (short merges beats into 2 scenes, long adds a round of the method's cycle,
+deep repeats the cycle); core beats are kept at every length, and a plan with more or fewer scenes than slots gets its
+slots split or merged instead of a repeated beat. The planner sees each beat's job and picture; scene writers get the
+link as an idea (not words), "what was said wins", "do not re-ask", and checks Q15 (plan words spoken), Q16 (a
+question asked twice) and Q17 (a core scene of one or two sentences).
+
+Decision only (`decision-check.mjs`, TAG=3 QUICK=1: 95 topics at familiar + 29 gold topics at new and practitioner;
+gold.json written before the runs):
+
+| | Haiku | Sonnet |
+|---|---|---|
+| method accepted, new / familiar / practitioner | 90% / 97% / 90% | 83% / 97% / 83% |
+| use case accepted (familiar) | 97% | 97% |
+| every method reached by its one-per-method topic | all but analogical at familiar* | all but analogical at familiar* |
+| socratic share of all 95 topics | 4% | 7% |
+| length read right (earlier full run, TAG=2) | 100% none, 100% short, 93% long | 100% / 100% / 100% |
+
+*analogical is used for newcomers (the level picks it); a topic that names "a padlock analogy" at familiar gets causal.
+A first version of the intent rules made socratic nearly vanish (0-2%) and missed analogical for newcomers; both were
+fixed before the planner and video runs (TAG=2 is that first version).
+
+Planner only (`plan-check.mjs`, plan4-*: 16 topics x 3 levels at the default length + 8 one-per-method topics at
+short and long):
+
+| | Haiku | Sonnet | old planner (plan-*6, 4-6 scenes) |
+|---|---|---|---|
+| plans keeping every core beat | 64/64 | 64/64 | evidence/experiment cut at the default length |
+| a text page on a beat that must show something | 0/93 | 0/94 | result on a text page 11x |
+| worked example: the new case reuses the run's picture | 18/19 | 17/17 | 10/24 |
+| last scene a text page / a card list | 4 / 2 of 64 | 1 / 11 of 64 | 11 / 18 of 94 |
+| first scene a title card | 1/64 | 0/64 | 13/94 |
+| method accepted (gold) | 88% | 91% | - |
+
+Videos at the DEFAULT length (what a person gets; the earlier runs forced 4-6 scenes and so never showed the cut
+beats): b-* = previous code, c-* = this branch, topics-8, `SCENES=` with run.sh.
+
+| | b-h | c-h | b-s | c-s |
+|---|---|---|---|---|
+| arcs with their core beat | socratic without evidence (2), worked without reasoning (2), cors cut to 3 beats | all | socratic without evidence (3), worked without reasoning (3) | all |
+| plan words spoken aloud | 2 | 0 | 0 | 0 |
+| questions to the viewer / followed by a pause | 8 / 5 | 11 / 5 | 14 / 7 | 11 / 8 |
+| planned predictions asked, then paused | 5/6 | 4/4 | 7/9 | 8/8 |
+| openings that take up their planned link | 22/23 | 25/26 | 24/24 | 23/24 |
+| scenes / sentences per scene | 3.9 / 4.7 | 4.3 / 5.6 | 4.0 / 6.9 | 4.0 / 6.7 |
+| prompt / completion tokens per video | 66k / 27k | 77k / 38k | 74k / 14k | 73k / 12k |
+| seconds per video | 122 | 145 | 97 | 91 |
+
+Read by hand: every number in the 16 new scripts checks out (runs, new cases, answers); no cross-scene contradiction.
+Haiku still re-runs the example in its reasoning and result scenes (Dijkstra, garbage collection, Bloom filter) and,
+once, says the answer in the opening question (CORS). Haiku writes 5 scenes for a 4-slot arc about a third of the
+time (the slots are split to fit), which with longer scenes is most of its token rise; its plan replies also vary
+from 0.7k to 7k completion tokens for similar text (provider-side). Sonnet's cost went down.

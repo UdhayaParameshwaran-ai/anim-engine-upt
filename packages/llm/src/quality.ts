@@ -7,7 +7,7 @@ import { compile } from "@anim/compiler";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12" | "Q13" | "Q14";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12" | "Q13" | "Q14" | "Q15" | "Q16" | "Q17";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -55,7 +55,12 @@ export interface SceneArc {
   /** The scene before (its script text) and every earlier scene's, for the link and the ending. */
   previous?: string;
   earlier?: string;
+  /** The scene carries a beat the method cannot be taught without (the run, the evidence, the experiment). */
+  core?: boolean;
 }
+
+/** Plan words that must never be spoken: beat names used as nouns, and talk about scenes. */
+const SCAFFOLD = /\b(next|last|previous|this|earlier|following) scene\b|\bthe (gap|follow-up|refine|beat|prediction|guess|steps|evidence|investigation|mapping) (showed|shows|ended|raised|set|gave|left)\b/i;
 
 const STOP = new Set("the a an and or but so of to in on at for with by is are was were be it its this that these those then than as from into now each one two only not no can will would could should has have had do does did what which who how why when where you your we our they their there here just also more most very".split(" "));
 const contentWords = (s: string) => new Set(s.toLowerCase().replace(/\{\w+\s?/g, " ").replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
@@ -100,6 +105,20 @@ function arcIssues(sceneId: string, sceneText: string, arc: SceneArc): QualityIs
     const repeated = mine.filter((t) => before.has(t)).length / Math.max(1, mine.length);
     if (repeated > 0.3) issues.push({ code: "Q14", message: `scene \`${sceneId}\` repeats ${Math.round(repeated * 100)}% of its phrases from earlier scenes; end the way ${arc.method} ends instead of recapping` });
   }
+  // Q15: the plan's words spoken aloud ("the gap showed…", "the next scene shows…").
+  const scaffold = said.find((l) => SCAFFOLD.test(l));
+  if (scaffold) issues.push({ code: "Q15", message: `scene \`${sceneId}\` speaks about the plan ("${scaffold.slice(0, 70)}"); say what happens in the topic itself, never "the next scene" or beat names` });
+  // Q16: the same question to the viewer as the scene before asked.
+  if (arc.previous) {
+    const before = narrationLines(arc.previous).map((l) => l.replace(/\{\w+\s?/g, "").replace(/\}/g, "").trim()).filter((l) => /\?\s*$/.test(l)).map(contentWords);
+    const again = said.filter((l) => /\?\s*$/.test(l)).find((q) => {
+      const w = [...contentWords(q)];
+      return w.length >= 2 && before.some((b) => w.filter((x) => b.has(x)).length / w.length >= 0.6);
+    });
+    if (again) issues.push({ code: "Q16", message: `scene \`${sceneId}\` asks the viewer again what the scene before asked ("${again.slice(0, 70)}"); build on that question instead of repeating it` });
+  }
+  // Q17: a scene the method cannot do without, written as a sentence or two.
+  if (arc.core && said.length < 3) issues.push({ code: "Q17", message: `scene \`${sceneId}\` carries a beat ${arc.method} cannot be taught without, but has only ${said.length} sentence${said.length === 1 ? "" : "s"}; show it in full on the example` });
   return issues;
 }
 

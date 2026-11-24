@@ -45,7 +45,8 @@ describe("length presets", () => {
     expect(plan()).toContain("exactly 6 scenes");
     asked.length = 0;
     await generate("how DNS works", { client, length: "long", scenes: { min: 3, max: 3 }, qualityRepairs: false }).catch(() => undefined);
-    expect(plan()).toContain("exactly 3 scenes");
+    // No written arc has 3 scenes: the nearest one wins, the longer on a tie (more of the method is taught).
+    expect(plan()).toContain("exactly 4 scenes");
     asked.length = 0;
     await generate("how DNS works", { client, length: "long", qualityRepairs: false, decideTeaching: false }).catch(() => undefined);
     expect(asked[0]).toContain("6–9 scenes");
@@ -64,7 +65,7 @@ describe("length read from the request", () => {
     expect(ask).toContain("# length: <none | short | standard | long | deep>");
     expect(ask).toMatch(/long\s+about three minutes: several parts, each explained: "in detail"/);
     expect(ask).toContain("long polling, quick sort, short-circuit evaluation");
-    expect(ask).toContain("How long the video should be never changes the use case or the method.");
+    expect(ask).toContain("How long the video should be never changes the use case or the intent.");
   });
 
   it("'explain' no longer makes every topic a concept", () => {

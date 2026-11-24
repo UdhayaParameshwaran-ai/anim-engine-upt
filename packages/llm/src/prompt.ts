@@ -26,8 +26,8 @@ import {
   type TemplateManifest,
 } from "@anim/registry";
 import { LENGTH_SPECS, LENGTHS, lengthSpec, type Length, type LengthSpec } from "./length.js";
-import { defaultMethodFor, guessUseCase, playbook, useCaseCatalogue, type UseCase } from "./usecases.js";
-import { audienceLine, DEFAULT_LEVEL, deviceList, methodCatalogue, type Decision, type Level } from "./teaching.js";
+import { guessUseCase, playbook, useCaseCatalogue, type UseCase } from "./usecases.js";
+import { audienceLine, DEFAULT_LEVEL, deviceList, intentMenu, methodCatalogue, parseSlot, slotLabel, type Decision, type Level } from "./teaching.js";
 import { PROMPT_IDS, Slots, type PromptId } from "./prompt-slots.js";
 import { DEFAULT_MAX_WORDS, planningAdvice, styleGuide, type PromptSettings } from "./settings.js";
 
@@ -484,7 +484,7 @@ ${elements}`;
  * System prompt for the outline pass: only what planning needs (scene
  * types, themes, the asset names), about a fifth of the full prompt.
  */
-export function outlineSystemPrompt(assets: AssetManifest[], domain?: Domain, settings: PromptSettings = {}): string {
+export function outlineSystemPrompt(assets: AssetManifest[], domain?: Domain, settings: PromptSettings = {}, decided = false): string {
   const S = new Slots("outline.system", settings);
   const level = settings.level ?? DEFAULT_LEVEL;
   // Each layout with its slot sizes, and each page element with the smallest slot it needs:
@@ -515,9 +515,9 @@ scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true 
 <id> is one short lowercase word (intro, stages, recap), never a number. A scene has template= or grid=, never both.
 
 USE CASES (decide what the video is for, write it on the "# usecase:" line, and plan the pictures the way that use case says)
-${S.v("usecases", useCaseCatalogue(level))}
+${S.v("usecases", useCaseCatalogue())}
 
-${S.v("teaching", teachingSection(level))}
+${S.v("teaching", teachingSection(level, decided))}
 
 ${S.v("style_menu", styleSection())}
 
@@ -542,19 +542,25 @@ ${S.v("domain_plan", domain ? `${DOMAINS[domain].plan}\n\n` : "")}PLANNING RULES
 - Plan only facts you are sure of.${S.v("house_style", styleGuide(settings))}`);
 }
 
-/** What the planner knows about teaching: the audience level it was given, the methods that suit it, and the devices. */
-export function teachingSection(level: Level = DEFAULT_LEVEL): string {
+/**
+ * What the planner knows about teaching: the audience level it was given, the devices, and (when the method is not
+ * decided before the plan) the methods to choose from. A decided plan gets its arc in the request instead.
+ */
+export function teachingSection(level: Level = DEFAULT_LEVEL, decided = false): string {
+  const methods = decided
+    ? ""
+    : `METHODS (one for the whole video; its beats are the arc of the video)
+${methodCatalogue(level)}
+- Choose the method that fits what the learner asks about this topic, and say why on the "# method:" line.
+- Every scene gets one beat of the method on its "# beat:" line, in the method's order: the first scene has the first beat, the last scene the last beat.
+`;
   return `TEACHING (how the explanation is told; the use case decides the pictures)
 ${audienceLine(level)}
 The audience level is given by the person: plan for it; never write it in the plan.
 
-METHODS (one for the whole video; its beats are the arc of the video)
-${methodCatalogue(level)}
-- Take the method the use case lists for this audience unless the topic clearly needs another: the one listed with it (a common wrong idea calls for socratic), or one that fits this topic much better. Say why on the "# method:" line.
-- Every scene gets one beat of the method on its "# beat:" line, in the method's order: the first scene has the first beat, the last scene the last beat. A beat may run over two scenes in a row; leave out at most one beat.
-- One scene may borrow another method for its beat (· via: analogical): methods combine, but the main method keeps the arc.
+${methods}- One scene may borrow another method for its beat (· via: analogical): methods combine, but the main method keeps the arc.
 - Only socratic and discovery open with a question to the viewer. The others open with what their "opens" says: a problem, a situation, common ground, something familiar; their first scene has no question or prediction device.
-- link: how the scene follows from the one before ("but the server already answered", "so the run starts at A"). The first scene has none.
+- link: the idea the scene picks up from the one before ("the server already answered", "the run starts at A"), never beat names or "the last scene". The first scene has none.
 - device: the devices the scene's narration uses, only where they help (most scenes need none or one):
 ${deviceList()}
 - A prediction gives the viewer time to answer before the picture shows it.
@@ -611,13 +617,13 @@ The viewer's recent videos leaned on these templates: ${often.join(", ")}. Prefe
 ${S.v("topic", topic)}
 
 Audience level: ${S.v("level", level)}.
-${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${decided ? S.v("teaching_plan", decidedBlock(decided)) : S.v("usecase_hint", guess ? `Likely use case: ${guess.name}, whose method is ${defaultMethodFor(guess, level)} (change either if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
+${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${decided ? S.v("teaching_plan", decidedBlock(decided)) : S.v("usecase_hint", guess ? `Likely use case: ${guess.name} (change it if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
 Output only:
 - the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
 - right after the "motion" line, one comment line "# usecase: ${decided ? decided.usecase : "<name>"}"${decided ? "" : " from USE CASES"}
 - then the brief: "# question: …", "# example: …" (one concrete case with its real values, or none), "# outcome: …"
 - then the method: "# method: ${decided ? `${decided.method.name} · why: ${decided.why}` : "<method> · why: <one line>"}"
-- one "scene" line per scene (${S.v("scenes", decided ? `exactly ${decided.slots.length}` : `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>" and one comment line "# beat: <${decided ? "its beat from the list above" : "beat of the method"}> [· via: <method>] [· device: <devices>] · link: <how it follows from the scene before>" (the first scene has no link)
+- one "scene" line per scene (${S.v("scenes", decided ? `exactly ${decided.slots.length}` : `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>" and one comment line "# beat: <${decided ? "its slot from the list above, word for word" : "beat of the method"}> [· via: <method>] [· device: <devices>] · link: <how it follows from the scene before>" (the first scene has no link)
 - optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
 No elements, narration or actions yet.`);
 }
@@ -658,18 +664,27 @@ Output only this scene, starting with its "scene" line.`)}`);
 }
 
 /** The decided teaching plan, as the plan request states it: the method and the beat of every scene, in order. */
+/** The arc a plan fills in: one numbered slot per scene, each beat with its job and the picture it needs. */
 function decidedBlock(d: Decision): string {
-  const list = d.slots.map((b, i) => `  ${i + 1}. ${b}${i === 0 ? ` (the video opens with ${d.method.opens})` : i === d.slots.length - 1 ? ` (the video ends with ${d.method.ends})` : ""}`).join("\n");
-  return `THE TEACHING PLAN IS DECIDED: use case ${d.usecase}, method ${d.method.name} (${d.why}).
-Write exactly ${d.slots.length} scenes, in this order; each scene's "# beat:" line starts with its beat:
+  const m = d.method;
+  const list = d.slots
+    .map((slot, i) => {
+      const { beats, round } = parseSlot(slot);
+      const where = i === 0 ? ` (the video opens with ${m.opens})` : i === d.slots.length - 1 ? ` (the video ends with ${m.ends})` : "";
+      const again = round > 1 ? `\n     round ${round}: ${m.round}` : "";
+      return `  ${i + 1}. ${slotLabel(slot)}${where}${again}\n${beats.map((b) => `     ${b}: ${m.jobs[b] ?? ""} Picture: ${m.pictures[b] ?? "the scene's own"}.`).join("\n")}`;
+    })
+    .join("\n");
+  return `THE TEACHING PLAN IS DECIDED: use case ${d.usecase}, method ${m.name} (${d.why}).${d.misconception ? `\nThe wrong idea to bring out: ${d.misconception}` : ""}
+Write exactly ${d.slots.length} scene lines, one per numbered slot, in this order (a slot with several beats is ONE scene); each scene's "# beat:" line starts with its slot, word for word:
 ${list}
-Each scene does its beat's job in the ${d.method.name} arc (${d.method.beats.join(" → ")}); a scene may borrow another method for its beat (· via: <method>).
-A beat is the scene's job, not its name: the scene id and title say what the scene is about ("The cheapest road first", never "The Problem" or "Steps").
+The jobs and pictures are for you: never copy their wording into the plan's lines, titles or goals; the "# beat:" line holds only the slot. A slot with several beats is one scene that does them in order. A later round brings something new, never a repeat. A scene may borrow another method for its beat (· via: <method>).
+Choose each scene's template for the picture its beats need. A beat is the scene's job, not its name: the scene id and title say what the scene is about ("The cheapest road first", never "The Problem" or "Steps").
 `;
 }
 
 /** The system prompt of the call that decides how a video teaches: what kind of video it is and the method. */
-export const DECIDE_SYSTEM = "You decide how a narrated explainer video teaches its topic: what kind of video it is, which teaching method it uses, and how long the request asks it to be. Reply with exactly three lines, nothing else.";
+export const DECIDE_SYSTEM = "You decide how a narrated explainer video teaches its topic: what kind of video it is, what the learner wants to know, the wrong idea to bring out, and how long the request asks it to be. Reply with exactly four lines, nothing else.";
 
 export function decideSystemPrompt(settings: PromptSettings = {}): string {
   return new Slots("decide.system", settings).done(DECIDE_SYSTEM);
@@ -687,19 +702,19 @@ export function decidePrompt(topic: string, settings: PromptSettings = {}): stri
 
 ${S.v("audience_level", audienceLine(level))}
 
-USE CASES (what kind of video this is, and the method it usually teaches with for this audience)
-${S.v("usecases", useCaseCatalogue(level, false))}
-
-METHODS
-${S.v("methods", methodCatalogue(level))}
-${S.v("usecase_hint", guess ? `\nLikely use case, from the topic's words: ${guess.name} (change it only if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
-Keep the use case's usual method. Take another only when this topic clearly needs it: the one listed with the use case (a common wrong idea calls for socratic), or one that fits this topic much better than the usual one. How long the video should be never changes the use case or the method.
-
+USE CASES (what kind of video this is: it decides the pictures)
+${S.v("usecases", useCaseCatalogue(false))}
+${S.v("usecase_hint", guess ? `\nLikely use case, from the topic's words: ${guess.name} (change it only if the topic is really something else).\n` : "")}
+WHAT THE LEARNER ASKS (the intent: it decides how the video teaches)
+${S.v("intents", intentMenu())}
+Take the intent the topic's own words ask: "how X works" asks how, "X vs Y" asks differ, "why is my X slow" asks fix, "what prints first" or "what happens if" asks predict, "what is X" asks what. Take believe when the video's point is correcting what most people wrongly believe or expect about it ("why more threads do not always make code faster", "why HTTPS does not hide which site you visit", "does deleting a file erase it"), even when the words say how or what; a topic that only has a minor misconception on the side is still how or what. How long the video should be never changes the use case or the intent.
+${S.v("house_style", styleGuide(settings))}
 ${S.v("lengths", lengthMenu())}
 
-Reply with exactly these three lines:
+Reply with exactly these four lines:
 # usecase: <name>
-# method: <method> · why: <one line: why this method fits this topic and this audience>
+# intent: <intent> · why: <one line: what this learner wants to know about the topic>
+# misconception: <the wrong idea most viewers at this level hold about it, in one sentence, or none>
 # length: <none | short | standard | long | deep>`);
 }
 

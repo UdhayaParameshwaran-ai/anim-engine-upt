@@ -239,7 +239,7 @@ describe("generate", () => {
   it("outlines, writes scenes, repairs the broken one and assembles a valid script", async () => {
     const llm = new ScriptedLlm(respond(true));
     const ready: number[] = [];
-    const r = await generate("how plants make food", { client: llm, onScene: (_, i) => ready.push(i) });
+    const r = await generate("how plants make food", { client: llm, qualityRepairs: false, onScene: (_, i) => ready.push(i) });
     expect(r.ok).toBe(true);
     expect(r.repairs).toBe(1);
     expect(r.calls).toBe(5); // teaching decision + outline + 2 scenes + 1 repair
@@ -259,7 +259,7 @@ describe("generate", () => {
 
   it("traces every call with its purpose, tokens, timing and how the reply validated", async () => {
     const seen: CallTrace[] = [];
-    const r = await generate("how plants make food", { client: new ScriptedLlm(respond(true)), concurrency: 1, onCall: (c) => seen.push(c) });
+    const r = await generate("how plants make food", { client: new ScriptedLlm(respond(true)), concurrency: 1, qualityRepairs: false, onCall: (c) => seen.push(c) });
     expect(r.trace.map((c) => [c.kind, c.scene, c.attempt])).toEqual([
       ["decide", undefined, undefined],
       ["outline", undefined, undefined],
@@ -268,7 +268,7 @@ describe("generate", () => {
       ["repair", "leaf", 1],
     ]);
     const [decide, outline, need, leaf, repair] = r.trace;
-    expect(decide).toMatchObject({ status: "done", system: "outline", verdict: "concept · feynman: familiar → simple → gap → refine" });
+    expect(decide).toMatchObject({ status: "done", system: "outline", verdict: "concept · how → causal: condition → trigger → mechanism → consequence" });
     expect(outline).toMatchObject({ status: "done", system: "outline", verdict: "2 scenes: need, leaf", usage: { prompt: 10, completion: 5 }, provider: "scripted", model: "m" });
     expect(need).toMatchObject({ system: "scene", check: { errors: 0 }, verdict: "valid" });
     expect(leaf!.check!.errors).toBe(2);
@@ -397,15 +397,16 @@ describe("generation fixes from the traced run", () => {
     await generate("how plants make food", { client: llm, concurrency: 3 });
     const prompts = llm.requests.map((q) => q.messages.at(-1)!.content);
     const plan = prompts.find((p) => p.startsWith("Plan a narrated"))!;
-    expect(plan).toContain("THE TEACHING PLAN IS DECIDED: use case concept, method feynman");
+    expect(plan).toContain("THE TEACHING PLAN IS DECIDED: use case concept, method causal");
     const leaf = prompts.find((p) => p.includes('Write scene "leaf"'))!;
     // Scene 2 waited for scene 1's draft and reads it, although three calls could run at once.
     expect(leaf).toContain("Already narrated in earlier scenes");
     expect(leaf).toContain("need: Plants need light and water.");
-    expect(leaf).toContain("YOUR PART IN THE TEACHING ARC (the video teaches by feynman");
-    expect(leaf).toContain("This scene's beat is simple");
+    expect(leaf).toContain("YOUR PART IN THE TEACHING ARC (the video teaches by causal");
+    // The plan has two scenes, so the four-beat arc is merged into two slots.
+    expect(leaf).toContain("This scene carries 2 beats, in this order:\n  - mechanism:");
     const need = prompts.find((p) => p.includes('Write scene "need"'))!;
-    expect(need).toContain("It opens the video: start with a familiar starting point");
+    expect(need).toContain("It opens the video: start with the starting situation");
     expect(need).not.toContain("Already narrated");
   });
 
@@ -461,13 +462,14 @@ describe("generation fixes from the traced run", () => {
     const answer = (improved: string) => (last: string) =>
       last.startsWith("This scene is valid") ? improved : last.startsWith("Plan") ? OUTLINE : last.includes('"need"') ? weak : LEAF_OK;
     const better = new ScriptedLlm(answer(NEED_OK));
-    const r = await generate("plants", { client: better });
+    // About Q1 (a diagram of boxes and words), not the teaching arc: no decision, so no arc checks.
+    const r = await generate("plants", { client: better, decideTeaching: false });
     expect(r.script).toContain("icon:sun");
     expect(r.quality).toEqual([]);
     const prompt = better.requests.find((q) => q.messages.at(-1)!.content.startsWith("This scene is valid"))!.messages.at(-1)!.content;
     expect(prompt).toContain("Q1 quality:");
 
-    const same = await generate("plants", { client: new ScriptedLlm(answer(weak)) });
+    const same = await generate("plants", { client: new ScriptedLlm(answer(weak)), decideTeaching: false });
     expect(same.script).toContain('box "Light"');
     expect(same.quality).toHaveLength(2);
 
@@ -566,7 +568,7 @@ a1 = arrow sun->water
 1 pop sun then visit sun
 2 draw a1 then pop water then visit water`;
     const llm = new ScriptedLlm((last) => (last.startsWith("Plan a narrated") ? OUTLINE : last.includes('Write scene "need"') ? UNMARKED : last.includes('Write scene "leaf"') ? LEAF_OK : "x"));
-    const r = await generate("plants", { client: llm });
+    const r = await generate("plants", { client: llm, qualityRepairs: false });
     expect(r.ok).toBe(true);
     expect(r.repairs).toBe(0);
     expect(r.script).toMatch(/> Plants need .*\{1\}.*\{2\}/);

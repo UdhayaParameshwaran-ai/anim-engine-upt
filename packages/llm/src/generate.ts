@@ -4,10 +4,10 @@ import type { Director } from "@anim/director";
 import { AssetLibrary, resolveTemplate, SHAPES, templatesFor, type AssetManifest, type Shape } from "@anim/registry";
 import type { ChatMessage, ChatResult, LlmClient, Usage } from "./client.js";
 import { briefOf, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, chosenCanvas, type Domain, pruneCarry, fullPrompt, narrationOf, pictureQuery, decidePrompt, decideSystemPrompt, outlinePrompt, outlineSystemPrompt, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, systemPrompt, type RecentUse } from "./prompt.js";
-import { applyDecision, arcBrief, DEFAULT_LEVEL, opensWithQuestion, parseDecision, teachingOf, type Decision, type TeachingPlan } from "./teaching.js";
+import { applyDecision, arcBrief, DEFAULT_LEVEL, opensWithQuestion, parseDecision, slotLabel, teachingOf, type Decision, type TeachingPlan } from "./teaching.js";
 import { qualityIssues, qualityReport, type SceneArc } from "./quality.js";
 import { detectLength, readLengthLine, type Length } from "./length.js";
-import { defaultMethodFor, exampleFor, guessUseCase, USE_CASES, useCaseOf, type UseCase } from "./usecases.js";
+import { exampleFor, guessUseCase, USE_CASES, useCaseOf, type UseCase } from "./usecases.js";
 import { effectiveSpec, type PromptSettings } from "./settings.js";
 
 export interface GenerateOptions {
@@ -202,7 +202,7 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
     if (routed.length) opts.onLog?.(`routed by shape: ${routed.join("; ")}`);
     const brief = briefOf(outline);
     if (!canvas) opts.onLog?.(brief.problems.length ? `brief incomplete: ${brief.problems.join("; ")}` : `brief: ${brief.question} → ${brief.outcome}`);
-    const teach = (ctx.teach = canvas ? undefined : teachingOf(outline, settings.level ?? DEFAULT_LEVEL, defaultMethodFor(ctx.usecase, settings.level ?? DEFAULT_LEVEL), range));
+    const teach = (ctx.teach = canvas ? undefined : teachingOf(outline, settings.level ?? DEFAULT_LEVEL, range));
     if (teach) {
       const arc = `${teach.method?.name ?? teach.methodName ?? "no method"}: ${teach.scenes.map((s) => `${s.id}=${s.beat ?? "?"}${s.via ? `/${s.via}` : ""}`).join(" → ")}`;
       opts.onLog?.(teach.problems.length ? `teaching plan (${arc}) has problems: ${teach.problems.join("; ")}` : `teaching plan: ${arc}`);
@@ -237,7 +237,10 @@ async function run(topic: string, opts: GenerateOptions, inherited?: Ctx): Promi
         if (example) (ctx.examples ??= new Map()).set(s.id, example);
         const first: ChatMessage = { role: "user", content: scenePrompt(outline, s.id, earlier, isCanvas(s.text), settings, example, teach ? arcBrief(teach, s.id) : "") };
         // Only what this scene's kind needs, and the pictures that match its words.
-        const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets, undefined, opts.domain), isCanvas(s.text), spec, settings, ctx.usecase);
+        // A scene that carries several beats (a short video's merged slot) gets room for each of them.
+        const k = teach?.scenes.find((x) => x.id === s.id)?.beats.length ?? 1;
+        const room = k > 1 ? { ...spec, sentences: { min: Math.min(8, spec.sentences.min * k), max: Math.min(8, spec.sentences.max * k) } } : spec;
+        const system = sceneSystemPrompt(sceneKindOf(planned), retrieveAssets(pictureQuery(topic, s.text), assets, undefined, opts.domain), isCanvas(s.text), room, settings, ctx.usecase);
         const reply = await chat(ctx, [first], { kind: "scene", scene: s.id }, undefined, system);
         // The plan's template or grid layout is binding: a scene line that changed it gets it back.
         const kept = keepPlanned(sceneOnly(clean(reply.text), s.id), planned);
@@ -323,11 +326,11 @@ async function planOutline(ctx: Ctx, topic: string, canvas: boolean, recent: Rec
   const spec = effectiveSpec(settings, length);
   const range = opts.scenes ?? spec.scenes;
   if (asked) {
-    decision = parseDecision(asked.text, level, range, USE_CASES, guessUseCase(topic)?.name ?? "concept");
-    note(ctx, asked.trace, { verdict: decision ? `${decision.usecase} · ${decision.method.name}: ${decision.slots.join(" → ")}` : "no decision; the plan chooses" });
+    decision = parseDecision(asked.text, level, spec.name, range, USE_CASES, guessUseCase(topic)?.name ?? "concept");
+    note(ctx, asked.trace, { verdict: decision ? `${decision.usecase} · ${decision.intent} → ${decision.method.name}: ${decision.slots.map(slotLabel).join(" → ")}` : "no decision; the plan chooses" });
   }
   const ask = canvas ? canvasOutlinePrompt(topic, spec.chapters, recent, settings) : outlinePrompt(topic, range, recent, spec, settings, decision);
-  const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain, settings));
+  const planned = await chat(ctx, [{ role: "user", content: ask }], { kind: "outline" }, undefined, outlineSystemPrompt(relevant, opts.domain, settings, Boolean(decision)));
   const written = clean(planned.text);
   const routed = routeOutline(tidyOutline(decision ? applyDecision(written, decision) : written));
   const tracing = traceForAlgorithms(routed.text, (useCaseOf(routed.text) ?? guessUseCase(topic))?.name);
@@ -360,7 +363,7 @@ export async function plan(topic: string, opts: GenerateOptions): Promise<PlanRe
     outline: r.outline,
     ...(usecase && { usecase }),
     brief: briefOf(r.outline),
-    teaching: teachingOf(r.outline, opts.settings?.level ?? DEFAULT_LEVEL, defaultMethodFor(usecase, opts.settings?.level ?? DEFAULT_LEVEL), r.range),
+    teaching: teachingOf(r.outline, opts.settings?.level ?? DEFAULT_LEVEL, r.range),
     changes: [...r.routed, ...r.tracing],
     length: r.spec.name,
     lengthFrom: r.lengthFrom,
@@ -756,6 +759,7 @@ function sceneArc(teach: TeachingPlan | undefined, id: string, texts: (string | 
     opens: m.opens,
     opensWithQuestion: opensWithQuestion(m),
     devices: s.devices,
+    core: s.beats.some((b) => m.core.includes(b)),
     ...(s.link && { link: s.link }),
     ...(texts[i - 1] !== undefined && { previous: texts[i - 1] }),
     ...(before.length && { earlier: before.join("\n") }),

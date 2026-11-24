@@ -21,10 +21,10 @@ export { ClaudeCodeClient, claudeCliAvailable, flatten, type ClaudeCodeOptions }
 export { bindCarry, checkScene, clean, generate, keepPlanned, plan, type PlanResult, routeOutline, split, tidyOutline, traceForAlgorithms, type CallKind, type CallTrace, type GenerateOptions, type GenerateResult } from "./generate.js";
 export { briefOf, ROLES } from "./prompt.js";
 export { CANVAS_CHOICE_SYSTEM, chooseSystemPrompt, canvasChoicePrompt, canvasOutlinePrompt, castPlan, defaultPrompts, STORY_HINTS, chosenCanvas, DECIDE_SYSTEM, decidePrompt, decideSystemPrompt, DOMAINS, type Domain, fullPrompt, narrationOf, outlinePrompt, outlineSystemPrompt, pictureList, pictureQuery, pruneCarry, repairPrompt, retrieveAssets, sceneKindOf, scenePrompt, sceneSystemPrompt, shapeTable, systemPrompt, teachingSection, templateCard, type Shortlist, type SceneKind } from "./prompt.js";
-export { applyDecision, arcBrief, audienceLine, opensWithQuestion, AUDIENCES, DEFAULT_LEVEL, DEVICES, findMethod, isLevel, LEVELS, METHODS, methodCatalogue, parseDecision, skeleton, teachingOf, TONES, type AudienceCard, type Decision, type Device, type Level, type Method, type TeachingPlan, type Tone } from "./teaching.js";
+export { applyDecision, arcBrief, arcFor, fitSlots, audienceLine, opensWithQuestion, AUDIENCES, DEFAULT_LEVEL, DEVICES, findMethod, INTENTS, intentMenu, isIntent, isLevel, LEVELS, METHODS, methodCatalogue, methodFor, parseDecision, parseSlot, slotLabel, teachingOf, TONES, type AudienceCard, type Decision, type Device, type Intent, type Level, type Method, type Slot, type TeachingPlan, type Tone } from "./teaching.js";
 export { copiedFrom, qualityIssues, qualityReport, type QualityIssue, type SceneArc } from "./quality.js";
 export { detectLength, isLength, readLengthLine, LENGTH_SPECS, LENGTHS, lengthForMinutes, lengthSpec, type Length, type LengthSpec } from "./length.js";
 export { DEFAULT_MAX_WORDS, effectiveSpec, planningAdvice, sanitizeSettings, settingsDefaults, styleGuide, type PromptSettings } from "./settings.js";
 export { isPromptId, PROMPT_IDS, PROMPT_INFO, SLOT_INFO, Slots, unknownSlots, type PromptId } from "./prompt-slots.js";
-export { defaultMethodFor, findUseCase, guessUseCase, playbook, USE_CASES, useCaseCatalogue, useCaseOf, type UseCase } from "./usecases.js";
+export { findUseCase, guessUseCase, playbook, USE_CASES, useCaseCatalogue, useCaseOf, type UseCase } from "./usecases.js";
 export { ReplayClient, type ReplayOptions } from "./replay.js";
