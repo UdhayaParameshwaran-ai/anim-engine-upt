@@ -516,13 +516,98 @@ select option { background: var(--surface); color: var(--fg); }
 #clock { font: 12px var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); min-width: 116px; text-align: right; }
 #clock span { color: var(--fg-3); }
 
-.switch { display: inline-flex; align-items: center; gap: 8px; margin-left: 14px; font-size: 12px; color: var(--fg-2); cursor: pointer; user-select: none; }
-.switch input { position: absolute; opacity: 0; pointer-events: none; }
-.switch .track { width: 28px; height: 16px; border-radius: 999px; background: var(--line-strong); position: relative; transition: background 0.15s; }
-.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
-.switch input:checked + .track { background: var(--fg); }
-.switch input:checked + .track::after { transform: translateX(12px); background: var(--bg); }
-.switch input:focus-visible + .track { outline: 2px solid var(--fg); outline-offset: 2px; }
+/* "Between scenes": what playback does when a scene ends (scene-break.ts). */
+.between { position: relative; margin-left: 10px; }
+.between-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-2);
+  font: 500 12px var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.between-btn:hover, .between-btn[aria-expanded="true"] { color: var(--fg); background: var(--muted-bg); }
+.between-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.between-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.between-btn .chev { width: 13px; height: 13px; opacity: 0.6; }
+.between-btn:not([data-mode="through"]) { color: var(--fg); border-color: var(--fg-3); }
+.between-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  width: 320px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+.between-menu[hidden] { display: none; }
+.between-title { margin: 4px 8px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-3); }
+.between-opt { display: flex; gap: 10px; align-items: flex-start; padding: 9px 8px; border-radius: 10px; cursor: pointer; }
+.between-opt:hover { background: var(--muted-bg); }
+.between-opt input { margin: 3px 0 0; accent-color: var(--fg); }
+.between-opt:has(input:checked) { background: var(--muted-bg); }
+.between-text { display: flex; flex-direction: column; gap: 2px; }
+.between-text b { font-size: 13px; font-weight: 600; color: var(--fg); }
+.between-text small { font-size: 12px; line-height: 1.4; color: var(--fg-2); }
+.between-delay { display: flex; align-items: center; gap: 8px; margin: 2px 8px 6px 34px; font-size: 12px; color: var(--fg-2); }
+.between-delay > span:first-child { flex: 1; }
+.between-delay .icon-btn { width: 26px; height: 26px; font: 600 14px/1 var(--font); }
+.between-delay .icon-btn:disabled { opacity: 0.35; cursor: default; }
+.between-delay-value { min-width: 34px; text-align: center; font: 600 12px var(--mono); color: var(--fg); }
+/* The break length only matters for the short break. */
+.between-menu:not(:has(input[value="auto"]:checked)) .between-delay { display: none; }
+
+/* The card on the video when playback stops at a scene's end. */
+.scene-break {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: min(560px, calc(100% - 32px));
+  padding: 14px 14px 14px 18px;
+  border-radius: 16px;
+  background: rgba(20, 20, 20, 0.86);
+  color: #ffffff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+  animation: sb-in 0.22s ease-out;
+}
+.scene-break[hidden] { display: none; }
+/* While the card asks to continue, the big play button on the video would be a second way to say the same. */
+#stage:has(.scene-break:not([hidden])) .vc-center { opacity: 0; pointer-events: none; }
+@keyframes sb-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+.sb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sb-done { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+.sb-up { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-up b { font-weight: 600; }
+.sb-count { font-size: 12px; color: rgba(255, 255, 255, 0.7); }
+.scene-break:not([data-mode="auto"]) .sb-count { display: none; }
+.sb-actions { display: flex; gap: 8px; flex: none; }
+.sb-actions button { height: 36px; border-radius: 999px; font: 600 13px var(--font); cursor: pointer; }
+.sb-stay { padding: 0 14px; border: 1px solid rgba(255, 255, 255, 0.3); background: transparent; color: #ffffff; }
+.sb-stay:hover { background: rgba(255, 255, 255, 0.1); }
+.scene-break:not([data-mode="auto"]) .sb-stay { display: none; }
+.sb-go { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px 0 12px; border: 0; background: #ffffff; color: #0d0d0d; }
+.sb-go:hover { background: #e9e9e9; }
+.sb-go svg { width: 14px; height: 14px; fill: currentColor; }
+.sb-actions button:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+/* The short break drains a bar along the card's bottom edge. */
+.sb-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: calc(var(--sb-left, 1) * 100%); background: #ffffff; opacity: 0.8; }
+.scene-break:not([data-mode="auto"]) .sb-bar { display: none; }
 
 #narration {
   margin: 4px 0 2px;

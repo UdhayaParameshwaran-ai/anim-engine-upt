@@ -116,6 +116,21 @@
         <div class="stage-card">
           <div id="stage">
             <div id="waiting" hidden><span class="dot"></span><span id="waiting-text">Writing the next scene</span></div>
+            <div id="scene-break" class="scene-break" role="status" aria-live="polite" hidden>
+              <div class="sb-text">
+                <span class="sb-done">Scene 1 of 4 done</span>
+                <span class="sb-up">Up next: <b class="sb-next"></b></span>
+                <span class="sb-count"></span>
+              </div>
+              <div class="sb-actions">
+                <button type="button" class="sb-stay" data-act="stay">Stay here</button>
+                <button type="button" class="sb-go" data-act="continue">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" /></svg>
+                  <span>Continue</span>
+                </button>
+              </div>
+              <div class="sb-bar" aria-hidden="true"></div>
+            </div>
             <div id="vc" class="vc" data-state="paused" hidden>
               <div class="vc-zone" data-zone="left"></div>
               <div class="vc-zone" data-zone="middle"></div>
@@ -153,11 +168,34 @@
           </button>
           <input id="scrub" type="range" min="0" max="1" step="0.001" value="0" aria-label="Timeline" />
           <span id="clock">0:00.0 <span>/ 0:00.0</span></span>
-          <label class="switch" title="Show element bounds (O)">
-            <input id="overlay-toggle" type="checkbox" />
-            <span class="track"></span>
-            <span>Bounds</span>
-          </label>
+          <div class="between">
+            <button id="between" type="button" class="between-btn" aria-haspopup="true" aria-expanded="false" aria-controls="between-menu" title="What happens when a scene ends">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h7M4 18h10M17 9l3 3-3 3" /></svg>
+              <span class="between-label">Play through</span>
+              <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg>
+            </button>
+            <div id="between-menu" class="between-menu" role="dialog" aria-label="Between scenes" hidden>
+              <p class="between-title">Between scenes</p>
+              <label class="between-opt">
+                <input type="radio" name="between" value="through" />
+                <span class="between-text"><b>Play straight through</b><small>Each scene runs into the next, like a normal video.</small></span>
+              </label>
+              <label class="between-opt">
+                <input type="radio" name="between" value="pause" />
+                <span class="between-text"><b>Pause after each scene</b><small>Stops at the end of every scene. Press Continue or Space when you are ready.</small></span>
+              </label>
+              <label class="between-opt">
+                <input type="radio" name="between" value="auto" />
+                <span class="between-text"><b>Short break, then continue</b><small>Stops for a moment to let the scene sink in, then plays on by itself.</small></span>
+              </label>
+              <div class="between-delay" aria-label="Length of the break">
+                <span>Break length</span>
+                <button type="button" class="icon-btn round" data-delay="-1" aria-label="Shorter break">−</button>
+                <span class="between-delay-value">3 s</span>
+                <button type="button" class="icon-btn round" data-delay="1" aria-label="Longer break">+</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <p id="narration" aria-live="off"></p>

@@ -7,6 +7,7 @@ import { SceneGrid } from "./scene-grid.js";
 import { VideoControls } from "./video-controls.js";
 import { renderInspector } from "./inspector.js";
 import { Overlay } from "./overlay.js";
+import { SceneBreak } from "./scene-break.js";
 import { TimelinePanel } from "./timeline-panel.js";
 import { CallsPanel, type CallTrace } from "./calls.js";
 import { promptSettings as createPromptSettings } from "./prompts.js";
@@ -65,7 +66,8 @@ const narration = $<HTMLParagraphElement>("narration");
 const cuesList = $<HTMLOListElement>("cues");
 const reportList = $<HTMLUListElement>("report");
 const inspectorBox = $<HTMLDivElement>("inspector");
-const overlayToggle = $<HTMLInputElement>("overlay-toggle");
+/** Element bounds drawn over the stage (a debugging aid, toggled with the O key). */
+let showBounds = false;
 const genLog = $<HTMLOListElement>("gen-log");
 const genBtn = $<HTMLButtonElement>("generate");
 const stopBtn = $<HTMLButtonElement>("stop");
@@ -120,6 +122,30 @@ const sceneGrid = new SceneGrid(
 
 let session: Session | undefined;
 let lastInspect = 0;
+/** The clock at the previous update, to see playback run across a scene's end. */
+let lastT = 0;
+
+/** What playback does when a scene ends: play through, pause, or a short break (the "Between scenes" menu). */
+const sceneBreak = new SceneBreak(
+  $<HTMLButtonElement>("between"),
+  $<HTMLElement>("between-menu"),
+  $<HTMLElement>("scene-break"),
+  {
+    hold: (t) => {
+      if (!session) return;
+      session.player.pause();
+      // The scene's last frame, not the next scene's first.
+      session.player.seek(Math.max(0, t - 1 / session.tl.fps));
+    },
+    resume: (t) => {
+      if (!session) return;
+      session.player.seek(t);
+      session.player.play();
+      update(session.player.time);
+    },
+  },
+  remembered,
+);
 
 /** Moves playback by `seconds` (the player clamps to the video), showing which way on the video. */
 function skip(seconds: number): void {
@@ -139,7 +165,7 @@ function mount(ir: VideoIR, tl: ResolvedTimeline, live = false): Session {
     onTime: update,
     onEnd: () => setPlaying(false),
     onWait: (w) => {
-      waitingText.textContent = "Writing the next scene";
+      waitingText.textContent = waitLabel;
       waiting.hidden = !w;
     },
   });
@@ -153,12 +179,14 @@ function mount(ir: VideoIR, tl: ResolvedTimeline, live = false): Session {
  * player keeps its clock. Earlier scenes resolve to the same times when
  * scenes are appended, so the picture doesn't jump.
  */
-async function extend(ir: VideoIR, tl: ResolvedTimeline, final: boolean): Promise<void> {
+async function extend(ir: VideoIR, tl: ResolvedTimeline, final: boolean, autoplay = true): Promise<void> {
   if (!session) {
     const s = mount(ir, tl, !final);
     await loadAudio(s.player);
-    s.player.play();
-    setPlaying(true);
+    if (autoplay) {
+      s.player.play();
+      setPlaying(true);
+    }
     return;
   }
   const old = session;
@@ -176,6 +204,8 @@ async function extend(ir: VideoIR, tl: ResolvedTimeline, final: boolean): Promis
 }
 
 function teardown(): void {
+  sceneBreak.dismiss();
+  lastT = 0;
   session?.player.pause();
   session?.stage.destroy();
   session = undefined;
@@ -218,6 +248,14 @@ function update(t: number): void {
   const s = session;
   if (!s) return;
   const { tl } = s;
+  // Moving away from a held scene end (seek, skip, a scene card) drops the "scene done" card.
+  if (sceneBreak.isHolding && Math.abs(t - (sceneBreak.heldAt! - 1 / tl.fps)) > 0.05) sceneBreak.dismiss();
+  const from = lastT;
+  lastT = t;
+  const held = sceneBreak.isHolding;
+  sceneBreak.check(tl, from, t, s.player.isPlaying, (id) => s.ir.scenes.find((x) => x.id === id)?.title);
+  // Holding seeks back to the scene's last frame, which updated everything already.
+  if (!held && sceneBreak.isHolding) return;
   scrub.value = String(t);
   scrub.style.setProperty("--p", `${tl.duration ? (t / tl.duration) * 100 : 0}%`);
   clock.innerHTML = `${fmtTime(t)} <span>/ ${fmtTime(tl.duration)}</span>`;
@@ -241,7 +279,7 @@ function update(t: number): void {
   lastInspect = now;
   const m = inspect(s.ir, tl, s.ev, t);
   renderInspector(inspectorBox, m);
-  s.overlay.enabled = overlayToggle.checked;
+  s.overlay.enabled = showBounds;
   s.overlay.update(m);
   editor.setNow(lineAt(m));
 }
@@ -265,46 +303,114 @@ function selectLine(line: number): void {
 
 // ---------------------------------------------------------------- build ---
 
-let building = false;
+/** What the waiting badge says while a live video waits for its next scene. */
+let waitLabel = "Writing the next scene";
+/** The build being streamed; a new Build or a generation stops it. */
+let buildAbort: AbortController | undefined;
 
-async function build(): Promise<void> {
-  if (building) return;
+/**
+ * Builds the script in the editor progressively: the server compiles it all (mistakes show at once), then speaks it
+ * scene by scene, and the first scene plays while the rest is spoken. `autoplay` is off for the example loaded with
+ * the page (no click yet, so the browser would not let it play sound).
+ */
+async function build(autoplay = true): Promise<void> {
+  if (renderMode) return buildWhole();
   stopGeneration();
+  buildAbort?.abort();
+  const abort = (buildAbort = new AbortController());
+  // The old video stays on screen until the first new scene is ready, but silent.
+  if (session?.player.isPlaying) {
+    session.player.pause();
+    update(session.player.time);
+  }
   const buildBtn = $<HTMLButtonElement>("build");
   // Compiling takes a moment; speaking the narration is what takes time (Kokoro runs locally; beeps are instant).
   const what = tts.value === "kokoro" ? "speaking the narration with Kokoro" : tts.value === "piper" ? "speaking the narration with Piper" : "building";
   const started = performance.now();
+  let total = 0;
+  let shown = false;
   const tick = () => {
+    if (shown) return;
     const s = Math.round((performance.now() - started) / 1000);
-    waitingText.textContent = `Building · ${what}${s >= 2 ? ` · ${s}s` : ""}${tts.value === "kokoro" && s >= 8 ? " (Piper is ~4x faster; Beeps is instant)" : ""}`;
+    waitingText.textContent = `Building · ${what}${total > 1 ? ` · scene 1 of ${total}` : ""}${s >= 2 ? ` · ${s}s` : ""}${tts.value === "kokoro" && s >= 8 ? " (Piper is ~4x faster; Beeps is instant)" : ""}`;
   };
-  building = true;
-  buildBtn.disabled = true;
   buildBtn.textContent = "Building…";
   tick();
   waiting.hidden = false;
   const timer = setInterval(tick, 1000);
-  let result: BuildResult;
+  /** The first scene replaces whatever video was showing; until then the old one stays (a failed build keeps it). */
+  const show = async (ir: VideoIR, tl: ResolvedTimeline, final: boolean) => {
+    if (!shown) {
+      shown = true;
+      clearInterval(timer);
+      waiting.hidden = true;
+      teardown();
+      waitLabel = "Speaking the next scene";
+    }
+    await extend(ir, tl, final, autoplay);
+  };
   try {
-    const res = await fetch(`/api/build?${style()}`, { method: "POST", body: editor.value });
-    result = await res.json();
+    const res = await fetch(`/api/build-stream?${style()}`, { method: "POST", body: editor.value, signal: abort.signal });
+    await readEvents(res, async (event, d) => {
+      if (abort !== buildAbort) return;
+      if (event === "start") {
+        total = d.scenes;
+        showDiagnostics(d.diagnostics);
+        tick();
+      } else if (event === "scene") {
+        await show(d.ir, d.timeline, false);
+      } else if (event === "done") {
+        showDiagnostics(d.diagnostics);
+        if (d.ok && d.ir && d.timeline) await show(d.ir, d.timeline, true);
+        else session?.player.finish();
+      } else if (event === "fail") {
+        showDiagnostics([`build failed: ${d.error}`]);
+        session?.player.finish();
+      }
+    });
   } catch (e) {
-    result = { ok: false, diagnostics: [], error: `build failed: ${e instanceof Error ? e.message : String(e)} (is the Studio server running?)` } as BuildResult;
+    if (abort.signal.aborted) return;
+    showDiagnostics([`build failed: ${e instanceof Error ? e.message : String(e)} (is the Studio server running?)`]);
+    session?.player.finish();
   } finally {
     clearInterval(timer);
-    waiting.hidden = true;
-    building = false;
-    buildBtn.disabled = false;
-    buildBtn.textContent = "Build";
+    if (abort === buildAbort) {
+      buildAbort = undefined;
+      if (!shown) waiting.hidden = true;
+      buildBtn.textContent = "Build";
+    }
+  }
+}
+
+/** The whole video in one request: the headless renderer needs every frame before it starts. */
+async function buildWhole(): Promise<void> {
+  let result: BuildResult;
+  try {
+    result = await (await fetch(`/api/build?${style()}`, { method: "POST", body: editor.value })).json();
+  } catch (e) {
+    result = { ok: false, diagnostics: [], error: `build failed: ${e instanceof Error ? e.message : String(e)}` } as BuildResult;
   }
   showDiagnostics(result.error ? [result.error] : result.diagnostics);
   if (!result.ok || !result.ir || !result.timeline) return;
-  const s = mount(result.ir, result.timeline);
-  if (renderMode) {
-    exposeForRender(s.stage);
-    return;
+  exposeForRender(mount(result.ir, result.timeline).stage);
+}
+
+/** Reads a server-sent event stream from a fetch response, handing each event over in order. */
+async function readEvents(res: Response, on: (event: string, data: any) => Promise<void> | void): Promise<void> {
+  if (!res.body) return;
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buffer += value;
+    for (let k = buffer.indexOf("\n\n"); k >= 0; k = buffer.indexOf("\n\n")) {
+      const block = buffer.slice(0, k);
+      buffer = buffer.slice(k + 2);
+      const data = /^data: (.*)$/m.exec(block)?.[1];
+      if (data !== undefined) await on(/^event: (.*)$/m.exec(block)?.[1] ?? "message", JSON.parse(data));
+    }
   }
-  await loadAudio(s.player);
 }
 
 function showDiagnostics(lines: string[]): void {
@@ -324,7 +430,8 @@ function note(text: string, cls: string): void {
 
 async function loadExample(): Promise<void> {
   editor.value = await (await fetch(`/api/source?file=${encodeURIComponent(examples.value)}`)).text();
-  await build();
+  // The example shows paused: there has been no click yet, and a page should not start talking by itself.
+  await build(false);
 }
 
 // ------------------------------------------------------------- generate ---
@@ -340,6 +447,10 @@ function log(text: string, cls = ""): void {
 
 async function startGeneration(): Promise<void> {
   stopGeneration();
+  buildAbort?.abort();
+  buildAbort = undefined;
+  $<HTMLButtonElement>("build").textContent = "Build";
+  waitLabel = "Writing the next scene";
   teardown();
   panel.clear();
   genLog.innerHTML = "";
@@ -503,17 +614,14 @@ editor.source.addEventListener("keydown", (e) => {
 });
 playBtn.addEventListener("click", () => {
   if (!session) return;
+  // At a held scene end, play means "continue to the next scene".
+  if (sceneBreak.isHolding) return sceneBreak.continue();
   session.player.toggle();
   update(session.player.time);
 });
 scrub.addEventListener("input", () => session?.player.seek(Number(scrub.value)));
 $<HTMLButtonElement>("prev").addEventListener("click", () => jumpCue(-1));
 $<HTMLButtonElement>("next").addEventListener("click", () => jumpCue(1));
-overlayToggle.addEventListener("change", () => {
-  if (!session) return;
-  lastInspect = 0;
-  update(session.player.time);
-});
 for (const list of [cuesList, reportList, diagnostics, inspectorBox]) list.addEventListener("click", onListClick);
 provider.addEventListener("change", () => {
   $<HTMLLabelElement>("replay-row").hidden = provider.value !== "replay";
@@ -586,7 +694,11 @@ document.addEventListener("keydown", (e) => {
     if (e.shiftKey) jumpCue(dir);
     else skip(dir * SKIP);
   }
-  if (e.key === "o" || e.key === "O") overlayToggle.click();
+  if (e.key === "o" || e.key === "O") {
+    showBounds = !showBounds;
+    lastInspect = 0;
+    if (session) update(session.player.time);
+  }
 });
 
 void init();
