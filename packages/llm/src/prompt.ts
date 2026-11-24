@@ -678,7 +678,7 @@ function decidedBlock(d: Decision): string {
   return `THE TEACHING PLAN IS DECIDED: use case ${d.usecase}, method ${m.name} (${d.why}).${d.misconception ? `\nThe wrong idea to bring out: ${d.misconception}` : ""}
 Write exactly ${d.slots.length} scene lines, one per numbered slot, in this order (a slot with several beats is ONE scene); each scene's "# beat:" line starts with its slot, word for word:
 ${list}
-The jobs and pictures are for you: never copy their wording into the plan's lines, titles or goals; the "# beat:" line holds only the slot. A slot with several beats is one scene that does them in order. A later round brings something new, never a repeat. A scene may borrow another method for its beat (· via: <method>).
+The jobs and pictures are for you: never copy their wording into the plan's lines, titles or goals; the "# beat:" line holds only the slot. A slot with several beats is one scene that does them in order. A later round brings something new, never a repeat. Only the scene that runs the example lists its step-by-step values; later scenes' goals name the step or result they point at, not the run again. A scene may borrow another method for its beat (· via: <method>).
 Choose each scene's template for the picture its beats need. A beat is the scene's job, not its name: the scene id and title say what the scene is about ("The cheapest road first", never "The Problem" or "Steps").
 `;
 }

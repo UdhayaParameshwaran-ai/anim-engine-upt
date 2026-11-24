@@ -193,3 +193,8 @@ Haiku still re-runs the example in its reasoning and result scenes (Dijkstra, ga
 once, says the answer in the opening question (CORS). Haiku writes 5 scenes for a 4-slot arc about a third of the
 time (the slots are split to fit), which with longer scenes is most of its token rise; its plan replies also vary
 from 0.7k to 7k completion tokens for similar text (provider-side). Sonnet's cost went down.
+
+Follow-up (wording only, not yet measured): worked-example reasoning now says "point at that one step on the finished
+run; never replay the run", result says "show the finished result once; do not retell the steps", discovery's pattern
+beat says "without running it again", and the planner keeps step-by-step values in the run's scene only. Aimed at
+Haiku re-running the example in its reasoning and result scenes; check it in the next eval batch (no new check added).

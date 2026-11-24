@@ -173,8 +173,8 @@ export const METHODS: readonly Method[] = [
     jobs: {
       problem: "State the concrete problem with its real values; no definition and no rule yet.",
       steps: "Solve it on the real values, one step per sentence, saying the values aloud: done when the example reaches its result on screen.",
-      reasoning: "Say why the key step is the right move: the rule behind what the viewer just watched.",
-      result: "Show the finished result and check it.",
+      reasoning: "Say why the key step is the right move: the rule behind what the viewer just watched. Point at that one step on the finished run; never replay the run.",
+      result: "Show the finished result once and check it; do not retell the steps.",
       apply: "Give a new small case on the same kind of picture, ask the viewer to work it out, pause, then give the answer. Do not restate the procedure.",
     },
     pictures: {
@@ -290,7 +290,7 @@ export const METHODS: readonly Method[] = [
       observation: "Show something to watch before any explanation.",
       prediction: "Ask the viewer what will happen next, then pause so they can guess.",
       experiment: "Run it and show what really happens, with the real output on screen: done when the evidence is visible, not described.",
-      discovery: "Point out the pattern in what happened.",
+      discovery: "Point out the pattern in what happened, without running it again.",
       formal: "Name the rule and state it precisely.",
     },
     pictures: {
