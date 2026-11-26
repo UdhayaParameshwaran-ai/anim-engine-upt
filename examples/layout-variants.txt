@@ -11,18 +11,19 @@ leaf = asset:leaf "Leaf"
 1 fade subtitle
 2 draw leaf
 
-scene zig "Steps, zigzag" template=steps variant=zigzag
-a = icon:sun "Light"
-b = icon:droplet "Water"
-c = icon:wind "Air"
-d = icon:cube "Sugar"
+scene deck "Steps, card deck" template=steps variant=deck
+title = title "How a plant eats"
+a = icon:sun "Light" "Leaves catch the sun"
+b = icon:droplet "Water" "Roots pull it up"
+c = icon:wind "Air" "Carbon dioxide comes in"
+d = icon:cube "Sugar" "The plant stores the food"
 > First {1}light, then {2}water, then {3}air, and finally {4}sugar.
 1 pop a
 2 pop b
 3 pop c
 4 pop d
 
-scene stairs "Steps, staircase" template=steps variant=staircase emphasis=last
+scene vert "Timeline, vertical" template=timeline variant=vertical emphasis=last
 a = box "Seed"
 b = box "Sprout"
 c = box "Plant"
@@ -32,6 +33,17 @@ d = box "Tree"
 2 fade b
 3 fade c
 4 fade d
+
+scene arc "Cycle, arc" template=cycle variant=arc
+a = icon:droplet "Evaporate"
+b = icon:cloud "Condense"
+c = icon:bolt "Storm"
+d = icon:droplet "Rain"
+> Water {1}evaporates, {2}condenses, {3}storms and {4}rains.
+1 pop a
+2 pop b
+3 pop c
+4 pop d
 
 scene diag "Compare, diagonal" template=compare variant=diagonal
 left = asset:cell.plant "Plant cell"

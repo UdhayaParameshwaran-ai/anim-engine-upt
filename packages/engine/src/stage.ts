@@ -12,6 +12,8 @@ export interface StageOptions {
   autoFit?: boolean;
   /** URL prefix the bundled font files are served from (see fonts.ts). Default "/fonts/". */
   fontBase?: string;
+  /** URL prefix the designer's HTML pages are served from (scenes drawn by a hosted page). Default https://tpl.anim.local. */
+  templateBase?: string;
 }
 
 interface SceneView {
@@ -66,6 +68,8 @@ export class Stage {
   private readonly svgCamera: SVGGElement;
   private readonly htmlCamera: HTMLDivElement;
   private readonly scenes: SceneView[] = [];
+  /** Instances that host a designer page; they are told the time every frame and the frame waits for them. */
+  private readonly pages: Instance[] = [];
   private readonly evaluator: ReturnType<typeof createEvaluator>;
   private readonly tints = new Map<string, Tween[]>();
   private readonly revealBy = new Map<string, string>();
@@ -148,11 +152,12 @@ export class Stage {
       const depth = (e: (typeof sceneIr.elements)[number]) => (e.kind === "panel" || e.kind === "rule" || e.kind === "zone" || e.kind === "chevron" ? 0 : e.link ? 1 : e.kind === "badge" ? 3 : 2);
       const ordered = [...sceneIr.elements].sort((a, b) => depth(a) - depth(b));
       for (const el of ordered) {
-        const inst = build(doc, el, this.theme, `${this.markId}-${res.id}-${el.id}`);
+        const inst = build(doc, el, this.theme, `${this.markId}-${res.id}-${el.id}`, opts.templateBase);
         paintFills(inst, this.theme);
         this.baseStyle.set(inst.root, inst.root.style.cssText);
         for (const nodes of inst.parts.values()) for (const n of nodes) this.baseStyle.set(n, (n as SVGElement).style.cssText);
         instances.set(el.id, inst);
+        if (inst.setCues) this.pages.push(inst);
         (inst.layer === "html" ? html : g).append(inst.root);
         // An element that gets struck through carries its line from the start (hidden until `strike`).
         if (inst.layer === "svg" && !inst.connector && timeline.tracks.some((tw) => tw.prop === "strike" && tw.target === `${res.id}/${el.id}`)) {
@@ -172,6 +177,13 @@ export class Stage {
       this.scenes.push({ res, ir: sceneIr, svg: g, html, instances });
     }
 
+    // A hosted page shows each item when the script shows it: the first moment its element becomes visible in its scene.
+    for (const view of this.scenes) for (const inst of view.instances.values()) {
+      if (!inst.setCues) continue;
+      const ids = String(inst.el.params.items ?? "").split(",").filter(Boolean);
+      inst.setCues(ids.map((id) => this.firstShown(`${view.res.id}/${id}`, view.res.t0)));
+    }
+
     container.append(this.root);
     if (opts.autoFit ?? true) {
       this.fit();
@@ -181,8 +193,19 @@ export class Stage {
     this.render(0);
   }
 
-  /** Resolves once the look's fonts have loaded; capture frames only after this. */
+  /** The earliest time (scene-local) at which an element's opacity rises above zero, or undefined when it never does. */
+  private firstShown(target: string, sceneStart: number): number | undefined {
+    let first: number | undefined;
+    for (const tw of this.timeline.tracks) {
+      if (tw.target !== target || tw.prop !== "opacity" || typeof tw.to !== "number" || tw.to <= 0) continue;
+      first = first === undefined ? tw.t0 : Math.min(first, tw.t0);
+    }
+    return first === undefined ? undefined : Math.max(0, first - sceneStart);
+  }
+
+  /** Resolves once the look's fonts have loaded and every hosted page has built itself; capture frames only after this. */
   async fontsReady(): Promise<void> {
+    await Promise.all(this.pages.map((p) => p.ready));
     const fonts = (this.root.ownerDocument as Document & { fonts?: FontFaceSet }).fonts;
     if (!fonts?.load) return;
     const faces = this.theme.faces.map(fontFace).filter((f) => f !== undefined);
@@ -252,6 +275,7 @@ export class Stage {
       const target = `${res.id}/${inst.el.id}`;
       const props = state.get(target) ?? {};
       this.applyElement(inst, target, props);
+      if (inst.tick) inst.tick(Math.min(Math.max(this.time, res.t0), res.t1) - res.t0);
       for (const [part, nodes] of inst.parts) {
         const pp = state.get(`${target}.${part}`) ?? (inst.el.params.anim === "walk" ? {} : undefined);
         if (pp) this.applyPart(nodes, `${target}.${part}`, pp);

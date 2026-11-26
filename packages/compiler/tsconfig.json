@@ -28,6 +28,9 @@
     },
     {
       "path": "../tts"
+    },
+    {
+      "path": "../html-templates"
     }
   ]
 }

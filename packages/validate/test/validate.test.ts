@@ -178,7 +178,7 @@ describe("schema", () => {
   });
 
   it("checks templates, layouts and transitions", () => {
-    const r = check("left = icon:sun\n> {1}Hi.\n1 pop left", { scene: "template=comprae in=swirl" });
+    const r = check('left = label "Old"\nr1 = icon:sun "a" "b"\n> {1}Hi.\n1 pop r1', { scene: "template=comprae in=swirl" });
     expect(r.codes).toEqual([C.UnknownTemplate, C.UnknownTransition, C.TemplateSlot]);
     expect(r.printed).toContain("template=compare");
     expect(r.ok).toBe(false); // missing `right` slot can't be auto-fixed

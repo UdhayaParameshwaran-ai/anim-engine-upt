@@ -1,0 +1,82 @@
+/* Interaction kit — scene styles. Shell styles come from ../process-steps-motion/steps-core.css. */
+.fx-w { display: inline-block; }
+.fx-m { display: inline-block; overflow: hidden; vertical-align: top; padding: 0 .04em .14em; margin-bottom: -.14em; }
+.ic [pathLength] { stroke-dasharray: 1; }
+.ix-cursor { position: absolute; left: 0; top: 0; z-index: 60; transform-origin: 8px 4px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.28)); }
+.ix-ripple { position: absolute; width: 80px; height: 80px; margin: -40px 0 0 -40px; border-radius: 50%; opacity: 0; pointer-events: none;
+  border: 3px solid var(--ac, var(--primary)); background: color-mix(in srgb, var(--ac, var(--primary)) 18%, transparent); }
+.ix-panel { position: absolute; border-radius: 36px; background: color-mix(in srgb, var(--surface) 70%, transparent); box-shadow: var(--shadow-raised), inset 0 0 0 1.5px var(--border); backdrop-filter: blur(10px); }
+
+/* 1 · Cursor & click */
+.ck-btn { position: absolute; display: flex; align-items: center; gap: 20px; padding: 0 28px; border-radius: 24px; overflow: hidden; color: var(--text);
+  background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 2px var(--border); }
+.ck-btn.hover { box-shadow: 0 18px 40px color-mix(in srgb, var(--ac) 22%, transparent), inset 0 0 0 2px color-mix(in srgb, var(--ac) 60%, transparent); }
+.ck-btn.on { background: var(--ac); color: var(--on-accent); box-shadow: 0 18px 44px color-mix(in srgb, var(--ac) 35%, transparent); }
+.ck-ic { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: var(--ac); background: color-mix(in srgb, var(--ac) 14%, transparent); flex: none; }
+.ck-btn.on .ck-ic { color: var(--on-accent); background: rgba(255,255,255,.2); }
+.ck-t { flex: 1; font-size: 34px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ck-ok { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--on-accent); background: rgba(255,255,255,.22); opacity: 0; }
+.ck-btn.on .ck-ok { opacity: 1; }
+.ck-btn .ix-ripple { border-color: var(--on-accent); background: rgba(255,255,255,.25); width: 140px; height: 140px; margin: -70px 0 0 -70px; }
+.ck-cap { position: absolute; left: 0; right: 0; text-align: center; font-size: 40px; font-weight: 600; color: var(--text-muted); }
+
+/* 2 · Drag & drop */
+.dg-zone { position: absolute; left: 980px; top: 250px; width: 880px; height: 680px; border-radius: 32px; border: 3px dashed color-mix(in srgb, var(--text) 18%, transparent);
+  background: color-mix(in srgb, var(--surface) 45%, transparent); transition: none; }
+.dg-zone.hot { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); box-shadow: 0 0 60px color-mix(in srgb, var(--primary) 25%, transparent); }
+.dg-zh { position: absolute; left: 30px; top: 22px; font-size: 26px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); display: flex; gap: 12px; align-items: center; }
+.dg-count { display: inline-grid; place-items: center; min-width: 40px; height: 40px; padding: 0 10px; border-radius: 20px; background: var(--primary); color: var(--on-accent); font-size: 22px; }
+.dg-ghost { position: absolute; width: 400px; height: 96px; border-radius: 20px; border: 2.5px dashed color-mix(in srgb, var(--text) 20%, transparent); opacity: 0; }
+.dg-card { position: absolute; width: 400px; height: 96px; border-radius: 20px; display: flex; align-items: center; gap: 16px; padding: 0 22px; z-index: 5;
+  background: var(--surface); box-shadow: var(--shadow-card), inset 6px 0 0 var(--ac); color: var(--text); }
+.dg-card.lift { z-index: 30; box-shadow: 0 30px 60px rgba(15,23,42,.25), inset 6px 0 0 var(--ac); }
+.dg-ic { color: var(--ac); display: grid; place-items: center; }
+.dg-t { flex: 1; font-size: 30px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dg-grip { font-size: 26px; color: var(--muted); letter-spacing: -.2em; }
+.dg-cap { position: absolute; left: 980px; width: 880px; top: 950px; text-align: center; font-size: 34px; font-weight: 600; color: var(--text-muted); }
+
+/* 3 · Prompt & send */
+.pr-box { position: absolute; left: 360px; top: 860px; width: 1200px; height: 104px; border-radius: 52px; display: flex; align-items: center; padding: 0 20px 0 44px;
+  background: var(--surface); box-shadow: var(--shadow-raised), inset 0 0 0 2px var(--border); font-size: 34px; font-weight: 500; color: var(--text); }
+.pr-text { white-space: nowrap; overflow: hidden; display: inline-block; max-width: 1000px; }
+.pr-caret { width: 3px; height: 42px; margin-left: 4px; background: var(--primary); display: inline-block; }
+.pr-send { position: relative; margin-left: auto; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; color: var(--text-muted); background: var(--raised); }
+.pr-send.ready { color: var(--on-accent); background: var(--primary); }
+.pr-feed { position: absolute; left: 360px; top: 0; width: 1200px; height: 840px; overflow: hidden; -webkit-mask-image: linear-gradient(transparent 200px, #000 330px); mask-image: linear-gradient(transparent 200px, #000 330px); }
+.pr-ex { position: absolute; left: 0; right: 0; top: 0; height: 250px; display: flex; flex-direction: column; gap: 18px; }
+.pr-me { align-self: flex-end; max-width: 760px; padding: 20px 30px; border-radius: 30px 30px 8px 30px; font-size: 30px; font-weight: 500; color: var(--on-accent); background: var(--primary); transform-origin: 100% 100%; }
+.pr-ai { align-self: flex-start; display: flex; align-items: center; gap: 16px; padding: 18px 28px; border-radius: 30px 30px 30px 8px; background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 1.5px var(--border); }
+.pr-ic { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: var(--ac); background: color-mix(in srgb, var(--ac) 14%, transparent); }
+.pr-dots { gap: 8px; } .pr-dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); display: block; }
+.pr-ans { font-size: 32px; font-weight: 700; color: var(--text); }
+
+/* 4 · Toggle switches */
+.tg-card { position: absolute; border-radius: 32px; background: var(--surface); box-shadow: var(--shadow-raised), inset 0 0 0 1.5px var(--border); }
+.tg-row { position: absolute; display: flex; align-items: center; gap: 24px; padding: 0 44px; border-radius: 24px; }
+.tg-row.focus { background: color-mix(in srgb, var(--ac) 7%, transparent); }
+.tg-ic { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--ac); background: color-mix(in srgb, var(--ac) 14%, transparent); }
+.tg-txt { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.tg-t { font-size: 34px; font-weight: 800; color: var(--text); }
+.tg-state { font-size: 24px; font-weight: 600; color: var(--ac); }
+.tg-sw { position: relative; width: 104px; height: 56px; border-radius: 28px; flex: none; overflow: hidden; background: color-mix(in srgb, var(--text) 14%, transparent); }
+.tg-fill { position: absolute; inset: 0; background: var(--ac); transform-origin: 0 50%; transform: scaleX(0); }
+.tg-knob { position: absolute; left: 6px; top: 6px; width: 44px; height: 44px; border-radius: 22px; background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,.25); }
+
+/* 5 · Touch & swipe */
+.tc-phone { position: absolute; left: 400px; top: 210px; width: 440px; height: 820px; border-radius: 64px; padding: 16px; background: var(--ink); box-shadow: var(--shadow-raised); }
+.tc-screen { position: relative; width: 100%; height: 100%; border-radius: 50px; overflow: hidden; background: var(--bg); }
+.tc-track { position: absolute; left: 24px; top: 120px; height: 520px; }
+.tc-card { position: absolute; top: 0; width: 340px; height: 520px; border-radius: 34px; padding: 40px 32px; display: flex; flex-direction: column; gap: 18px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ac) 22%, var(--surface)), var(--surface)); box-shadow: var(--shadow-card), inset 0 0 0 2px color-mix(in srgb, var(--ac) 30%, transparent); }
+.tc-ic { width: 110px; height: 110px; border-radius: 50%; display: grid; place-items: center; color: var(--on-accent); background: var(--ac); }
+.tc-card b { font-size: 38px; font-weight: 800; color: var(--text); line-height: 1.1; }
+.tc-card span:last-child { font-size: 24px; font-weight: 500; color: var(--text-muted); line-height: 1.35; }
+.tc-dots { position: absolute; left: 0; right: 0; bottom: 60px; display: flex; justify-content: center; gap: 12px; }
+.tc-dots i { width: 12px; height: 12px; border-radius: 6px; background: color-mix(in srgb, var(--text) 20%, transparent); }
+.tc-dots i.on { width: 34px; background: var(--primary); }
+.tc-finger { position: absolute; left: -40px; top: -40px; width: 80px; height: 80px; border-radius: 50%; z-index: 50; opacity: 0;
+  background: radial-gradient(circle, rgba(255,255,255,.75), rgba(255,255,255,.35)); box-shadow: 0 0 0 3px rgba(15,23,42,.25), 0 8px 24px rgba(0,0,0,.2); }
+.tc-finger .ix-ripple { left: 40px; top: 40px; border-color: #fff; background: rgba(255,255,255,.25); }
+.tc-pane { position: absolute; left: 960px; top: 430px; width: 860px; display: flex; flex-direction: column; gap: 18px; }
+.tc-title { font-size: 84px; font-weight: 800; letter-spacing: -.03em; line-height: 1.02; color: var(--text); }
+.tc-detail { font-size: 36px; font-weight: 500; line-height: 1.35; color: var(--text-muted); }

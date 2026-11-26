@@ -1,6 +1,1 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
-  "include": ["src"],
-  "references": [{ "path": "../dsl" }, { "path": "../registry" }]
-}
+{"extends":"../../tsconfig.base.json","compilerOptions":{"rootDir":"src","outDir":"dist"},"include":["src"],"references":[{"path":"../dsl"},{"path":"../registry"},{"path":"../html-templates"}]}

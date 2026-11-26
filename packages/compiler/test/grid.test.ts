@@ -105,7 +105,18 @@ describe("grid scenes", () => {
 });
 
 describe("layout variants and knobs", () => {
-  const steps = (attrs: string) => `video 1 "V"\nscene s "S" template=steps ${attrs}\na = box "A"\nb = box "B"\nc = box "C"\n> {1}One, {2}two, {3}three.\n1 fade a\n2 fade b\n3 fade c\n`;
+  // (`steps` is drawn by an HTML page now; `timeline` and `cards` still go through this layout engine.)
+  const timeline = (attrs: string) => `video 1 "V"
+scene s "S" template=timeline ${attrs}
+a = box "A"
+b = box "B"
+c = box "C"
+> {1}One, {2}two, {3}three.
+1 fade a
+2 fade b
+3 fade c
+`;
+  const cards = (attrs: string) => timeline(attrs).replace("template=timeline", "template=cards");
   const boxes = (src: string) => {
     const r = compile(src);
     expect(report(r.diagnostics.filter((d) => d.severity === "error"))).toBe("");
@@ -113,38 +124,43 @@ describe("layout variants and knobs", () => {
   };
 
   it("arrange the same template differently", () => {
-    const row = boxes(steps(""));
-    const zig = boxes(steps("variant=zigzag"));
-    const col = boxes(steps("variant=column"));
-    const stairs = boxes(steps("variant=staircase"));
-    expect(new Set([row.a!.y, row.b!.y, row.c!.y]).size).toBe(1);
-    expect(zig.b!.y).toBeGreaterThan(zig.a!.y);
-    expect(zig.c!.y).toBe(zig.a!.y);
+    const alt = boxes(timeline(""));
+    const line = boxes(timeline("variant=line"));
+    const col = boxes(timeline("variant=vertical"));
+    expect(new Set([line.a!.y, line.b!.y, line.c!.y]).size).toBe(1);
+    expect(alt.b!.y).toBeGreaterThan(alt.a!.y);
+    expect(alt.c!.y).toBe(alt.a!.y);
     expect(col.b!.y).toBeGreaterThan(col.a!.y);
     expect(col.a!.x).toBe(col.b!.x);
-    expect(stairs.a!.y).toBeGreaterThan(stairs.b!.y);
-    expect(stairs.b!.y).toBeGreaterThan(stairs.c!.y);
+    // The cards: one strip, or one feature on one side with the rest stacked on the other.
+    const strip = boxes(cards("variant=strip"));
+    const feature = boxes(cards("variant=feature"));
+    expect(new Set([strip.a!.y, strip.b!.y, strip.c!.y]).size).toBe(1);
+    expect(feature.a!.x).toBeLessThan(feature.b!.x);
+    expect(feature.b!.x).toBe(feature.c!.x);
+    expect(feature.b!.y).toBeLessThan(feature.c!.y);
   });
 
   it("give the emphasized element more room and space things by density", () => {
-    const even = boxes(steps("variant=zigzag"));
-    const big = boxes(steps("variant=zigzag emphasis=b"));
+    const even = boxes(timeline("variant=line"));
+    const big = boxes(timeline("variant=line emphasis=b"));
     expect(big.b!.x - big.a!.x).toBeGreaterThan(even.b!.x - even.a!.x);
-    const airy = boxes(steps("density=airy"));
-    const tight = boxes(steps("density=tight"));
+    const airy = boxes(timeline("variant=line density=airy"));
+    const tight = boxes(timeline("variant=line density=tight"));
     expect(tight.a!.w).toBeGreaterThanOrEqual(airy.a!.w);
+    expect(airy.b!.x - airy.a!.x).toBeGreaterThan(tight.b!.x - tight.a!.x);
   });
 
   it("mirror any layout, grid pages included", () => {
-    const plain = boxes(steps(""));
-    const flipped = boxes(steps("mirror=true"));
+    const plain = boxes(timeline(""));
+    const flipped = boxes(timeline("mirror=true"));
     expect(flipped.a!.x).toBe(1920 - plain.a!.x - plain.a!.w);
     const page = (m: string) => boxes(`video 1 "G"\nscene a "A" grid=L2-01 ${m}\ns1 = body "Left"\ns2 = stat "9" "right"\n> {1}Go {2}now.\n1 draw s1\n2 draw s2\n`);
     expect(page("mirror=true").s1!.x).toBeGreaterThan(page("").s1!.x);
   });
 
   it("pick a stable variant for variant=auto", () => {
-    expect(boxes(steps("variant=auto"))).toEqual(boxes(steps("variant=auto")));
+    expect(boxes(timeline("variant=auto"))).toEqual(boxes(timeline("variant=auto")));
   });
 
   it("left-align headlines in the left title variant", () => {
@@ -153,9 +169,9 @@ describe("layout variants and knobs", () => {
   });
 
   it("fix bad knobs (NAR218)", () => {
-    const r = compile(steps("variant=zigzg density=airyy emphasis=nobody mirror=yes"));
+    const r = compile(timeline("variant=alternte density=airyy emphasis=nobody mirror=yes"));
     const fixes = r.diagnostics.filter((d) => d.code === "NAR218").map((d) => d.fixed);
-    expect(fixes).toEqual(["used `zigzag`", "ignored", "used `airy`", "ignored"]);
+    expect(fixes).toEqual(["used `alternate`", "ignored", "used `airy`", "ignored"]);
   });
 });
 
@@ -210,10 +226,10 @@ describe("composition by intent (compose=)", () => {
 });
 
 describe("authored variants (pnpm variant)", () => {
-  const src = (variant: string) => `video 1 "A"\nscene s "S" template=steps variant=${variant}\na = box "A"\nb = box "B"\nc = box "C"\n> {1}One, {2}two, {3}three.\n1 fade a\n2 fade b\n3 fade c\n`;
+  const src = (variant: string) => `video 1 "A"\nscene s "S" template=cards variant=${variant}\na = box "A"\nb = box "B"\nc = box "C"\n> {1}One, {2}two, {3}three.\n1 fade a\n2 fade b\n3 fade c\n`;
 
-  it("offers approved variants like built-in ones (steps:arch arches up in the middle)", () => {
-    expect(findTemplate("steps")!.variants).toContain("arch");
+  it("offers approved variants like built-in ones (cards:arch arches up in the middle)", () => {
+    expect(findTemplate("cards")!.variants).toContain("arch");
     const r = compile(src("arch"));
     expect(r.diagnostics).toEqual([]);
     const [a, b, c] = ["a", "b", "c"].map((id) => r.ir!.scenes[0]!.elements.find((e) => e.id === id)!.box);
@@ -222,8 +238,8 @@ describe("authored variants (pnpm variant)", () => {
   });
 
   it("keeps drafts out unless drafts are allowed", () => {
-    EXTRA_VARIANTS.push({ template: "steps", name: "test-draft", summary: "test", status: "draft" });
-    VARIANT_PLUGINS["steps:test-draft"] = (c) => c.items.forEach((e, i) => c.put(e, c.colCells(c.area, c.items.length)[i]!));
+    EXTRA_VARIANTS.push({ template: "cards", name: "test-draft", summary: "test", status: "draft" });
+    VARIANT_PLUGINS["cards:test-draft"] = (c) => c.items.forEach((e, i) => c.put(e, c.colCells(c.area, c.items.length)[i]!));
     try {
       const blocked = compile(src("test-draft"));
       expect(blocked.diagnostics.find((d) => d.code === "NAR218")?.message).toMatch(/draft that hasn't been approved/);
@@ -233,7 +249,7 @@ describe("authored variants (pnpm variant)", () => {
       expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y); // the plugin's column layout ran
     } finally {
       EXTRA_VARIANTS.pop();
-      delete VARIANT_PLUGINS["steps:test-draft"];
+      delete VARIANT_PLUGINS["cards:test-draft"];
     }
   });
 });

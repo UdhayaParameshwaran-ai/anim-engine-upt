@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { basename, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { respondPath } from "../../packages/html-templates/src/files.mjs";
 
 const repo = fileURLToPath(new URL("../..", import.meta.url));
 const packages = join(repo, "packages");
@@ -44,6 +45,13 @@ function api(): Plugin {
           if (url.pathname === "/api/history") return json(res, historyApi(req.method ?? "GET", url.searchParams.get("id")));
           if (url.pathname === "/api/generate") return await generateStream(server, url, req, res);
           if (url.pathname.startsWith("/audio/")) return send(res, "audio/wav", readFileSync(join(ttsDir, basename(url.pathname))));
+          // The designer's HTML pages (scenes drawn by a hosted page), mounted at /tpl so they share the Studio's origin.
+          if (url.pathname.startsWith("/tpl/")) {
+            const r = respondPath(decodeURIComponent(url.pathname.slice("/tpl".length)));
+            res.statusCode = r.status;
+            res.setHeader("content-type", r.type);
+            return void res.end(r.body);
+          }
           if (url.pathname.startsWith("/fonts/")) {
             const [pkg, file] = url.pathname.slice("/fonts/".length).split("/");
             return send(res, "font/woff2", readFileSync(join(repo, "node_modules", "@fontsource", basename(pkg ?? ""), "files", basename(file ?? ""))));

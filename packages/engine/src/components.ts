@@ -1,6 +1,7 @@
 import type { Box, ElementIR } from "@anim/ir";
 import { ICONS, ILLUSTRATIONS } from "./art.js";
 import { color, itemColor, shadowFilter, type Theme } from "./theme.js";
+import { buildMotion, DEFAULT_TEMPLATE_BASE } from "./motion.js";
 import { buildWidget, WIDGET_KINDS } from "./widgets.js";
 
 export const SVG_NS = "http://www.w3.org/2000/svg";
@@ -31,6 +32,12 @@ export interface Instance {
   shown?: string;
   /** A line across the element, drawn by `strike`. */
   strikeLine?: SVGLineElement;
+  /** A page-hosting element: called every frame with the scene's own time. */
+  tick?: (sceneTime: number) => void;
+  /** Resolves when the hosted page can be shown (fonts loaded, stage built). */
+  ready?: Promise<void>;
+  /** Told, once the timeline is known, when each item of the page is shown (scene-local seconds). */
+  setCues?: (cues: (number | undefined)[]) => void;
   /** Connectors are re-routed every frame between their endpoints. */
   connector?: { from: string; to: string; path: SVGPathElement; head?: SVGPathElement; label?: SVGTextElement; token?: SVGCircleElement };
 }
@@ -39,10 +46,16 @@ const CHAR_W = 0.55;
 const FONT: Record<string, number> = { title: 80, text: 44, label: 34, node: 32, list: 40, box: 36, circle: 32, placeholder: 28, edge: 26, arrow: 26, line: 26, icon: 30, asset: 32 };
 
 /** `ids` prefixes any SVG ids the element defines (clip paths), unique per stage. */
-export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${el.id}`): Instance {
+export function build(doc: Document, el: ElementIR, theme: Theme, ids = `anim-${el.id}`, templateBase = DEFAULT_TEMPLATE_BASE): Instance {
   const inst: Instance = { el, layer: el.layer, root: undefined!, parts: new Map(), strokes: [], fills: [], chars: [], lines: [], innerText: [] };
+  // Drawn by a hosted page instead (see compiler/html.ts): the element is there for its verbs and timing, with nothing to show.
+  if (el.params.virtual) {
+    inst.layer = "svg";
+    inst.root = svg<SVGGElement>(doc, "g", { "data-id": el.id, "data-kind": el.kind, "data-virtual": "" });
+    return inst;
+  }
   if (el.layer === "html") {
-    inst.root = buildHtml(doc, el, theme, inst);
+    inst.root = el.kind === "motion" ? buildMotion(doc, el, theme, inst, templateBase) : buildHtml(doc, el, theme, inst);
     return inst;
   }
   const g = svg<SVGGElement>(doc, "g", { "data-id": el.id, "data-kind": el.kind });

@@ -1,0 +1,210 @@
+/* Stats — shared app chrome + stage styles.
+   Load themes.css BEFORE this file: it defines the colour variables for each of the four themes. */
+:root {
+  /* Colours come from themes.css (generated from src/theme/themes.ts). These two are derived from the active theme. */
+  --primary-soft: color-mix(in srgb, var(--primary) 62%, white);
+  --glow: color-mix(in srgb, var(--primary) 55%, transparent);
+  /* The big date numbers use ONE colour in every variant. */
+  --date: var(--text);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--chrome);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea { font: inherit; color: inherit; }
+
+/* ── App bar ───────────────────────────────────────────── */
+.app-bar {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+}
+.app-bar a.back { color: var(--text-muted); text-decoration: none; font-size: 14px; }
+.app-bar a.back:hover { color: var(--text); }
+.app-bar h1 { margin: 0; font-size: 16px; font-weight: 600; }
+.app-bar .variants { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.app-bar .variants a {
+  padding: 6px 12px; border-radius: 999px; font-size: 13px; text-decoration: none;
+  color: var(--text-muted); border: 1px solid var(--border);
+}
+.app-bar .variants a.on { color: var(--on-accent); background: var(--primary); border-color: var(--primary); }
+.app-bar .themes { display: flex; gap: 6px; flex-wrap: wrap; }
+.app-bar .themes button {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  color: var(--text-muted); background: transparent; border: 1px solid var(--border);
+}
+.app-bar .themes button i { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); display: inline-block; }
+.app-bar .themes button.on { color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+
+/* ── Layout ────────────────────────────────────────────── */
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 360px; height: calc(100% - 57px); }
+.preview { display: flex; flex-direction: column; gap: 12px; padding: 20px; min-width: 0; overflow: auto; }
+.viewport {
+  position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden;
+  border-radius: 12px; background: var(--bg); box-shadow: var(--shadow-raised);
+}
+.stage {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
+  transform-origin: 0 0; overflow: hidden; background: transparent; /* the backdrop and colour sit on .viewport behind it */
+  font-family: var(--font); color: var(--text);
+}
+.stage * { will-change: auto; }
+
+/* ── Transport ─────────────────────────────────────────── */
+.controls { display: flex; align-items: center; gap: 12px; }
+.controls button {
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); cursor: pointer; display: grid; place-items: center;
+}
+.controls button:hover { border-color: var(--primary); }
+.controls button svg { width: 16px; height: 16px; fill: currentColor; }
+.controls input[type=range] { flex: 1; accent-color: var(--primary); }
+.controls .time { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-muted); min-width: 92px; text-align: right; }
+.hint { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+/* ── Editor panel ──────────────────────────────────────── */
+.editor { border-left: 1px solid var(--border); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.editor h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; color: var(--text-muted); }
+.field input, .field textarea, .item input, .item textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 14px; resize: vertical;
+}
+.field input:focus, .item input:focus, .item textarea:focus { outline: none; border-color: var(--primary); }
+
+.items { display: flex; flex-direction: column; gap: 12px; }
+.item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+.item-head { display: flex; align-items: center; gap: 8px; }
+.item-head .num { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.item-head .tools { margin-left: auto; display: flex; gap: 4px; }
+.item-head .tools button {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; cursor: pointer; font-size: 13px; line-height: 1;
+}
+.item-head .tools button:hover { border-color: var(--primary); }
+.item-head .tools button:disabled { opacity: .3; cursor: default; }
+.thumb {
+  height: 96px; border-radius: 8px; background: var(--bg) center / cover no-repeat;
+  position: relative; overflow: hidden; border: 1px dashed var(--border);
+}
+.thumb .upload {
+  position: absolute; inset: auto 6px 6px auto; padding: 4px 10px; border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); color: var(--text); font-size: 12px; cursor: pointer;
+}
+.thumb .upload input { display: none; }
+.thumb.drag { border-color: var(--primary); }
+
+.btn {
+  padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 500;
+}
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-accent); }
+.btn:hover { filter: brightness(1.1); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Theme backdrop ──────────────────────────────────────
+   Drawn on the whole preview container (not just the 16:9 stage), so it fills the canvas whatever shape the container is.
+   --s is the stage scale set by the script, so the grid, tints and glows scale with the stage; same look as the Remotion themes. */
+.bd-host { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.bd { position: absolute; inset: 0; overflow: hidden; }
+.bd-grid {
+  position: absolute; inset: 0; background-size: calc(64px * var(--s, 1)) calc(64px * var(--s, 1));
+  -webkit-mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, #000 0%, rgba(0,0,0,.3) 100%); mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, #000 0%, rgba(0,0,0,.3) 100%);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--primary) 3.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--primary) 3.5%, transparent) 1px, transparent 1px);
+}
+.bd-tint, .bd-glow { position: absolute; border-radius: 50%; }
+.bd-tint.t1 { left: calc(-160px * var(--s, 1)); top: calc(-200px * var(--s, 1)); width: calc(720px * var(--s, 1)); height: calc(560px * var(--s, 1));
+  transform: translate(calc(var(--d1x, 0) * var(--s, 1) * 1px), calc(var(--d1y, 0) * var(--s, 1) * 1px));
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--primary) 7%, transparent), transparent); }
+.bd-tint.t2 { right: calc(-200px * var(--s, 1)); bottom: calc(-240px * var(--s, 1)); width: calc(760px * var(--s, 1)); height: calc(600px * var(--s, 1));
+  transform: translate(calc(var(--d2x, 0) * var(--s, 1) * 1px), calc(var(--d2y, 0) * var(--s, 1) * 1px));
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--secondary) 6%, transparent), transparent); }
+.bd-glow { width: calc(900px * var(--s, 1)); height: calc(620px * var(--s, 1)); }
+.bd-glow.g1 { left: calc(-220px * var(--s, 1)); top: calc(-240px * var(--s, 1));
+  transform: translate(calc(var(--d1x, 0) * var(--s, 1) * 1px), calc(var(--d1y, 0) * var(--s, 1) * 1px));
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--primary) 15%, transparent), transparent); }
+.bd-glow.g2 { right: calc(-120px * var(--s, 1)); bottom: calc(-200px * var(--s, 1));
+  transform: translate(calc(var(--d2x, 0) * var(--s, 1) * 1px), calc(var(--d2y, 0) * var(--s, 1) * 1px));
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--secondary) 12%, transparent), transparent); }
+.bd-glow.g3 { left: 40%; top: calc(-300px * var(--s, 1)); width: calc(800px * var(--s, 1)); height: calc(520px * var(--s, 1));
+  transform: translate(calc(var(--d3x, 0) * var(--s, 1) * 1px), calc(var(--d3y, 0) * var(--s, 1) * 1px));
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tertiary) 12%, transparent), transparent); }
+.bd-dots { position: absolute; inset: 0; background-size: calc(56px * var(--s, 1)) calc(56px * var(--s, 1));
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 7%, transparent) calc(1.5px * var(--s, 1)), transparent calc(2px * var(--s, 1))); }
+
+/* ── Embed mode (gallery thumbnails) ───────────────────── */
+body.embed { background: var(--bg); overflow: hidden; }
+body.embed .app-bar, body.embed .editor, body.embed .controls, body.embed .hint { display: none; }
+body.embed .app { display: block; height: 100%; }
+body.embed .preview { padding: 0; height: 100%; overflow: hidden; }
+body.embed .viewport { border-radius: 0; box-shadow: none; }
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; height: auto; }
+  .preview { padding: 16px; }
+  .editor { border-left: 0; border-top: 1px solid var(--border); padding: 16px; }
+}
+
+/* ── Shared step pieces ────────────────────────────────── */
+.hd-kicker { position: absolute; left: 120px; top: 72px; font-size: 24px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--secondary); }
+.hd-heading { position: absolute; left: 120px; top: 108px; font-size: 64px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; white-space: nowrap; color: var(--text); }
+.hd-mask { overflow: hidden; display: block; padding-bottom: 6px; }
+.hd-mask > span { display: inline-block; }
+.ic { display: block; overflow: visible; }
+.editor.noimg .thumb, .editor.noimg [data-f="image"] { display: none; }
+.item select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px; font-size: 13px; }
+.item select:focus { outline: none; border-color: var(--primary); }
+
+/* ── Stats pieces (sizes mirror src/theme/theme.ts: display 120, h1 80, h2 56, h3 40, body 32, label 24; space = 8px) ── */
+:root { --stroke: 4px; }
+.hd { position: absolute; left: 96px; right: 96px; top: 64px; }
+.hd-k { font-size: 24px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--secondary); margin-bottom: 6px; }
+.hd-h { font-size: 56px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; color: var(--text); font-family: var(--font-heading); }
+.place { position: absolute; display: flex; align-items: center; justify-content: center; }
+.ic { display: block; overflow: visible; }
+
+/* counting number (StableNumber) */
+.cn { display: inline-flex; align-items: baseline; white-space: nowrap; font-family: var(--font-heading); font-weight: 700; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.cn-num { display: inline-grid; }
+.cn-num > * { grid-area: 1 / 1; font: inherit; justify-self: end; }
+.cn-num > i { visibility: hidden; }
+.cn-pre, .cn-suf { font-size: .6em; }
+.cn-pre { margin-right: .05em; }
+.cn-suf { margin-left: .04em; }
+
+/* delta badge */
+.db { display: inline-flex; align-items: center; gap: 16px; }
+.db-pill { display: inline-flex; align-items: center; border-radius: var(--radius); color: var(--dc); font-family: var(--font-heading); font-weight: 700; line-height: 1.1; transform-origin: left center;
+  background: color-mix(in srgb, var(--dc) 16%, transparent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--dc) 35%, transparent); font-variant-numeric: tabular-nums; }
+.db-l { color: var(--text-muted); font-family: var(--font); font-weight: 500; }
+
+/* editor extras */
+.seg { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--raised); align-self: flex-start; }
+.seg button { border: 0; background: transparent; padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.trio { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 6px; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; }
+.field select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 14px; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-muted); }
+.chk input { width: auto; accent-color: var(--primary); }
+.item.off { opacity: .5; }
+.editor h2 .cap { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* ── Process Steps pieces (sizes from ProcessSteps.tsx: title = label 24 semibold, detail = caption 20) ── */
+.sp-title { font-family: var(--font-heading); font-size: 24px; font-weight: 600; line-height: 1.25; color: var(--text); }
+.sp-detail { font-family: var(--font); font-size: 20px; font-weight: 400; line-height: 1.25; color: var(--text-muted); }
+.sp-n { font-family: ui-monospace, "JetBrains Mono", monospace; color: var(--text-muted); }
+.sp-num { position: absolute; display: flex; align-items: center; justify-content: center; color: var(--text); font-family: var(--font-heading); font-weight: 700; }
+.sp-lab { position: absolute; text-align: center; }
+.sp-row { position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.sp-step { position: absolute; inset: 0; }
+.sp-band { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
+.sp-idx { display: flex; align-items: center; gap: 8px; color: var(--primary); font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 20px; font-weight: 500; }
+.sp-det { position: absolute; text-align: center; }

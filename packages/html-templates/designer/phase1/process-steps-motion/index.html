@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Process Steps · Motion set</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="themes.css">
+<link rel="stylesheet" href="steps-core.css">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 48px 24px 64px; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--secondary); }
+  h1 { margin: 8px 0 8px; font-size: 40px; letter-spacing: -.02em; }
+  .lead { margin: 0 0 24px; color: var(--text-muted); max-width: 760px; line-height: 1.6; }
+  .themes-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 28px; }
+  .themes-bar button { display: inline-flex; align-items: center; gap: 9px; padding: 7px 16px 7px 8px; border-radius: 999px; font-size: 14px; cursor: pointer;
+    color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); }
+  .themes-bar button i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); display: inline-block; }
+  .themes-bar button.on { color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: border-color .2s, transform .2s; }
+  .card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .frame { position: relative; aspect-ratio: 16 / 9; background: var(--bg); }
+  .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .meta { padding: 18px 20px 22px; display: grid; gap: 8px; }
+  .meta h2 { margin: 0; font-size: 20px; }
+  .meta p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-muted); }
+  .src { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); } .src.new { color: var(--secondary); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tags span { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Template · process steps</div>
+    <h1>Process steps: 9 motion ideas, 4 themes</h1>
+    <p class="lead">Each variant walks through the same steps with its own motion idea: a road, a deck, a reel, a ring, a tower and a camera dolly. They all follow the same rules: the current step moves, finished steps step back, text blur-rises word by word, and each motion ends where the next step appears. Pace sets the gap and the hold. Pick a theme below to restyle every preview.</p>
+    <nav class="themes-bar" id="themes" aria-label="Theme"></nav>
+    <div class="grid">
+      <a class="card" href="v1-morph-relay.html">
+        <div class="frame"><iframe data-src="v1-morph-relay.html" title="01 · Morph Relay preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>01 · Morph Relay</h2>
+          <div class="src new">New motion</div>
+          <p>One shape carries the whole process. At each step it morphs into a new form, turning and squashing as it changes and taking the step colour while its icon swaps. Every finished form is stamped into a row below.</p>
+          <div class="tags"><span>shape morph</span><span>one object, many stages</span><span>stamps</span></div>
+        </div>
+      </a>
+      <a class="card" href="v2-card-deck.html">
+        <div class="frame"><iframe data-src="v2-card-deck.html" title="02 · Card Deck preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>02 · Card Deck</h2>
+          <div class="src new">New motion</div>
+          <p>Each step is a card on a deck. When it's done, the card lifts, tips back in 3D and arcs into a "done" tray, and the deck slides forward to the next card.</p>
+          <div class="tags"><span>3D flip</span><span>done tray</span><span>depth stack</span></div>
+        </div>
+      </a>
+      <a class="card" href="v3-accordion-focus.html">
+        <div class="frame"><iframe data-src="v3-accordion-focus.html" title="03 · Accordion Focus preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>03 · Accordion Focus</h2>
+          <div class="src new">New motion</div>
+          <p>A highlight slides to the current row with a springy overshoot and the row opens to reveal its detail, while the previous row folds shut and gets a drawn check. The list reflows smoothly as rows open and close.</p>
+          <div class="tags"><span>UI-native</span><span>spring highlight</span><span>reflow</span></div>
+        </div>
+      </a>
+      <a class="card" href="v4-orbit.html">
+        <div class="frame"><iframe data-src="v4-orbit.html" title="04 · Orbit preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>04 · Orbit</h2>
+          <div class="src new">New motion</div>
+          <p>The steps sit on a tilted 3D ring that turns to bring each one to the front. The front step is large, sharp and lit; the back ones are small and soft. Dots travel round the ring.</p>
+          <div class="tags"><span>3D carousel</span><span>depth of field</span><span>cyclic feel</span></div>
+        </div>
+      </a>
+      <a class="card" href="v5-block-stack.html">
+        <div class="frame"><iframe data-src="v5-block-stack.html" title="05 · Block Stack preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>05 · Block Stack</h2>
+          <div class="src new">New motion</div>
+          <p>Each step drops onto the last: it falls under gravity, squashes and springs back, the tower shudders and dust puffs out. Then a leader line draws out to its detail.</p>
+          <div class="tags"><span>physics</span><span>squash & stretch</span><span>builds up</span></div>
+        </div>
+      </a>
+      <a class="card" href="v6-domino-chain.html">
+        <div class="frame"><iframe data-src="v6-domino-chain.html" title="06 · Domino Chain preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>06 · Domino Chain</h2>
+          <div class="src new">New motion</div>
+          <p>Cause and effect. Each tile is knocked and teeters while its step is explained, then falls into the next tile, which is the next step. The last one lands flat with a bounce.</p>
+          <div class="tags"><span>cause → effect</span><span>gravity</span><span>held tension</span></div>
+        </div>
+      </a>
+      <a class="card" href="v1-path-walker.html">
+        <div class="frame"><iframe data-src="v1-path-walker.html" title="07 · Path Walker preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>07 · Path Walker</h2>
+          <div class="src new">New motion</div>
+          <p>A glowing traveller walks a winding road. The road ahead is a faint dashed line and turns solid behind it. Each step blooms on arrival: the disc lights, the icon draws, a ring pulses and the text flips in.</p>
+          <div class="tags"><span>traveller</span><span>eye-trace</span><span>focus walk</span></div>
+        </div>
+      </a>
+      <a class="card" href="v6-dolly-pan.html">
+        <div class="frame"><iframe data-src="v6-dolly-pan.html" title="08 · Dolly Pan preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>08 · Dolly Pan</h2>
+          <div class="src new">New motion</div>
+          <p>The steps sit on a set wider than the screen. The camera dollies from one to the next with parallax numerals and specks, and the frame softens with the speed of the move. Neighbours peek in at the edges, and the text slides in with the camera.</p>
+          <div class="tags"><span>camera dolly</span><span>parallax</span><span>motion softening</span></div>
+        </div>
+      </a>
+      <a class="card" href="v3-number-rail.html">
+        <div class="frame"><iframe data-src="v3-number-rail.html" title="09 · Number Rail preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>09 · Number Rail</h2>
+          <div class="src new">New motion</div>
+          <p>Editorial type. A giant numeral rolls like a reel to the next step, with its neighbours faint above and below. A progress rail fills, and the title and detail shear into place word by word.</p>
+          <div class="tags"><span>kinetic type</span><span>reel roll</span><span>progress rail</span></div>
+        </div>
+      </a>
+    </div>
+  </div>
+<script src="themes.js"></script>
+<script>
+(function () {
+  var THEMES = window.TIMELINE_THEMES || [];
+  var KEY = 'timeline-motion-theme-v1';
+  var q = new URLSearchParams(location.search).get('theme'), saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { /* storage unavailable */ }
+  var cur = THEMES.filter(function (t) { return t.id === (q || saved || window.TIMELINE_DEFAULT_THEME); })[0] || THEMES[0];
+  var bar = document.getElementById('themes');
+  var frames = [].slice.call(document.querySelectorAll('.frame iframe'));
+  bar.innerHTML = THEMES.map(function (t) {
+    return '<button data-id="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.swatch[1] + ' 50%,' + t.swatch[0] + ' 50%)"></i>' + t.label + '</button>';
+  }).join('');
+  function apply() {
+    document.documentElement.dataset.theme = cur.id;
+    frames.forEach(function (f) { f.src = f.dataset.src + '?embed&theme=' + cur.id; });
+    [].forEach.call(bar.querySelectorAll('button'), function (b) { b.classList.toggle('on', b.dataset.id === cur.id); });
+    try { localStorage.setItem(KEY, cur.id); } catch (e) { /* storage unavailable */ }
+  }
+  bar.onclick = function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    cur = THEMES.filter(function (t) { return t.id === b.dataset.id; })[0] || cur;
+    apply();
+  };
+  apply();
+})();
+</script>
+</body>
+</html>

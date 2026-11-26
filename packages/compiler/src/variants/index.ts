@@ -1,5 +1,5 @@
 import type { VariantLayout } from "./api.js";
-import { stepsArch } from "./steps-arch.js";
+import { cardsArch } from "./cards-arch.js";
 
 export type { VariantContext, VariantLayout } from "./api.js";
 
@@ -10,5 +10,5 @@ export type { VariantContext, VariantLayout } from "./api.js";
  */
 export const VARIANT_PLUGINS: Record<string, VariantLayout> = {
   // plugin entries
-  "steps:arch": stepsArch,
+  "cards:arch": cardsArch,
 };

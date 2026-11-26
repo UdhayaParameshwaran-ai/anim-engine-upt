@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Charts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../process-steps-motion/themes.css">
+<link rel="stylesheet" href="../process-steps-motion/steps-core.css">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 48px 24px 64px; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--secondary); }
+  h1 { margin: 8px 0 8px; font-size: 40px; letter-spacing: -.02em; }
+  .lead { margin: 0 0 24px; color: var(--text-muted); max-width: 760px; line-height: 1.6; }
+  .themes-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 28px; }
+  .themes-bar button { display: inline-flex; align-items: center; gap: 9px; padding: 7px 16px 7px 8px; border-radius: 999px; font-size: 14px; cursor: pointer;
+    color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); }
+  .themes-bar button i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); display: inline-block; }
+  .themes-bar button.on { color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: border-color .2s, transform .2s; }
+  .card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .frame { position: relative; aspect-ratio: 16 / 9; background: var(--bg); }
+  .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .meta { padding: 18px 20px 22px; display: grid; gap: 8px; }
+  .meta h2 { margin: 0; font-size: 20px; }
+  .meta p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-muted); }
+  .src { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); } .src.new { color: var(--secondary); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tags span { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Template · charts</div>
+    <h1>Charts: one template per chart, each with its own motions</h1>
+    <p class="lead">Every chart is a template, and every template has several motions. Open a chart to see all its variants.</p>
+    <nav class="themes-bar" id="themes" aria-label="Theme"></nav>
+    <div class="grid">
+      <a class="card" href="bar/index.html">
+        <div class="frame"><iframe data-src="bar/v1-spring-rise.html" title="Bar chart preview" loading="lazy"></iframe></div>
+        <div class="meta"><h2>01 · Bar chart</h2><p>5 motions: Spring Rise · Sort Race · Scan Sweep · LED Segments · Glow Wipe</p></div>
+      </a>
+      <a class="card" href="line/index.html">
+        <div class="frame"><iframe data-src="line/v1-rise-from-flat.html" title="Line chart preview" loading="lazy"></iframe></div>
+        <div class="meta"><h2>02 · Line chart</h2><p>4 motions: Rise from Flat · Constellation · Bars to Line · Focus Zoom</p></div>
+      </a>
+      <a class="card" href="donut/index.html">
+        <div class="frame"><iframe data-src="donut/v1-focus-ring.html" title="Donut chart preview" loading="lazy"></iframe></div>
+        <div class="meta"><h2>03 · Donut chart</h2><p>4 motions: Focus Ring · Activity Rings · Bar to Ring · Radial Ticks</p></div>
+      </a>
+    </div>
+  </div>
+<script src="../process-steps-motion/themes.js"></script>
+<script>
+(function () {
+  var THEMES = window.TIMELINE_THEMES || [];
+  var KEY = 'timeline-motion-theme-v1';
+  var q = new URLSearchParams(location.search).get('theme'), saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { /* storage unavailable */ }
+  var cur = THEMES.filter(function (t) { return t.id === (q || saved || window.TIMELINE_DEFAULT_THEME); })[0] || THEMES[0];
+  var bar = document.getElementById('themes');
+  var frames = [].slice.call(document.querySelectorAll('.frame iframe'));
+  bar.innerHTML = THEMES.map(function (t) {
+    return '<button data-id="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.swatch[1] + ' 50%,' + t.swatch[0] + ' 50%)"></i>' + t.label + '</button>';
+  }).join('');
+  function apply() {
+    document.documentElement.dataset.theme = cur.id;
+    frames.forEach(function (f) { f.src = f.dataset.src + '?embed&theme=' + cur.id; });
+    [].forEach.call(bar.querySelectorAll('button'), function (b) { b.classList.toggle('on', b.dataset.id === cur.id); });
+    try { localStorage.setItem(KEY, cur.id); } catch (e) { /* storage unavailable */ }
+  }
+  bar.onclick = function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    cur = THEMES.filter(function (t) { return t.id === b.dataset.id; })[0] || cur;
+    apply();
+  };
+  apply();
+})();
+</script>
+</body>
+</html>

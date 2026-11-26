@@ -189,7 +189,7 @@ export class SceneGrid {
     doc.body.append(box);
     let stage: Stage | undefined;
     try {
-      stage = new Stage(box, ir, tl, { autoFit: false });
+      stage = new Stage(box, ir, tl, { autoFit: false, templateBase: "/tpl" });
       for (const c of cards) {
         await idle();
         if (job !== this.job) return;

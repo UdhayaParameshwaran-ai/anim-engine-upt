@@ -21,9 +21,10 @@ export interface Group {
 export type Density = "typical" | "min" | "max";
 
 // Example content: a real topic per template, so arrangements read like real scenes.
-const ITEMS: Record<string, [string, string][]> = {
+// A third entry is the detail line, shown by templates drawn as HTML pages (steps).
+const ITEMS: Record<string, [string, string, string?][]> = {
   title: [["icon:sun", "Light"], ["icon:droplet", "Water"], ["icon:wind", "Air"]],
-  steps: [["icon:droplet", "Evaporate"], ["icon:cloud", "Condense"], ["icon:bolt", "Storm"], ["icon:droplet", "Rain"], ["asset:earth", "Collect"], ["icon:sun", "Repeat"]],
+  steps: [["icon:droplet", "Evaporate", "The sun lifts water into the air"], ["icon:cloud", "Condense", "Vapour cools into clouds"], ["icon:bolt", "Storm", "Clouds grow heavy and charged"], ["icon:droplet", "Rain", "Water falls back to the ground"], ["asset:earth", "Collect", "Rivers carry it to the sea"], ["icon:sun", "Repeat", "The cycle starts all over again"]],
   cycle: [["icon:sun", "Heat"], ["icon:cloud", "Clouds"], ["icon:droplet", "Rain"], ["asset:tree", "Plants"], ["icon:wind", "Wind"], ["icon:flame", "Energy"]],
   timeline: [["box", "1796 · First vaccine"], ["box", "1885 · Rabies"], ["box", "1955 · Polio"], ["box", "1980 · Smallpox gone"], ["box", "2020 · mRNA"], ["box", "2030 · Next"], ["box", "2040 · Future"]],
   hub: [["icon:server", "Servers"], ["icon:database", "Data"], ["icon:user", "Users"], ["icon:gear", "Settings"], ["icon:clock", "Uptime"], ["icon:check", "Checks"], ["icon:bolt", "Speed"], ["icon:heart", "Health"]],
@@ -74,6 +75,7 @@ export function templateScript(t: TemplateManifest, variant: string, size: Densi
   if (t.name === "flow") return flowScript(variant, size, long);
   if (t.name === "trace") return traceScript(variant, typeof size === "number" ? size : itemCount(t, size));
   if (TECH_TEMPLATES.has(t.name)) return techScript(t, variant, typeof size === "number" ? size : itemCount(t, size), long);
+  if (t.html) return hostedScript(t, variant, typeof size === "number" ? size : itemCount(t, size), long);
   const label = (l: string) => (long ? `${l} ${LONG}` : l);
   const decl: string[] = [];
   const show: string[] = [];
@@ -104,8 +106,8 @@ export function templateScript(t: TemplateManifest, variant: string, size: Densi
     return scene(`template=process variant=${variant}`, decl, show);
   }
   ids.forEach((id, i) => {
-    const [kind, text] = pool[i % pool.length]!;
-    decl.push(`${id} = ${kind} "${label(text)}"`);
+    const [kind, text, detail] = pool[i % pool.length]!;
+    decl.push(`${id} = ${kind} "${label(text)}"${t.html && detail ? ` "${detail}"` : ""}`);
     show.push(id);
   });
   // converge / diverge: one arrow per item, into or out of the hub.
@@ -118,6 +120,50 @@ export function templateScript(t: TemplateManifest, variant: string, size: Densi
     show.push(...arrows.map((a) => a.split(" ")[0]!));
   }
   return scene(`template=${t.name} variant=${variant}`, decl, show);
+}
+
+/** Added to every string for the long-text stress setting: well over what any hosted variant takes. */
+const OVER = " and everything that comes after it, all the way to the very end of the long road ahead";
+
+/**
+ * Example scenes for the templates drawn by a designer's page. Each item is written the way the template reads it (see its
+ * card in the registry guide): steps/ui take a title and a detail, compare rows a left and a right point, timeline events a
+ * date, a title and a detail, stats a label, a value and a change, charts a label and a value.
+ */
+function hostedScript(t: TemplateManifest, variant: string, n: number, long: boolean): string {
+  const s = (text: string) => (long ? `${text}${OVER}` : text);
+  const decl: string[] = [];
+  const cues: string[] = [];
+  const attrs = `template=${t.name} variant=${variant}`;
+  const rows: string[][] = ({
+    steps: [["icon:droplet", "Evaporate", "The sun lifts water into the air"], ["icon:cloud", "Condense", "Vapour cools into clouds"], ["icon:bolt", "Storm", "Clouds grow heavy and charged"], ["icon:droplet", "Rain", "Water falls back to the ground"], ["icon:globe", "Collect", "Rivers carry it to the sea"], ["icon:sun", "Repeat", "The cycle starts all over again"]],
+    compare: [["icon:database", "State lives on the server", "State travels with the user"], ["icon:server", "Every request looks it up", "Every request checks a signature"], ["icon:lock", "Logging out is instant", "A token lives until it expires"], ["icon:bolt", "Easy to revoke", "Hard to revoke early"], ["icon:globe", "Needs shared storage", "Scales with no storage"]],
+    timeline: [["icon:flask", "1796", "First vaccine", "Jenner tests cowpox against smallpox"], ["icon:shield", "1885", "Rabies", "Pasteur protects a boy from the disease"], ["icon:heart", "1955", "Polio vaccine", "Salk's shot ends the epidemics"], ["icon:globe", "1980", "Smallpox gone", "The first disease wiped out"], ["icon:bolt", "2020", "mRNA vaccines", "Instructions, not virus, train the body"], ["icon:sun", "2030", "Next", "Vaccines for more diseases"], ["icon:cloud", "2035", "Tomorrow", "Cheaper and shelf-stable"], ["icon:star", "2040", "Future", "Protection made for each person"]],
+    stats: [["icon:user", "Q1", "12k"], ["icon:user", "Q2", "21k", "+75% vs Q1"], ["icon:user", "Q3", "33k", "+57% vs Q2"], ["icon:user", "Q4", "41k", "+24% vs Q3"], ["icon:user", "Q5", "52k", "+27% vs Q4"], ["icon:user", "Q6", "60k", "+15% vs Q5"]],
+    chart: [["label", "Jan", "$42k"], ["label", "Feb", "$55k"], ["label", "Mar", "$48k"], ["label", "Apr", "$71k"], ["label", "May", "$64k"], ["label", "Jun", "$83k"], ["label", "Jul", "$90k"], ["label", "Aug", "$77k"]],
+    ui: [["icon:send", "Send", "What is DNS?"], ["icon:send", "Send", "Why is it slow today?"], ["icon:send", "Send", "Show me an example"], ["icon:send", "Send", "Thanks, that helps"], ["icon:send", "Send", "One more question"], ["icon:send", "Send", "Good night"]],
+  } as Record<string, string[][]>)[t.name] ?? [];
+
+  const heading: Record<string, string> = { steps: "The water cycle", compare: "Sessions or tokens", timeline: "A short history of vaccines", stats: "Active users", chart: "Monthly revenue", ui: "Ask in plain words", title: "Photosynthesis" };
+  if (t.slots.some((x) => x.name === "title")) decl.push(`title = title "${s(heading[t.name] ?? "Example")}"`);
+  if (t.name === "title") {
+    decl.push(`subtitle = text "${s("Light, water, air: sugar")}"`);
+    cues.push("1 write title", "2 fade subtitle");
+    return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> {1}Plants make their own food {2}from sunlight.\n${cues.join("\n")}\n`;
+  }
+  if (t.name === "compare") decl.push(`left = label "${s("Server session")}"`, `right = label "${s("Signed token")}"`);
+  const ids: string[] = [];
+  rows.slice(0, Math.max(1, n)).forEach((r, i) => {
+    const id = `i${i + 1}`;
+    ids.push(id);
+    const [kind, ...texts] = r;
+    // Timeline items are a label (date, title, detail); the leading icon in the sample is not part of the syntax.
+    if (t.name === "timeline") decl.push(`${id} = label ${texts.map((x) => `"${s(x)}"`).join(" ")}`);
+    else decl.push(`${id} = ${kind} ${texts.map((x) => `"${s(x)}"`).join(" ")}`);
+  });
+  const words = ids.map((id, i) => `{${i + 1}}${id}`).join(" then ");
+  ids.forEach((id, i) => cues.push(`${i + 1} pop ${id}`));
+  return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> First ${words}.\n${cues.join("\n")}\n`;
 }
 
 const TECH_TEMPLATES = new Set(["exchange", "architecture", "stack", "structure", "code", "tree", "states", "gitgraph", "anatomy"]);

@@ -3,6 +3,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { basename, dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { compile, report } from "@anim/compiler";
+import { respond as templateResponse } from "@anim/html-templates/files";
 import type { ResolvedTimeline, VideoIR } from "@anim/ir";
 import { resolve } from "@anim/timeline";
 import { FileCache, MockTtsProvider, speakVideo, type TtsProvider } from "@anim/tts";
@@ -71,8 +72,30 @@ export function pageHtml(bundle: string, data: Prepared): string {
 /** Pages load fonts from this made-up origin; requests to it are answered from node_modules/@fontsource. */
 const FONT_HOST = "https://fonts.anim.local/";
 
-/** Serves the bundled font files to a page (a setContent page has no origin of its own). */
+/**
+ * Serves the designer's HTML pages (scenes drawn by a hosted page) and their font, from disk. Nothing goes to the network:
+ * the pages ask Google Fonts for Inter, and are answered with the local files instead.
+ */
+async function serveTemplates(page: Page): Promise<void> {
+  await page.route(/^https:\/\/(tpl\.anim\.local|fonts\.googleapis\.com|fonts\.gstatic\.com)\//, async (route) => {
+    const r = templateResponse(route.request().url());
+    if (!r) return route.abort();
+    await route.fulfill({ status: r.status, contentType: r.type, body: r.body });
+  });
+}
+
+/** Where the page that hosts the stage is served from: the same origin as the designer's pages, so the stage can call into them. */
+const HOST_URL = "https://tpl.anim.local/_host.html";
+
+/** Loads the host page. (`setContent` would give it an opaque origin, which may not touch the iframes of hosted pages.) */
+async function loadHost(page: Page, html: string): Promise<void> {
+  await page.route(HOST_URL, (route) => route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html }));
+  await page.goto(HOST_URL, { waitUntil: "load" });
+}
+
+/** Serves the bundled font files to a page. */
 async function serveFonts(page: Page): Promise<void> {
+  await serveTemplates(page);
   await page.route(`${FONT_HOST}**`, async (route) => {
     const [pkg, file] = new URL(route.request().url()).pathname.slice(1).split("/");
     try {
@@ -146,7 +169,7 @@ export async function renderVideo(data: Prepared, opts: RenderOptions): Promise<
         const segment = tmpFile(`segment-${k}.mp4`);
         const page = await browser.newPage({ viewport: { width: data.ir.canvas.width, height: data.ir.canvas.height }, deviceScaleFactor: 1 });
         await serveFonts(page);
-        await page.setContent(html, { waitUntil: "load" });
+        await loadHost(page, html);
         await page.evaluate(() => (window as unknown as { __ready: Promise<boolean> }).__ready);
         const enc = encoder(segment, fps, opts.crf ?? 18);
         for (let i = a; i < b; i++) {
@@ -187,7 +210,7 @@ export async function renderFrames(data: Prepared, frames: number[], outDir: str
   try {
     const page = await browser.newPage({ viewport: { width: data.ir.canvas.width, height: data.ir.canvas.height }, deviceScaleFactor: 1 });
     await serveFonts(page);
-    await page.setContent(pageHtml(await pageBundle(), data), { waitUntil: "load" });
+    await loadHost(page, pageHtml(await pageBundle(), data));
     await page.evaluate(() => (window as unknown as { __ready: Promise<boolean> }).__ready);
     const files: string[] = [];
     for (const i of frames) {

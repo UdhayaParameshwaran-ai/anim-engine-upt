@@ -25,6 +25,7 @@ import {
   type ParamSpec,
   type VerbManifest,
 } from "@anim/registry";
+import { THEMES as MOTION_THEMES, itemLimits, motionSet, motionVariant, slotLimits } from "@anim/html-templates";
 import { closest } from "./fuzzy.js";
 import { checkGrid } from "./grid.js";
 import { analyzeTrace } from "./trace.js";
@@ -107,6 +108,7 @@ export const ValidateCodes = {
   TraceCapacity: "NAR615",
   OutsideTemplate: "NAR411",
   DanglingConnector: "NAR412",
+  TemplateText: "NAR616",
 } as const;
 
 const C = ValidateCodes;
@@ -237,6 +239,7 @@ class Validator {
   private scene(scene: Scene, prev: { declared: Map<string, ElementDecl>; visible: Set<string> }) {
     this.settings(scene.settings);
     this.sceneAttrs(scene, prev.declared);
+    this.htmlRules(scene);
 
     // Kept elements carry over from the previous scene, still visible if they were.
     const declared = new Map<string, ElementDecl>();
@@ -329,9 +332,13 @@ class Validator {
     // An element nothing shows would leave a hole in the scene: it fades in after the first
     // sentence (a connector, which needs both its ends on screen, after the last).
     const beats = scene.steps.flatMap((s) => s.beats);
+    const hostedTpl = scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
+    const hosted = !!hostedTpl?.html;
+    const hostedSlots = new Set(hostedTpl?.slots.map((x) => x.name) ?? []);
     for (const el of sceneOwn) {
       // A zone appears with its first member (the layout shows it).
       if (shown.has(el.id) || el.kind === "zone") continue; // zones and lanes appear with their first member
+      if (hosted && hostedSlots.has(el.id)) continue; // a hosted page draws its own heading, side names, subtitle...
       const link = LINK_KINDS.has(el.kind);
       const beat = link ? beats.at(-1) : beats[0];
       this.warn(
@@ -345,6 +352,41 @@ class Validator {
       );
     }
     return { declared, visible };
+  }
+
+  /**
+   * A scene drawn by one of the designer's pages: its text has to fit the page. The limits were measured per variant
+   * (packages/html-templates/src/limits.json); a title or detail past them would clip, so it is an error the writer can fix by
+   * shortening. With `variant=auto` the compiler may pick any variant that takes this many items, so the tightest of them counts.
+   */
+  private htmlRules(scene: Scene): void {
+    const name = scene.attrs.template;
+    const tpl = name ? findTemplate(name) : undefined;
+    const set = tpl?.html && name ? motionSet(name) : undefined;
+    if (!tpl || !set) return;
+    const slots = new Set(tpl.slots.map((x) => x.name));
+    const declared = scene.steps.flatMap((s) => s.elements);
+    const items = declared.filter((e) => !slots.has(e.id));
+    const wanted = scene.attrs.variant;
+    const named = wanted && wanted !== "auto" ? set.variants.find((v) => v.id === wanted) : undefined;
+    const pool = named ? [named] : wanted === "auto" ? set.variants.filter((v) => items.length >= v.items[0] && items.length <= v.items[1]) : [motionVariant(set, undefined)];
+    if (!pool.length) return;
+    const which = named ? `\`${named.id}\` takes` : wanted === "auto" ? "the variants that fit take" : `the default (\`${pool[0]!.id}\`) takes`;
+    // The tightest limit of the candidate variants counts for each string of an item, and for each named slot.
+    const per = pool.map((v) => itemLimits(set, v));
+    const slotMax = pool.map((v) => slotLimits(set, v));
+    const nth = ["first", "second", "third"];
+    for (const el of items) {
+      el.texts.forEach((t, i) => {
+        const max = Math.min(...per.map((l) => l[i] ?? Infinity));
+        if (t.length > max) this.error(C.TemplateText, `\`${el.id}\`: the ${nth[i] ?? i + 1} string is ${t.length} characters; ${which} at most ${max}. Shorten it`, el.span);
+      });
+    }
+    for (const el of declared.filter((e) => slots.has(e.id))) {
+      const max = Math.min(...slotMax.map((l) => l[el.id] ?? Infinity));
+      const t = el.texts[0] ?? "";
+      if (t.length > max) this.error(C.TemplateText, `\`${el.id}\`: ${t.length} characters; ${which} at most ${max}. Shorten it`, el.span);
+    }
   }
 
   private sceneAttrs(scene: Scene, prevDeclared: Map<string, ElementDecl>): void {
@@ -372,6 +414,12 @@ class Validator {
         this.error(C.UnknownTemplate, `unknown template \`${value}\` (templates: ${TEMPLATES.map((t) => t.name).join(", ")})`, scene.span, {
           desc: near ? `used \`${near}\`` : "removed; the scene falls back to a layout",
           apply: () => (near ? (scene.attrs.template = near) : delete scene.attrs.template),
+        });
+      } else if (key === "theme" && value !== "auto" && !(MOTION_THEMES as readonly string[]).includes(value)) {
+        const near = closest(value, MOTION_THEMES);
+        this.warn(C.BadSetting, `unknown scene theme \`${value}\` (themes: auto, ${MOTION_THEMES.join(", ")})`, scene.span, {
+          desc: near ? `used \`${near}\`` : "removed; the theme follows the look",
+          apply: () => (near ? (scene.attrs.theme = near) : delete scene.attrs.theme),
         });
       } else if (key === "carry") {
         const ids = value.split(",").filter(Boolean);

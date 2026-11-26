@@ -502,9 +502,9 @@ describe("style director in generation", () => {
 
 describe("tidyOutline", () => {
   it("fixes numeric and repeated scene ids and variants=", () => {
-    const out = tidyOutline(['video 1 "X"', 'scene 1 "A" template=steps variants=row', 'scene stages "B"', "# goal: b", 'scene stages "C"', 'scene stages "D"'].join("\n"));
+    const out = tidyOutline(['video 1 "X"', 'scene 1 "A" template=steps variants=rail', 'scene stages "B"', "# goal: b", 'scene stages "C"', 'scene stages "D"'].join("\n"));
     expect(out.split("\n").filter((l) => l.startsWith("scene"))).toEqual([
-      'scene s1 "A" template=steps variant=row',
+      'scene s1 "A" template=steps variant=rail',
       'scene stages "B"',
       'scene stages2 "C"',
       'scene stages3 "D"',
@@ -521,7 +521,7 @@ describe("template knowledge", () => {
   it("routes a planned scene to the template of its shape", () => {
     const outline = [
       'video 1 "Plants"',
-      'scene need "Needs" template=steps variant=zigzag',
+      'scene need "Needs" template=steps variant=deck',
       "# shape: many-to-one · goal: sun, water and CO2 make a leaf grow",
       'scene make "Make" template=processing',
       "# shape: transform · goal: inputs become glucose",
@@ -678,7 +678,7 @@ describe("pictures, structure and story arcs", () => {
       changed: "grid=L2-02 (it wrote grid=L2-07)",
     });
     // Another template's variant means nothing to the planned one.
-    expect(keepPlanned('scene a "A" template=steps variant=zigzag', 'scene a "A" template=cycle').text).toBe('scene a "A" template=cycle');
+    expect(keepPlanned('scene a "A" template=steps variant=deck', 'scene a "A" template=cycle').text).toBe('scene a "A" template=cycle');
     expect(keepPlanned('scene a "A"', 'scene a "A" template=hub').text).toBe('scene a "A" template=hub');
   });
 

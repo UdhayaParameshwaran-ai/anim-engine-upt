@@ -1,6 +1,7 @@
 import { Stage } from "@anim/engine";
+
 import type { ResolvedTimeline, VideoIR } from "@anim/ir";
-import { COMPOSE_PATTERNS, GRID_ELEMENTS, GRID_LAYOUTS, TEMPLATES, THEMES } from "@anim/registry";
+import { COMPOSE_PATTERNS, GRID_ELEMENTS, GRID_LAYOUTS, MOTION_THEMES, TEMPLATES, THEMES } from "@anim/registry";
 import { composeGroup, elementGroup, gridGroup, templateGroup, type Case, type Density, type Group } from "./gallery-cases.js";
 import { motionGroup } from "./gallery-motions.js";
 import { $, escape } from "./util.js";
@@ -21,8 +22,17 @@ const filter = $<HTMLInputElement>("g-filter");
 const groupsEl = $<HTMLDivElement>("g-groups");
 const toc = $<HTMLElement>("g-toc");
 
-lookSel.innerHTML = THEMES.map((t) => `<option value="${t}">${t}</option>`).join("");
+const option = (t: string) => `<option value="${t}">${t}</option>`;
+// The designer's four themes are what the new templates are built for; the older looks still style the older templates.
+lookSel.innerHTML = `<optgroup label="Designer themes (new templates)">${MOTION_THEMES.map(option).join("")}</optgroup><optgroup label="Looks (older templates)">${THEMES.map(option).join("")}</optgroup>`;
 lookSel.value = "paper";
+const isMotionTheme = (v: string) => (MOTION_THEMES as readonly string[]).includes(v);
+const HOSTED = new Set(TEMPLATES.filter((t) => t.html).map((t) => t.name));
+/** A designer theme goes on the scenes drawn by a designer's page (`theme=`); the video itself keeps the paper look. */
+function themed(script: string, look: string): string {
+  if (!isMotionTheme(look)) return script;
+  return script.replace(/^(scene .*template=([a-z]+).*)$/m, (line, _all, name: string) => (HOSTED.has(name) ? `${line} theme=${look}` : line));
+}
 $<HTMLParagraphElement>("g-summary").textContent =
   `${TEMPLATES.length} templates · ${TEMPLATES.reduce((n, t) => n + t.variants.length, 0)} variants · ` +
   `${GRID_LAYOUTS.length} grid layouts · ${GRID_ELEMENTS.length} grid elements · ${COMPOSE_PATTERNS.length} compose patterns. ` +
@@ -47,10 +57,12 @@ async function limited<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function build(c: Case): Promise<Built> {
-  const key = `${lookSel.value}\n${c.script}`;
+  const look = isMotionTheme(lookSel.value) ? "paper" : lookSel.value;
+  const script = themed(c.script, lookSel.value);
+  const key = `${look}\n${script}`;
   let p = cache.get(key);
   if (!p) {
-    p = limited(async () => (await fetch(`/api/build?tts=beeps&variants=exact&theme=${lookSel.value}`, { method: "POST", body: c.script })).json() as Promise<Built>);
+    p = limited(async () => (await fetch(`/api/build?tts=beeps&variants=exact&theme=${look}`, { method: "POST", body: script })).json() as Promise<Built>);
     cache.set(key, p);
   }
   return p;
@@ -143,9 +155,13 @@ async function show(tile: HTMLElement, c: Case): Promise<void> {
       return;
     }
     status.remove();
-    const stage = new Stage(box, r.ir, r.timeline);
+    const stage = new Stage(box, r.ir, r.timeline, { templateBase: "/tpl" });
     stage.render(stage.duration);
     stages.set(tile, stage);
+    // A scene drawn by a hosted page shows nothing until its page has loaded: draw the final frame again then.
+    void stage.fontsReady().then(() => {
+      if (stages.get(tile) === stage) stage.render(stage.duration);
+    });
   } catch (e) {
     status.textContent = `Build failed: ${e instanceof Error ? e.message : String(e)}`;
     tile.classList.add("bad");

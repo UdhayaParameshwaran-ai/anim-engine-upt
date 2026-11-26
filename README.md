@@ -10,8 +10,8 @@ The LLM writes a compact plain-text **narration-first DSL**. Visual actions are 
 
 ```
 scene need "What a plant needs" template=steps
-sun   = icon:sun
-water = icon:droplet
+sun   = icon:sun "Sunlight" "The energy the plant runs on"
+water = icon:droplet "Water" "Drawn up through the roots"
 > Every plant needs {1}sunlight and {2}water.
 1 pop sun
 2 pop water
@@ -133,9 +133,9 @@ Scenes that no template fits can say how their elements relate instead: `compose
 New arrangements are added offline, never improvised at generation time:
 
 ```sh
-pnpm variant new steps arch "steps rising along an arch"   # scaffold a draft plugin
-pnpm variant check steps:arch                              # stress-test + contact sheet + report
-pnpm variant approve steps:arch                            # after reviewing the report
+pnpm variant new cards arch "cards rising along an arch"   # scaffold a draft plugin
+pnpm variant check cards:arch                              # stress-test + contact sheet + report
+pnpm variant approve cards:arch                            # after reviewing the report
 pnpm variant list
 ```
 

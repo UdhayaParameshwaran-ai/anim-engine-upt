@@ -1,0 +1,1190 @@
+{
+ "generated": "2026-11-25",
+ "theme": "daylight-clean",
+ "adapt": true,
+ "levels": [
+  {
+   "k": 0,
+   "title": 12,
+   "detail": 30
+  },
+  {
+   "k": 1,
+   "title": 20,
+   "detail": 48
+  },
+  {
+   "k": 2,
+   "title": 28,
+   "detail": 66
+  },
+  {
+   "k": 3,
+   "title": 36,
+   "detail": 84
+  },
+  {
+   "k": 4,
+   "title": 44,
+   "detail": 102
+  },
+  {
+   "k": 5,
+   "title": 52,
+   "detail": 120
+  }
+ ],
+ "variants": [
+  {
+   "set": "bar",
+   "variant": "v1-spring-rise",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "bar",
+   "variant": "v2-sort-race",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "bar",
+   "variant": "v3-scan-sweep",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "bar",
+   "variant": "v4-led-segments",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "bar",
+   "variant": "v5-glow-wipe",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 5
+   },
+   "field": "label",
+   "level": 0,
+   "titleChars": 14,
+   "detailChars": null,
+   "note": "long labels wrap and overprint the next row; 5 rows with short labels are clean",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "comparison",
+   "variant": "v1-split-wipe",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "row",
+   "level": 4,
+   "titleChars": 44,
+   "detailChars": 102,
+   "note": ""
+  },
+  {
+   "set": "comparison",
+   "variant": "v2-verdict-columns",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "row",
+   "level": 4,
+   "titleChars": 44,
+   "detailChars": 102,
+   "note": ""
+  },
+  {
+   "set": "comparison",
+   "variant": "v3-balance",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "row",
+   "level": 4,
+   "titleChars": 44,
+   "detailChars": 102,
+   "note": ""
+  },
+  {
+   "set": "comparison",
+   "variant": "v4-flip-cards",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "row",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "cards flip in 3D, so words overlap mid-turn; settled frames are clean",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "comparison",
+   "variant": "v5-versus",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "row",
+   "level": 2,
+   "titleChars": 28,
+   "detailChars": 66,
+   "note": ""
+  },
+  {
+   "set": "donut",
+   "variant": "v1-focus-ring",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "donut",
+   "variant": "v2-activity-rings",
+   "items": {
+    "min": 2,
+    "max": 5,
+    "codeMax": 6,
+    "effectiveMax": 5
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "donut",
+   "variant": "v3-bar-to-ring",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "donut",
+   "variant": "v4-radial-ticks",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "interaction",
+   "variant": "v1-cursor-click",
+   "items": {
+    "min": 1,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 2,
+   "titleChars": 28,
+   "detailChars": 66,
+   "note": ""
+  },
+  {
+   "set": "interaction",
+   "variant": "v2-drag-drop",
+   "items": {
+    "min": 1,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 0,
+   "titleChars": 12,
+   "detailChars": 30,
+   "note": ""
+  },
+  {
+   "set": "interaction",
+   "variant": "v3-prompt-send",
+   "items": {
+    "min": 1,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "interaction",
+   "variant": "v4-toggle-switches",
+   "items": {
+    "min": 1,
+    "max": 5,
+    "codeMax": 6,
+    "effectiveMax": 5
+   },
+   "field": "title+detail",
+   "level": 3,
+   "titleChars": 36,
+   "detailChars": 84,
+   "note": ""
+  },
+  {
+   "set": "interaction",
+   "variant": "v5-touch-swipe",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "cards slide in from off-frame on purpose",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "line",
+   "variant": "v1-rise-from-flat",
+   "items": {
+    "min": 3,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "line",
+   "variant": "v2-constellation",
+   "items": {
+    "min": 3,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "line",
+   "variant": "v3-bars-to-line",
+   "items": {
+    "min": 3,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "line",
+   "variant": "v4-focus-zoom",
+   "items": {
+    "min": 3,
+    "max": 8,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 2,
+   "titleChars": 28,
+   "detailChars": 66,
+   "note": "the camera frames the last point on purpose; labels outside the frame are expected",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "stats",
+   "variant": "v1-odometer",
+   "items": {
+    "min": 1,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 2,
+   "titleChars": 28,
+   "detailChars": 66,
+   "note": "digits roll through the frame on purpose; no defect seen at 6 items",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "stats",
+   "variant": "v1-tape-measure",
+   "items": {
+    "min": 1,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "stats",
+   "variant": "v2-unit-swarm",
+   "items": {
+    "min": 1,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 2,
+   "titleChars": 28,
+   "detailChars": 66,
+   "note": "clean at 6 items",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "stats",
+   "variant": "v3-liquid-tubes",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "stats",
+   "variant": "v4-bubble-pack",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 3
+   },
+   "field": "label",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "bubbles run off the bottom of the frame from the 4th (20-character labels); the designer's table says 6",
+   "reviewed": true,
+   "provisional": true
+  },
+  {
+   "set": "stats",
+   "variant": "v4-depth-flight",
+   "items": {
+    "min": 1,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "label",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "stats",
+   "variant": "v5-scale-zoom",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 3
+   },
+   "field": "label",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "the nested labels overprint each other at 4 items; 3 not yet seen",
+   "reviewed": true,
+   "provisional": true
+  },
+  {
+   "set": "stats",
+   "variant": "v6-comet-trail",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 8,
+    "effectiveMax": 8
+   },
+   "field": "label",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "steps",
+   "variant": "v1-morph-relay",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "steps",
+   "variant": "v1-path-walker",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 2,
+   "titleChars": 28,
+   "detailChars": 66,
+   "note": ""
+  },
+  {
+   "set": "steps",
+   "variant": "v2-card-deck",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 2,
+   "titleChars": 28,
+   "detailChars": 66,
+   "note": "checked by eye at 6 steps: a 28-character title wraps to 2-3 lines and a 66-character detail to 2; the automatic check flagged the cards flying into the tray",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "steps",
+   "variant": "v3-accordion-focus",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 3,
+   "titleChars": 36,
+   "detailChars": 84,
+   "note": ""
+  },
+  {
+   "set": "steps",
+   "variant": "v3-number-rail",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "steps",
+   "variant": "v4-orbit",
+   "items": {
+    "min": 3,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "steps",
+   "variant": "v5-block-stack",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 3,
+   "titleChars": 36,
+   "detailChars": 84,
+   "note": ""
+  },
+  {
+   "set": "steps",
+   "variant": "v6-dolly-pan",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "steps",
+   "variant": "v6-domino-chain",
+   "items": {
+    "min": 2,
+    "max": 6,
+    "codeMax": 6,
+    "effectiveMax": 6
+   },
+   "field": "title+detail",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "text",
+   "variant": "v1-beats",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "text",
+   "variant": "v2-fade",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "text",
+   "variant": "v3-typewriter",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "text",
+   "variant": "v4-decode",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "text",
+   "variant": "v5-rise",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "text",
+   "variant": "v6-tracking",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "text",
+   "variant": "v7-flip",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "text",
+   "variant": "v8-karaoke",
+   "items": {
+    "min": 1,
+    "max": 10,
+    "codeMax": 10,
+    "effectiveMax": 10
+   },
+   "field": "line",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "timeline",
+   "variant": "v1-ribbon",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 8,
+    "effectiveMax": 8
+   },
+   "field": "title+detail",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "clean at 8 events",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "timeline",
+   "variant": "v2-camera",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 8,
+    "effectiveMax": 8
+   },
+   "field": "title+detail",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "timeline",
+   "variant": "v3-filmstrip",
+   "items": {
+    "min": 2,
+    "max": 8,
+    "codeMax": 8,
+    "effectiveMax": 8
+   },
+   "field": "title+detail",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "the strip scrolls off-frame on purpose",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "titles",
+   "variant": "v1-rise",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v10-depth",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v11-reel",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v12-liquid",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v13-spot",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v14-converge",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v2-curtain",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v3-logo",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "clean",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "titles",
+   "variant": "v4-shine",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v5-card",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v6-cinema",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v7-beam",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "titles",
+   "variant": "v8-weight",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 0,
+   "titleChars": 12,
+   "detailChars": 30,
+   "note": ""
+  },
+  {
+   "set": "titles",
+   "variant": "v9-elastic",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v1-wipe",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v10-ripple",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v2-push",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": ""
+  },
+  {
+   "set": "transitions",
+   "variant": "v3-zoom",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v4-iris",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v5-slats",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v6-split",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 1,
+   "titleChars": 20,
+   "detailChars": 48,
+   "note": "the halves leave the frame on purpose",
+   "reviewed": true,
+   "provisional": false
+  },
+  {
+   "set": "transitions",
+   "variant": "v7-defocus",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v8-cube",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  },
+  {
+   "set": "transitions",
+   "variant": "v9-panel",
+   "items": {
+    "min": 0,
+    "max": 0,
+    "codeMax": null,
+    "effectiveMax": null
+   },
+   "field": "title+subtitle",
+   "level": 5,
+   "titleChars": 52,
+   "detailChars": 120,
+   "note": "fits the longest copy tested"
+  }
+ ]
+}

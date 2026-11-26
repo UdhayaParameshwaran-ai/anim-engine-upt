@@ -18,6 +18,7 @@
     "@anim/timeline": "workspace:*",
     "@anim/tts": "workspace:*",
     "@anim/validate": "workspace:*",
-    "@lume/kiwi": "^0.4.4"
+    "@lume/kiwi": "^0.4.4",
+    "@anim/html-templates": "workspace:*"
   }
 }

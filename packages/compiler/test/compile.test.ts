@@ -28,6 +28,14 @@ describe("examples", () => {
       expect(JSON.stringify(a)).toBe(JSON.stringify(b));
       for (const scene of a.scenes) {
         for (const e of scene.elements) {
+          // A scene drawn by one of the designer's HTML pages keeps its declared elements as virtual ones (no box, nothing
+          // drawn); the page-sized `motion` element is the one that has to sit in the canvas.
+          if (e.params.virtual) {
+            expect(e.box.w, e.id).toBe(0);
+            expect(e.box.h, e.id).toBe(0);
+            expect(scene.elements.some((m) => m.kind === "motion"), `${scene.id} hosts its page`).toBe(true);
+            continue;
+          }
           expect(e.box.w, e.id).toBeGreaterThan(0);
           expect(e.box.x, e.id).toBeGreaterThanOrEqual(0);
           expect(e.box.y, e.id).toBeGreaterThanOrEqual(0);
@@ -103,9 +111,11 @@ describe("layout", () => {
     expect(loop("").elements.filter((e) => e.params.auto).map((e) => `${e.kind} ${e.link!.from}->${e.link!.to}`)).toEqual(["arrow a->b", "arrow b->c", "arrow c->a"]);
     expect(loop("x1 = arrow a->b\n").elements.filter((e) => e.params.auto)).toEqual([]);
 
-    // Steps are numbered; cards sit on panels of one size; compare gets a "vs".
-    const steps = ir(`video 1\nscene s template=steps\na = icon:sun "One"\nb = icon:heart "Two"\n> {1}First, {2}second.\n1 pop a\n2 pop b\n`).scenes[0]!;
-    expect(steps.elements.filter((e) => e.kind === "badge").map((e) => e.texts[0])).toEqual(["1", "2"]);
+    // A timeline marks each event on its axis; cards sit on panels of one size.
+    // (Steps used to be numbered here; they are drawn by an HTML page now, which numbers them itself.)
+    const line = ir(`video 1\nscene s template=timeline\na = icon:sun "One"\nb = icon:heart "Two"\n> {1}First, {2}second.\n1 pop a\n2 pop b\n`).scenes[0]!;
+    expect(line.elements.filter((e) => e.kind === "rule")).toHaveLength(1);
+    expect(line.elements.filter((e) => e.kind === "badge")).toHaveLength(2);
     const cards = ir(`video 1\nscene s template=cards\na = icon:sun "One"\nb = asset:leaf "Two"\nc = icon:gear "Three"\n> {1}Three things.\n1 pop a,b,c\n`).scenes[0]!;
     const panels = cards.elements.filter((e) => e.kind === "panel").map((e) => `${e.box.w}x${e.box.h}`);
     expect(panels).toHaveLength(3);
@@ -122,12 +132,12 @@ describe("layout", () => {
   });
 
   it("lets pictures fill a roomy cell, with labels that scale along", () => {
-    const one = ir(`video 1\nscene s template=steps\na = icon:sun "Sun"\nb = icon:heart "Heart"\n> {1}Two.\n1 pop a,b\n`).scenes[0]!;
+    const one = ir(`video 1\nscene s template=converge\na = icon:sun "Sun"\nb = icon:heart "Heart"\nresult = icon:gear "Out"\n> {1}Two.\n1 pop a,b,result\n`).scenes[0]!;
     const a = one.elements.find((e) => e.id === "a")!;
     expect(a.box.w).toBeGreaterThan(280); // 200 at natural size
     expect(a.params.labelFont).toBeGreaterThan(34);
-    // Six items leave no room to grow.
-    const many = ir(`video 1\nscene s template=steps\n${"abcdef".split("").map((c) => `${c} = icon:sun "Sun"`).join("\n")}\n> {1}Six.\n1 pop a,b,c,d,e,f\n`).scenes[0]!;
+    // Five inputs leave no room to grow.
+    const many = ir(`video 1\nscene s template=converge\n${"abcde".split("").map((c) => `${c} = icon:sun "Sun"`).join("\n")}\nresult = icon:gear "Out"\n> {1}Five.\n1 pop a,b,c,d,e,result\n`).scenes[0]!;
     expect(many.elements.find((e) => e.id === "a")!.box.w).toBeLessThanOrEqual(260);
   });
 

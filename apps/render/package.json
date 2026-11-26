@@ -21,6 +21,7 @@
     "@anim/tts-kokoro": "workspace:*",
     "@anim/tts-piper": "workspace:*",
     "ffmpeg-static": "^5.2.0",
-    "playwright-core": "^1.50.0"
+    "playwright-core": "^1.50.0",
+    "@anim/html-templates": "workspace:*"
   }
 }

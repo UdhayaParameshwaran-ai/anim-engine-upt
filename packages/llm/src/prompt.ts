@@ -221,7 +221,7 @@ RULES
 - One idea per sentence, at most ${S.v("max_words", settings.maxWords ?? DEFAULT_MAX_WORDS)} words. ${S.v("sentences", span(spec.sentences))} sentences per scene.
 - Every cue gets at least one action. Every element must be shown by an enter verb (fade, pop, draw, write).
 - Show an element before emphasizing or moving it. Draw connectors after (or together with) their endpoints.
-- Templates draw their own structure, each part appearing with its item: hub spokes, cycle arrows, step numbers and the arrows between steps, card panels, the "vs" of a compare, the timeline axis, spotlight leader lines, and the arrows of converge, diverge and process. Declare only the items and show them; declare a connector yourself only in template=flow, in a scene without a template, or to put a label on it.
+- Templates draw their own structure, each part appearing with its item: hub spokes, cycle arrows, card panels, the "vs" of a compare, the timeline axis, spotlight leader lines, and the arrows of converge, diverge and process. Declare only the items and show them; declare a connector yourself only in template=flow, in a scene without a template, or to put a label on it.
 - Never write coordinates, sizes or colors. Only durations like 0.8 are allowed as numbers.
 - Prefer a template. Element ids that equal slot names fill those slots; other elements fill items in order.
 - No template fits? compose=<pattern> arranges 2–6 elements by intent (${S.v("compose_patterns", COMPOSE_PATTERNS.join("|"))}); emphasis=<id> names the hero. An element called title keeps the top band.
@@ -277,7 +277,7 @@ const STORY: Record<string, string> = {
   structure: "- Operate on the cells: drop c4 to push onto a stack, lift c4 to pop, swap c1,c2 to sort, visit c3 to move a search to a cell, mark c3 as=ok when found, strike c2 to cross out a rejected value, merge c1,c2,c3 to combine cells into the last one.",
   stack: "- Move data through the layers: send a packet along an arrow between layers, mark a layer as=fail where it breaks, drop a new layer onto the stack.",
   flow: "- Follow the path: visit n1, visit n2, … along the route the data takes; mark the end node as=ok|fail.",
-  steps: "- Let one item travel through the stages: as each stage appears, visit it (1 pop a then visit a; 2 pop b then visit b …), so the ring moves along the sequence; mark a stage that fails as=fail and the last one as=ok.",
+  steps: "- Write each step as `s1 = icon:name \"Title\" \"One line of detail\"` (the second string is the detail; keep both within the limits of the variant you chose) and show it on the sentence that says it: `1 pop s1`. A designed motion carries the rest (numbers, path, cards), so do not visit, mark, move or pulse a step, and do not write a title action: the heading is drawn by the motion.",
   gitgraph: "- Walk the history in order: pop each commit and draw the line to it, then visit that commit (the ring follows the latest commit); mark the merge commit as=ok, and shake a commit where there is a conflict.",
   title: "- Keep the opening calm: write the title, fade the subtitle, pop the pictures; pulse the main picture once on the key word, nothing more.",
   compare: "- Make the contrast move: pop one side, then the other; visit or pulse the side being described. A trade-off has no loser: strike a side only when the narration says that option is wrong or ruled out, and mark one as=ok only when it says that one wins.",
@@ -359,7 +359,7 @@ function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas:
             ]
           : [
             "- Element ids that equal slot names fill those slots; other elements fill items in order.",
-            "- The template draws its own structure, each part appearing with its item (spokes, loop arrows, step numbers and the arrows between steps, card panels, the \"vs\", the timeline axis, leader lines, the arrows into or out of a result). Declare only the items and show them; declare an arrow yourself only to put a label on it.",
+            "- The template draws its own structure, each part appearing with its item (spokes, loop arrows, card panels, the \"vs\", the timeline axis, leader lines, the arrows into or out of a result). Declare only the items and show them; declare an arrow yourself only to put a label on it.",
             "- Page elements (stat, bullets, quote, …) never go in a template scene; use ELEMENT KINDS.",
           ]),
     ...(!grid && kind.template.name === "code" ? ['- Code and terminal text is one quoted string with \\n between lines: code "a = 1\\nprint(a)" lang=py. Keep the real indentation of the code: spaces right after \\n ("def f(x):\\n    return x"). Lines are parts: write code.2 types line 2, highlight code.2 marks it.'] : []),
@@ -391,9 +391,9 @@ HOW TIMING WORKS
 
 SHAPE OF A SCENE (each sentence, then its own actions)
 scene heat "How water rises" template=steps
-sun = icon:sun "Sunlight"
-sea = icon:waves "Warm sea"
-cloud = icon:cloud "Clouds"
+sun = icon:sun "Sunlight" "Light warms the sea surface"
+sea = icon:waves "Warm sea" "Warm water starts to rise"
+cloud = icon:cloud "Clouds" "Rising vapour cools and condenses"
 > The {1}sun warms the {2 surface of the sea}.
 1 pop sun
 2 pop sea

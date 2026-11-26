@@ -1,6 +1,7 @@
 import type { Action, Args, Diagnostic, ElementDecl, Script, Setting } from "@anim/dsl";
 import { IR_VERSION, type ActionIR, type BeatIR, type Box, type ElementIR, type SceneIR, type VideoIR } from "@anim/ir";
 import { COMPONENTS, findComponent, findMotion, findVerb, KITS, partsOf, VERBS, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
+import { htmlSceneOf, motionElement, MOTION_ID, type HtmlScene } from "./html.js";
 import { layoutScene, type SceneLayout } from "./layout.js";
 import { expandTrace } from "./trace.js";
 
@@ -98,6 +99,8 @@ export function lower(script: Script, assets: AssetLibrary, variants: "fit" | "e
         }),
       })),
     };
+    const html = htmlSceneOf(scene);
+    if (html) hostHtml(ir, html, { width: w!, height: h! }, motion);
     titleFirst(ir);
     furnish(ir, layout, motion);
     scenes.push(ir);
@@ -250,6 +253,18 @@ function titleFirst(scene: SceneIR): void {
       return;
     }
   }
+}
+
+/**
+ * An HTML scene: the declared elements stay (their verbs say when each item is spoken) but nothing is drawn for them; one
+ * `motion` element hosts the designer's page and shows from the start of the scene.
+ */
+function hostHtml(scene: SceneIR, html: HtmlScene, canvas: { width: number; height: number }, motion: MotionProfile): void {
+  for (const el of scene.elements) el.params = { ...el.params, virtual: true };
+  scene.elements.push(motionElement(html, canvas, html.theme, scene.steps[0]?.beats[0]?.line ?? 0));
+  const beat = scene.steps[0]?.beats[0];
+  const fade = findVerb("fade")!;
+  beat?.actions.unshift({ anchor: "start", line: beat.line, calls: [{ verb: "fade", verbVersion: fade.version, targets: [MOTION_ID], duration: round2(0.01 * motion.durScale), delay: 0, stagger: 0, params: {} }] });
 }
 
 const later = (a: Moment, b: Moment) => (a.step - b.step || a.beat - b.beat || a.rank - b.rank || a.offset - b.offset) > 0;

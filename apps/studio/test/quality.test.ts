@@ -49,29 +49,31 @@ describe("template cards", () => {
 
 describe("fit-based variants", () => {
   const grid = TEMPLATES.find((t) => t.name === "cards")!;
-  const steps = TEMPLATES.find((t) => t.name === "steps")!;
+  // (`steps` is drawn by an HTML page now, with no layout to fit; the timeline still tries its variants on the content.)
+  const timeline = TEMPLATES.find((t) => t.name === "timeline")!;
   const variantOf = (script: string, variants: "fit" | "exact" = "fit") => {
     const r = compile(script, { variants });
     return { r, used: r.ir!.scenes[0]!.elements.find((e) => e.id === "i1")!.box };
   };
 
   it("keep a named variant that fits", () => {
-    const r = compile(templateScript(steps, "column", 3));
+    const r = compile(templateScript(timeline, "vertical", 3));
     expect(r.diagnostics).toEqual([]);
   });
 
   it("replace a named variant that crowds its content, and say so", () => {
-    const script = CROWDED("row");
+    const script = CROWDED("line");
     expect(unfit(script, "exact").length).toBeGreaterThan(0);
     const r = compile(script);
     const switched = r.diagnostics.find((d) => d.code === "NAR416");
-    expect(switched?.message).toMatch(/variant `row` does not fit/);
+    expect(switched?.message).toMatch(/variant `line` does not fit/);
     expect(switched?.fixed).toMatch(/^variant=/);
     expect(r.diagnostics.filter((d) => UNFIT.has(d.code))).toEqual([]);
   });
 
   it("replace the template default silently when it crowds the content", () => {
     const script = CROWDED();
+    expect(unfit(script, "exact").length).toBeGreaterThan(0);
     const r = compile(script);
     expect(r.diagnostics.filter((d) => UNFIT.has(d.code) || d.code === "NAR416")).toEqual([]);
   });
@@ -86,17 +88,17 @@ describe("fit-based variants", () => {
   });
 
   it("variants: exact keeps the named variant even when it crowds", () => {
-    expect(unfit(CROWDED("row"), "exact").length).toBeGreaterThan(0);
+    expect(unfit(CROWDED("line"), "exact").length).toBeGreaterThan(0);
   });
 });
 
-/** Six steps with very long box labels: too much text for one row. */
+/** Six timeline events with very long box labels: too much text for one line. */
 const CROWDED = (variant?: string) => {
   const label = "Collect every input and check that each one is valid before anything else runs";
   const ids = [1, 2, 3, 4, 5, 6];
   const lines = [
     "video 1",
-    `scene s template=steps${variant ? ` variant=${variant}` : ""}`,
+    `scene s template=timeline${variant ? ` variant=${variant}` : ""}`,
     ...ids.map((i) => `i${i} = box "${label}"`),
     `> ${ids.map((i) => `{${i}}i${i}`).join(" ")}.`,
     ...ids.map((i) => `${i} fade i${i}`),
@@ -132,6 +134,11 @@ describe("template quality", () => {
       const counts = allowed(t);
       const n = counts[Math.floor((counts.length - 1) / 2)]!;
       const bad = unfit(templateScript(t, "auto", n, true), "fit");
+      // A template drawn as an HTML page has no layout to fit; its limits are text lengths, and a text over them is an error (NAR616).
+      if (t.html) {
+        if (!bad.length || bad.some((b) => !b.startsWith("NAR616"))) problems.push(`${t.name} ×${n}: long labels should be reported as NAR616, got ${bad.join("; ") || "nothing"}`);
+        continue;
+      }
       if (bad.length) problems.push(`${t.name} ×${n}: ${bad.join("; ")}`);
     }
     expect(problems).toEqual([]);
@@ -181,6 +188,8 @@ describe("emphasis= (the general pass)", () => {
           if (t.name === "cards" && v === "strip") continue;
           // The timeline weighs its own cells for emphasis, and with six or more events the labels shrink too far (also before the general pass).
           if (t.name === "timeline") continue;
+          // A variant only promises to stay clean within the item counts its card gives (cards:arch is built for 3 to 6).
+          if (!promised(t, v).includes(n)) continue;
           for (const e of ["first", "last"]) if (unfit(base.replace(`template=${t.name}`, `template=${t.name} emphasis=${e}`), "exact").length) problems.push(`${t.name}:${v} ×${n} emphasis=${e}`);
         }
     }

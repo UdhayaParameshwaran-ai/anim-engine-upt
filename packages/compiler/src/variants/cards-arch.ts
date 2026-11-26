@@ -1,11 +1,11 @@
 import type { VariantLayout } from "./api.js";
 
 /**
- * steps:arch — steps rising along an arch that peaks in the middle.
+ * cards:arch — cards rising along an arch that peaks in the middle.
  * Items keep their order left to right; each sits higher the closer it is
  * to the middle (a half sine), like stones of an arch.
  */
-export const stepsArch: VariantLayout = (c) => {
+export const cardsArch: VariantLayout = (c) => {
   const n = c.items.length;
   const cells = c.rowCells(c.area, n, n > 1 && c.emphasis >= 0 ? c.items.map((_, i) => (i === c.emphasis ? 1.6 : 1)) : undefined);
   const h = c.area.h * 0.5;

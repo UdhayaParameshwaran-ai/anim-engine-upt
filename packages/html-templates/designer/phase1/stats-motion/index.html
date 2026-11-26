@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stats · Motion set</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="themes.css">
+<link rel="stylesheet" href="stats-core.css">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 48px 24px 64px; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--secondary); }
+  h1 { margin: 8px 0 8px; font-size: 40px; letter-spacing: -.02em; }
+  .lead { margin: 0 0 24px; color: var(--text-muted); max-width: 760px; line-height: 1.6; }
+  .themes-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 28px; }
+  .themes-bar button { display: inline-flex; align-items: center; gap: 9px; padding: 7px 16px 7px 8px; border-radius: 999px; font-size: 14px; cursor: pointer;
+    color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); }
+  .themes-bar button i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); display: inline-block; }
+  .themes-bar button.on { color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: border-color .2s, transform .2s; }
+  .card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .frame { position: relative; aspect-ratio: 16 / 9; background: var(--bg); }
+  .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .meta { padding: 18px 20px 22px; display: grid; gap: 8px; }
+  .meta h2 { margin: 0; font-size: 20px; }
+  .meta p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-muted); }
+  .src { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); } .src.new { color: var(--secondary); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tags span { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Template · stats</div>
+    <h1>Stats: 7 motion ideas, 4 themes</h1>
+    <p class="lead">Each variant tells the same numbers with its own motion idea: reels, units, liquid, depth, area and a tracked line. They all follow the same rules: one moving thing at a time, blur-rise text, a slow drift during holds, and the next element appearing where the eye already is. Pace sets the gap and the hold. Pick a theme below to restyle every preview.</p>
+    <nav class="themes-bar" id="themes" aria-label="Theme"></nav>
+    <div class="grid">
+      <a class="card" href="v1-tape-measure.html">
+        <div class="frame"><iframe data-src="v1-tape-measure.html" title="01 · Tape Measure preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>01 · Tape Measure</h2>
+          <div class="src new">New motion</div>
+          <p>The value is read off a ruler. The tape scrolls under a fixed needle and locks on, with blur following its speed. The distance travelled is the change: a band spans from the last flag to the needle, and every stat leaves a flag behind.</p>
+          <div class="tags"><span>measurement</span><span>distance = change</span><span>flags</span></div>
+        </div>
+      </a>
+      <a class="card" href="v2-unit-swarm.html">
+        <div class="frame"><iframe data-src="v2-unit-swarm.html" title="02 · Unit Swarm preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>02 · Unit Swarm</h2>
+          <div class="src new">New motion</div>
+          <p>The number is made of 100 units. Dots fly out of a drifting cloud on curved paths and lock into a 10×10 grid. Dots added this beat glow and older ones settle back, so the growth shows without reading.</p>
+          <div class="tags"><span>visual metaphor</span><span>particles</span><span>1 dot = unit</span></div>
+        </div>
+      </a>
+      <a class="card" href="v3-liquid-tubes.html">
+        <div class="frame"><iframe data-src="v3-liquid-tubes.html" title="03 · Liquid Tubes preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>03 · Liquid Tubes</h2>
+          <div class="src new">New motion</div>
+          <p>Glass tubes fill with liquid that sloshes and settles while bubbles rise. The value floats on the surface. Focus walks from tube to tube with a camera lean, then every tube returns and the highlight glows.</p>
+          <div class="tags"><span>slosh physics</span><span>focus walk</span><span>camera lean</span></div>
+        </div>
+      </a>
+      <a class="card" href="v4-bubble-pack.html">
+        <div class="frame"><iframe data-src="v4-bubble-pack.html" title="04 · Bubble Pack preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>04 · Bubble Pack</h2>
+          <div class="src new">New motion</div>
+          <p>Each stat inflates as a bubble whose area is the value. It floats into the cluster and shoulders the others aside with real collision physics, then everything settles with a soft wobble. The newest bubble is lit.</p>
+          <div class="tags"><span>area = value</span><span>collision physics</span><span>soft wobble</span></div>
+        </div>
+      </a>
+      <a class="card" href="v5-scale-zoom.html">
+        <div class="frame"><iframe data-src="v5-scale-zoom.html" title="05 · Scale Zoom preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>05 · Scale Zoom</h2>
+          <div class="src new">New motion</div>
+          <p>Each value is a square whose area is the number, all growing from one corner. The newest square always fills the frame: the camera pulls back and older squares shrink inside it. The panel shows ×-times vs the first.</p>
+          <div class="tags"><span>area = value</span><span>camera pull-back</span><span>× ratio</span></div>
+        </div>
+      </a>
+      <a class="card" href="v6-comet-trail.html">
+        <div class="frame"><iframe data-src="v6-comet-trail.html" title="06 · Comet Trail preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>06 · Comet Trail</h2>
+          <div class="src new">New motion</div>
+          <p>A glowing comet draws the line, and the number riding on it is the value of the line under it, so it flows between points. A level line reads its height off the axis, and pins drop in at each point.</p>
+          <div class="tags"><span>live value</span><span>axis read-off</span><span>pin drop</span></div>
+        </div>
+      </a>
+      <a class="card" href="v1-odometer.html">
+        <div class="frame"><iframe data-src="v1-odometer.html" title="07 · Odometer preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>07 · Odometer</h2>
+          <div class="src new">New motion</div>
+          <p>Each digit is a mechanical reel. The ones digit spins most, like a real counter, and motion blur follows each reel's speed. The label flips down like a counter wheel, and finished numbers drop into a history rail.</p>
+          <div class="tags"><span>digit reels</span><span>speed blur</span><span>history rail</span></div>
+        </div>
+      </a>
+    </div>
+  </div>
+<script src="themes.js"></script>
+<script>
+(function () {
+  var THEMES = window.TIMELINE_THEMES || [];
+  var KEY = 'timeline-motion-theme-v1';
+  var q = new URLSearchParams(location.search).get('theme'), saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { /* storage unavailable */ }
+  var cur = THEMES.filter(function (t) { return t.id === (q || saved || window.TIMELINE_DEFAULT_THEME); })[0] || THEMES[0];
+  var bar = document.getElementById('themes');
+  var frames = [].slice.call(document.querySelectorAll('.frame iframe'));
+  bar.innerHTML = THEMES.map(function (t) {
+    return '<button data-id="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.swatch[1] + ' 50%,' + t.swatch[0] + ' 50%)"></i>' + t.label + '</button>';
+  }).join('');
+  function apply() {
+    document.documentElement.dataset.theme = cur.id;
+    frames.forEach(function (f) { f.src = f.dataset.src + '?embed&theme=' + cur.id; });
+    [].forEach.call(bar.querySelectorAll('button'), function (b) { b.classList.toggle('on', b.dataset.id === cur.id); });
+    try { localStorage.setItem(KEY, cur.id); } catch (e) { /* storage unavailable */ }
+  }
+  bar.onclick = function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    cur = THEMES.filter(function (t) { return t.id === b.dataset.id; })[0] || cur;
+    apply();
+  };
+  apply();
+})();
+</script>
+</body>
+</html>

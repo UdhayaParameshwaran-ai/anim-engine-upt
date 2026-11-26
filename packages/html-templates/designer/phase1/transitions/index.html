@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scene Transitions Templates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="themes.css">
+<link rel="stylesheet" href="transitions-core.css">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 48px 24px 64px; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--secondary); }
+  h1 { margin: 8px 0 8px; font-size: 40px; letter-spacing: -.02em; }
+  .lead { margin: 0 0 24px; color: var(--text-muted); max-width: 760px; line-height: 1.6; }
+  .themes-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 28px; }
+  .themes-bar button { display: inline-flex; align-items: center; gap: 9px; padding: 7px 16px 7px 8px; border-radius: 999px; font-size: 14px; cursor: pointer;
+    color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); }
+  .themes-bar button i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); display: inline-block; }
+  .themes-bar button.on { color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: border-color .2s, transform .2s; }
+  .card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .frame { position: relative; aspect-ratio: 16 / 9; background: var(--bg); }
+  .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .meta { padding: 18px 20px 22px; display: grid; gap: 8px; }
+  .meta h2 { margin: 0; font-size: 20px; }
+  .meta p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-muted); }
+  .src { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); } .src.new { color: var(--secondary); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tags span { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Template · scene transitions</div>
+    <h1>Scene Transitions — 10 ways one scene gives way to the next, 4 themes</h1>
+    <p class="lead">Every variation plays the same two scenes, so the difference you see is the transition itself. While it runs, the content inside each scene moves at its own speed (parallax), so the change has depth instead of being a flat cut; when the new scene lands, its title words rise into place. Open any one to edit both scenes' titles, subtitles and tints, choose the direction (for the directional ones) and set the pace. Wrap a word in *asterisks* for the accent colour. All colours and fonts come from the theme. Pick a theme below: it restyles every preview.</p>
+    <nav class="themes-bar" id="themes" aria-label="Theme"></nav>
+    <div class="grid">
+      <a class="card" href="v1-wipe.html">
+        <div class="frame"><iframe data-src="v1-wipe.html" title="Wipe preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>01 · Wipe</h2>
+          <div class="src">transition="wipe"</div>
+          <p>A soft-edged line uncovers the new scene with a thin light leading it, while old and new content slide in opposite senses. Directional.</p>
+        </div>
+      </a>
+      <a class="card" href="v2-push.html">
+        <div class="frame"><iframe data-src="v2-push.html" title="Push preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>02 · Push</h2>
+          <div class="src">transition="push"</div>
+          <p>The new scene pushes the old one out; the old moves less and dims and shrinks, so the scenes sit at different depths. Directional.</p>
+        </div>
+      </a>
+      <a class="card" href="v3-zoom.html">
+        <div class="frame"><iframe data-src="v3-zoom.html" title="Zoom through preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>03 · Zoom through</h2>
+          <div class="src">transition="zoom"</div>
+          <p>The camera flies into the old scene until it dissolves into blur, and the new scene grows out of the distance into focus.</p>
+        </div>
+      </a>
+      <a class="card" href="v4-iris.html">
+        <div class="frame"><iframe data-src="v4-iris.html" title="Iris preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>04 · Iris</h2>
+          <div class="src">transition="iris"</div>
+          <p>A circle opens from the centre and the new scene fills it, with a thin ring on its edge. The old scene eases back.</p>
+        </div>
+      </a>
+      <a class="card" href="v5-slats.html">
+        <div class="frame"><iframe data-src="v5-slats.html" title="Slats preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>05 · Slats</h2>
+          <div class="src">transition="slats"</div>
+          <p>The new scene arrives in eight strips that open one after another, alternating up and down. Directional.</p>
+        </div>
+      </a>
+      <a class="card" href="v6-split.html">
+        <div class="frame"><iframe data-src="v6-split.html" title="Split preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>06 · Split</h2>
+          <div class="src">transition="split"</div>
+          <p>The old scene parts down the middle like doors to uncover the new one, which settles in from slightly larger. Directional.</p>
+        </div>
+      </a>
+      <a class="card" href="v7-defocus.html">
+        <div class="frame"><iframe data-src="v7-defocus.html" title="Defocus preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>07 · Defocus</h2>
+          <div class="src">transition="defocus"</div>
+          <p>The old scene drifts out of focus and fades while the new one pulls into focus, with a soft bloom. Calm and cinematic.</p>
+        </div>
+      </a>
+      <a class="card" href="v8-cube.html">
+        <div class="frame"><iframe data-src="v8-cube.html" title="Cube preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>08 · Cube</h2>
+          <div class="src">transition="cube"</div>
+          <p>The scenes are faces of a cube that turns in 3D; the new face swings to the front. Directional.</p>
+        </div>
+      </a>
+      <a class="card" href="v9-panel.html">
+        <div class="frame"><iframe data-src="v9-panel.html" title="Panel preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>09 · Panel</h2>
+          <div class="src">transition="panel"</div>
+          <p>A block of theme colour sweeps across and covers the frame; the scene changes behind it and the block sweeps away. Directional.</p>
+        </div>
+      </a>
+      <a class="card" href="v10-ripple.html">
+        <div class="frame"><iframe data-src="v10-ripple.html" title="Ripple preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>10 · Ripple</h2>
+          <div class="src">transition="ripple"</div>
+          <p>The old scene dissolves into the new through a wave of distortion that swells in the middle and calms again.</p>
+        </div>
+      </a>
+    </div>
+  </div>
+<script src="themes.js"></script>
+<script>
+(function () {
+  var THEMES = window.TIMELINE_THEMES || [];
+  var KEY = 'timeline-motion-theme-v1';
+  var q = new URLSearchParams(location.search).get('theme'), saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { /* storage unavailable */ }
+  var cur = THEMES.filter(function (t) { return t.id === (q || saved || window.TIMELINE_DEFAULT_THEME); })[0] || THEMES[0];
+  var bar = document.getElementById('themes');
+  var frames = [].slice.call(document.querySelectorAll('.frame iframe'));
+  bar.innerHTML = THEMES.map(function (t) {
+    return '<button data-id="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.swatch[1] + ' 50%,' + t.swatch[0] + ' 50%)"></i>' + t.label + '</button>';
+  }).join('');
+  function apply() {
+    document.documentElement.dataset.theme = cur.id;
+    frames.forEach(function (f) { f.src = f.dataset.src + '?embed&theme=' + cur.id; });
+    [].forEach.call(bar.querySelectorAll('button'), function (b) { b.classList.toggle('on', b.dataset.id === cur.id); });
+    try { localStorage.setItem(KEY, cur.id); } catch (e) { /* storage unavailable */ }
+  }
+  bar.onclick = function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    cur = THEMES.filter(function (t) { return t.id === b.dataset.id; })[0] || cur;
+    apply();
+  };
+  apply();
+})();
+</script>
+</body>
+</html>

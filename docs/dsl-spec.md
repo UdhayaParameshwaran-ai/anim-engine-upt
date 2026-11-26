@@ -179,7 +179,7 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 |---|---|
 | `title` | `center` `left` (left-aligned headline, items beside it) `split` |
 | `compare` | `side` `stacked` `diagonal` `asymmetric` (golden ratio) |
-| `steps` | `row` `zigzag` `column` `staircase` `grid` |
+| `steps` | `rail` `deck` `accordion` `path` `stack` `domino` `orbit` `dolly` `morph` (the designer's HTML motions; 2 to 6 items; `auto` picks one that fits the item count) |
 | `cycle` | `ring` `arc` |
 | `hub` | `ring` `sides` |
 | `timeline` | `alternate` `line` `vertical` |
@@ -197,7 +197,7 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
   |---|---|
   | `hub` | a spoke from the center to each item |
   | `cycle` | arrows from each item to the next, closing the loop |
-  | `steps` | a number on each item; arrows between them when none are declared |
+  | `steps` | nothing of ours: an HTML page draws the steps (see below) |
   | `cards` | a panel behind each item (one size for all) |
   | `compare` | a panel behind each side and a "vs" between them |
   | `timeline` | the axis and a dot for each event (`alternate`, `line`) |
@@ -219,12 +219,13 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
   - **Each scene request** carries only its template's card and example.
   - **The style director** rotates only among variants whose card covers the scene's item count.
   - **The quality test** (`apps/studio/test/quality.test.ts`) holds every variant to its card's item range.
+- `theme=daylight-clean|daylight-plain|aurora-night|aurora-plain|auto` picks the designer theme of a scene drawn by a designer's page (`title`, `steps`, `compare`, `timeline`, `stats`, `chart`, `ui`). `auto` (the default) takes the light theme on a dark-ink look and the night theme on a light-ink one. Other templates ignore it.
 - `emphasis=first|last|<id>` gives that element more room (the larger side of `compare`, the hero of `grid variant=feature`). In the other templates the element grows by up to 30% about its center, as far as its cell, the safe area and its neighbours allow.
 - `frame=close` opens the scene with the camera close on its first item (about 1.6x) and pulls out to the full view as the first sentence begins; it is left alone when the scene moves the camera itself.
 - `density=airy|normal|tight` changes spacing and how much of its cell each element fills.
 - `mirror=true` flips the scene left↔right; it works on grid pages too, so the 27 rule-book layouts have 54 arrangements.
 
-Bad values are fixed to the closest one or dropped (NAR218). Variants added through the authoring pipeline (`pnpm variant`, see the README) appear in this list once approved (`steps` also has `arch`); a draft variant is refused with NAR218.
+Bad values are fixed to the closest one or dropped (NAR218). Variants added through the authoring pipeline (`pnpm variant`, see the README) appear in this list once approved (`cards` also has `arch`); a draft variant is refused with NAR218.
 
 ## 6c-tech. Software & tech templates
 
@@ -242,7 +243,7 @@ A domain pack for explaining software and technology. With `generate(topic, { do
 | `gitgraph` | branching | `b = zone "main"` starts a branch lane, the commits (`circle "init"`) declared after it are on it; the lines you declare join commits and take their lane's colour; a commit's column follows the links, so a merge comes after both parents | `lanes` |
 | `anatomy` | format | the parts of a URL, request, packet or token as one bar (widths follow their text) or as rows; name each part with `label "…" @below:<part>` (`@right-of` for rows) | `bar`, `stacked` |
 
-`steps variant=pipeline` draws the stages as joined chevrons (CI/CD, ETL, a compiler) without arrows. `steps variant=column` draws each step as a band, its picture at the left with a large label beside it, and its number next to it.
+`steps` is drawn by one of the designer's HTML pages (`packages/html-templates`), not by our layout: `s1 = icon:send "Inject" "A harmless piece enters the arm"` gives a step its title and, as an optional second string, its detail line (`icon` and `asset` take it; `card "Title" "Detail"` works too). The declared elements are virtual (no box, nothing drawn for them) and the verbs on them say when each step is spoken; the compiler adds one page-sized `motion` element that hosts the page and time-warps it so each step appears on its cue. Each variant has measured text limits; a title or detail over them is NAR616.
 
 **Elements**
 - `code "line 1\nline 2" lang=js|py|sql|bash|json|…`: a dark editor panel with line numbers and simple syntax colours. `\n` inside a quoted string is a line break. Each line is a part: `write code.2` types line 2, and `highlight code.2` puts a bar behind it.

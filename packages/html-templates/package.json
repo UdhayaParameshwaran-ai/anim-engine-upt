@@ -1,0 +1,19 @@
+{
+  "name": "@anim/html-templates",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The designer's HTML motion templates (verbatim, per phase), our adaptive overlay, and what the compiler needs to know about them",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./files": {
+      "types": "./src/files.d.mts",
+      "default": "./src/files.mjs"
+    }
+  }
+}

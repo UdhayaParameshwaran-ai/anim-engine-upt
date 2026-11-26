@@ -1,4 +1,5 @@
 import type { Diagnostic, ElementDecl, Place, Scene } from "@anim/dsl";
+import { htmlLayout, htmlSceneOf } from "./html.js";
 import type { Box } from "@anim/ir";
 import { findGridLayout, findTemplate, frameMode, frameRects, GRID, slotRects, SLOTS, variantGuide, type AssetLibrary, type Rect, type TemplateManifest } from "@anim/registry";
 import { gridMode, gridParts } from "@anim/validate";
@@ -63,6 +64,9 @@ const LINK_KINDS = new Set(["arrow", "line", "edge"]);
 const GAP = 48;
 
 export function layoutScene(scene: Scene, ctx: LayoutContext, kept: Map<string, Box> = new Map()): SceneLayout {
+  // A scene drawn by one of the designer's HTML pages has nothing for us to place.
+  const html = htmlSceneOf(scene);
+  if (html) return htmlLayout(scene, ctx, html);
   const isGrid = scene.attrs.grid !== undefined && findGridLayout(scene.attrs.grid);
   const tpl = !isGrid && scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
   if (!tpl || tpl.variants.length < 2 || ctx.variants === "exact") return new SceneLayouter(scene, ctx, kept).run();

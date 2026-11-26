@@ -12,7 +12,11 @@ import { countUp } from "../src/widgets.js";
 const EXAMPLES = join(import.meta.dirname, "../../../examples");
 
 async function load(file: string): Promise<{ ir: VideoIR; tl: ResolvedTimeline }> {
-  const ir = compile(readFileSync(join(EXAMPLES, file), "utf8")).ir!;
+  return loadSource(readFileSync(join(EXAMPLES, file), "utf8"));
+}
+
+async function loadSource(src: string): Promise<{ ir: VideoIR; tl: ResolvedTimeline }> {
+  const ir = compile(src).ir!;
   const speech = await speakVideo(ir, { provider: new MockTtsProvider({ audio: false }) });
   return { ir, tl: resolve(ir, speech) };
 }
@@ -117,7 +121,8 @@ describe("stage", () => {
   });
 
   it("renders HTML-layer cards and wipes them in", async () => {
-    const { ir, tl } = await load("cells.txt");
+    // (cells.txt's recap is a `steps` scene, drawn by an HTML page; a cards template still builds each card as a DOM node.)
+    const { ir, tl } = await loadSource('video 1\nscene recap "Recap" template=cards\ns1 = card "Wall" "Plants only"\ns2 = card "Chloroplasts" "Plants only"\ns3 = card "Membrane" "Both"\n> Remember: the {1}wall and the {2}chloroplasts belong to plants, but {3}both have a membrane.\n1 pop s1\n2 pop s2\n3 pop s3 then pulse s3\n');
     const stage = new Stage(container, ir, tl, { autoFit: false });
     const card = node(stage, "recap", "s1");
     expect(card.tagName).toBe("DIV");
@@ -278,7 +283,8 @@ describe("template structure and looks", () => {
     return { stage: new Stage(container, ir, tl, { autoFit: false, ...(theme && { theme }) }), ir, tl };
   }
   const CARDS = 'video 1\nscene s "Kinds" template=cards\na = icon:sun "Solar"\nb = icon:wind "Wind"\n> {1}Two kinds.\n1 pop a,b /0.2\n';
-  const STEPS = 'video 1\nscene s "Order" template=steps\na = icon:sun "One"\nb = icon:gear "Two"\n> {1}First, then {2}second.\n1 pop a\n2 pop b\n';
+  // (`steps` is drawn by an HTML page now; a timeline still has its axis behind the items and a dot above each.)
+  const LINE = 'video 1\nscene s "Order" template=timeline\na = icon:sun "One"\nb = icon:gear "Two"\n> {1}First, then {2}second.\n1 pop a\n2 pop b\n';
 
   it("draws connector labels above the nodes, shown and hidden with their connector", async () => {
     const { stage, tl } = await stageOf('video 1\nscene s "Flow" template=flow\na = node "Start"\nb = node "End"\ne = a -> b "next step"\n> {1}From start {2}to end.\n1 pop a,b\n2 draw e\n');
@@ -310,18 +316,17 @@ describe("template structure and looks", () => {
   });
 
   it("draws panels behind the items and badges above them, each shown with its item", async () => {
-    const { stage, tl } = await stageOf(STEPS);
+    const { stage, tl } = await stageOf(LINE);
     const order = [...stage.root.querySelectorAll('[data-scene="s"] [data-kind]')].map((n) => n.getAttribute("data-kind"));
-    // Connectors first, then the items, then their number badges.
-    expect(order.indexOf("arrow")).toBeLessThan(order.indexOf("icon"));
+    // The axis first, then the items, then their dots.
+    expect(order.indexOf("rule")).toBeLessThan(order.indexOf("icon"));
     expect(order.lastIndexOf("icon")).toBeLessThan(order.indexOf("badge"));
     const second = firstTween(tl, "s/b", "opacity");
-    const badge = [...stage.root.querySelectorAll('[data-scene="s"] [data-kind="badge"]')].find((n) => n.textContent === "2") as SVGGElement & HTMLElement;
+    const badge = [...stage.root.querySelectorAll('[data-scene="s"] [data-kind="badge"]')][1] as SVGGElement & HTMLElement;
     stage.render(second.t0 - 0.05);
     expect(visible(badge)).toBe(false);
     stage.render(second.t1 + 1);
     expect(visible(badge)).toBe(true);
-    expect(badge.textContent).toBe("2");
 
     const cards = await stageOf(CARDS);
     const kinds = [...cards.stage.root.querySelectorAll('[data-scene="s"] [data-kind]')].map((n) => n.getAttribute("data-kind"));

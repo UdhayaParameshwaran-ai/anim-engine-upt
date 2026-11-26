@@ -166,3 +166,13 @@ describe("the model's look and motion", () => {
     expect(d.recent().motions).toEqual(["minimal"]);
   });
 });
+
+describe("scenes drawn by a designer page", () => {
+  it("take no spacing, mirroring, emphasis or framing knobs (there is no layout of ours to apply them to)", () => {
+    const scenes = Array.from({ length: 8 }, (_, i) => `scene s${i} template=steps\na = icon:sun "A" "Light"\nb = icon:heart "B" "Love"\n> {1}Hi.\n1 pop a\n2 pop b\n`).join("\n");
+    for (const topic of ["dns", "tcp", "git", "http", "cache", "queue", "tree", "cdn", "jwt", "rest", "sql", "dom"]) {
+      const lines = direct(`video 1\n${scenes}`, { topic }).script.split("\n").filter((l) => l.startsWith("scene "));
+      for (const l of lines) expect(l).not.toMatch(/\bdensity=|\bmirror=|\bemphasis=|\bframe=/);
+    }
+  });
+});

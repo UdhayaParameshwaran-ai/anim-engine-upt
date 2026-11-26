@@ -105,7 +105,7 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "lifecycle",
     when: "stages or states something goes through over time: an order, a connection, a build, a traffic light",
-    plan: "The core is ONE growing scene (template=states or steps): the whole machine first, then one real item followed through it with visit, one chapter per stage, including the unusual path (failure, timeout, retry).",
+    plan: "The core is ONE growing scene (template=states): the whole machine first, then one real item followed through it with visit, one chapter per stage, including the unusual path (failure, timeout, retry).",
     scene: "",
     keywords: /\b(state machine|lifecycle|life cycle|states of|life of|stages of)\b/i,
   },

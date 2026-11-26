@@ -1,3 +1,6 @@
+import { CHART, COMPARE, STATS, STEPS, TIMELINE, TITLE, UI } from "@anim/html-templates";
+/** The four themes of the designer templates. */
+export { THEMES as MOTION_THEMES } from "@anim/html-templates";
 import { SHAPES, TEMPLATE_GUIDES, type Shape, type TemplateGuide, type VariantGuide } from "./guide.js";
 import { EXTRA_VARIANTS } from "./variants.js";
 
@@ -160,7 +163,7 @@ export const THEME_SUMMARIES: Record<(typeof THEMES)[number], string> = {
 };
 export const CHART_TYPES = ["bar", "line", "pie"] as const;
 /** Scene attributes the DSL understands. */
-export const SCENE_ATTRS = ["template", "grid", "compose", "in", "out", "keep", "carry", "frame", "variant", "emphasis", "density", "mirror", "check"] as const;
+export const SCENE_ATTRS = ["template", "grid", "compose", "in", "out", "keep", "carry", "frame", "variant", "emphasis", "density", "mirror", "check", "theme"] as const;
 
 /** `compose=`: arrangements the constraint solver understands (`auto` tries them all). */
 export const COMPOSE_PATTERNS = ["auto", "hero-left", "hero-right", "hero-top", "hero-center", "columns", "rows", "pyramid", "z"] as const;
@@ -199,6 +202,8 @@ export interface TemplateManifest {
   graph?: { maxNodes: number };
   /** Arrangements of the same slots (`variant=`); the first is the default. */
   variants: readonly string[];
+  /** Drawn by one of the designer's HTML pages (packages/html-templates) instead of by our layout: the items' texts go to the page. */
+  html?: boolean;
   /** What the template means and when to use it (guide.ts). */
   guide: TemplateGuide;
 }
@@ -211,12 +216,15 @@ const TECH = ["code", "terminal"] as const;
 export const COLLECTIONS = ["row", "stack", "queue", "set", "pairs", "chain", "buckets", "graph", "tree", "heap", "plot", "ring", "lanes", "net"] as const;
 
 const BASE_TEMPLATES: readonly Omit<TemplateManifest, "guide">[] = [
-  { name: "title", version: 1, summary: "big title with optional subtitle", slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 0, max: 3 }, variants: ["center", "left", "split"] },
-  { name: "compare", version: 1, summary: "two things side by side", slots: [{ name: "left", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "right", accepts: [...VISUAL, ...TEXTUAL], required: true }, { name: "title", accepts: ["title", "text"], required: false }], variants: ["side", "stacked", "diagonal", "asymmetric"] },
-  { name: "steps", version: 1, summary: "ordered sequence left to right", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 }, variants: ["row", "zigzag", "column", "staircase", "grid", "pipeline"] },
+  { name: "title", version: 2, summary: "the opening headline, shown by a designed motion; optional subtitle, kicker, byline, brand and one icon", html: true, slots: [{ name: "title", accepts: ["title", "text"], required: true }, { name: "subtitle", accepts: ["text", "label"], required: false }, { name: "kicker", accepts: ["text", "label"], required: false }, { name: "byline", accepts: ["text", "label"], required: false }, { name: "brand", accepts: ["text", "label"], required: false }], items: { accepts: ["icon", "asset"], min: 0, max: 1 }, variants: TITLE.variants.map((v) => v.id) },
+  { name: "compare", version: 2, summary: "two things contrasted: side names (left, right), then rows of matching points (the right side is the better one), shown by a designed motion", html: true, slots: [{ name: "left", accepts: ["label", "text"], required: true }, { name: "right", accepts: ["label", "text"], required: true }, { name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 1, max: 5 }, variants: COMPARE.variants.map((v) => v.id) },
+  { name: "steps", version: 2, summary: "ordered steps, each with a title and a detail line, shown by a motion (a rolling number rail, a card deck, a walked path...)", html: true, slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 6 }, variants: STEPS.variants.map((v) => v.id) },
+  { name: "stats", version: 1, summary: "key figures: each is a label and a value (with an optional change), shown by a designed motion", html: true, slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 1, max: 6 }, variants: STATS.variants.map((v) => v.id) },
+  { name: "chart", version: 1, summary: "values as a chart: bars, a line or a ring; each item is a label and a value, shown by a designed motion", html: true, slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: ["label", "text", ...VISUAL], min: 2, max: 8 }, variants: CHART.variants.map((v) => v.id) },
+  { name: "ui", version: 1, summary: "someone using an interface: clicking, typing and sending, toggling, dragging or swiping; each item is a control and what it does, shown by a designed motion", html: true, slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 1, max: 6 }, variants: UI.variants.map((v) => v.id) },
   { name: "cycle", version: 1, summary: "items on a loop with arrows", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 3, max: 6 }, variants: ["ring", "arc"] },
   { name: "flow", version: 1, summary: "flowchart / graph of nodes and edges", slots: [], graph: { maxNodes: 12 }, variants: ["auto", "down", "across"] },
-  { name: "timeline", version: 1, summary: "events along a horizontal line", slots: [], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 7 }, variants: ["alternate", "line", "vertical"] },
+  { name: "timeline", version: 2, summary: "dated events in order: each event is a date, a title and a detail, shown by a designed motion", html: true, slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: ["label", "text", ...VISUAL], min: 2, max: 8 }, variants: TIMELINE.variants.map((v) => v.id) },
   { name: "hub", version: 1, summary: "central idea with spokes", slots: [{ name: "center", accepts: [...VISUAL, ...TEXTUAL], required: true }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 8 }, variants: ["ring", "sides"] },
   { name: "cards", version: 1, summary: "cards of equal weight in rows", slots: [{ name: "title", accepts: ["title", "text"], required: false }], items: { accepts: [...VISUAL, ...TEXTUAL], min: 2, max: 9 }, variants: ["auto", "feature", "strip"] },
   { name: "spotlight", version: 1, summary: "one large visual with labels around it", slots: [{ name: "main", accepts: [...VISUAL], required: true }], items: { accepts: ["label", "text"], min: 0, max: 6 }, variants: ["center", "left", "right"] },
@@ -258,7 +266,7 @@ export interface ComponentManifest {
 export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "title", version: 1, layer: "svg", summary: "large heading", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, parts: "words", drawable: true },
   { kind: "text", version: 1, layer: "svg", summary: "body text", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, parts: "words", drawable: true },
-  { kind: "label", version: 1, layer: "svg", summary: "short caption next to something", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, parts: "words", drawable: true },
+  { kind: "label", version: 1, layer: "svg", summary: "short caption next to something; more strings after the first are read by templates that show them: a date, title and detail (timeline), a label and a value (chart)", named: "none", texts: { min: 1, max: 3 }, link: false, params: {}, parts: "words", drawable: true },
   { kind: "list", version: 1, layer: "svg", summary: "bullet list; items split on ;", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, parts: "items", drawable: true },
   { kind: "card", version: 1, layer: "html", summary: "heading + body card", named: "none", texts: { min: 1, max: 2 }, link: false, params: {}, parts: ["head", "body"], drawable: false },
   { kind: "formula", version: 1, layer: "html", summary: "math formula (TeX)", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, parts: "items", drawable: false },
@@ -268,8 +276,8 @@ export const COMPONENTS: readonly ComponentManifest[] = [
   { kind: "line", version: 1, layer: "svg", summary: "line between two elements", named: "none", texts: { min: 0, max: 1 }, link: true, params: { style: { type: "enum", values: ["solid", "dashed"], default: "solid" } }, drawable: true },
   { kind: "node", version: 1, layer: "svg", summary: "graph node for the flow template", named: "none", texts: { min: 1, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "edge", version: 1, layer: "svg", summary: "graph edge (a -> b \"label\")", named: "none", texts: { min: 0, max: 1 }, link: true, params: {}, drawable: true },
-  { kind: "icon", version: 1, layer: "svg", summary: "icon from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
-  { kind: "asset", version: 1, layer: "svg", summary: "illustration from the semantic library", named: "required", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
+  { kind: "icon", version: 1, layer: "svg", summary: "icon from the semantic library; more strings after the label are read by templates that show them: a detail (steps, interaction), a value and a change (stats)", named: "required", texts: { min: 0, max: 3 }, link: false, params: {}, drawable: true },
+  { kind: "asset", version: 1, layer: "svg", summary: "illustration from the semantic library; more strings after the label are read by templates that show them: a detail (steps)", named: "required", texts: { min: 0, max: 3 }, link: false, params: {}, drawable: true },
   { kind: "placeholder", version: 1, layer: "svg", summary: "labeled box standing in for a missing asset", named: "none", texts: { min: 0, max: 1 }, link: false, params: {}, drawable: true },
   { kind: "code", version: 1, layer: "svg", summary: 'code panel (look=window|tabs|card|light, anim=type|lines|walk, file=name for tabs); lines split on \\n: code "const a = 1;\\nreturn a" lang=js', named: "none", texts: { min: 1, max: 1 }, link: false, params: { lang: { type: "string", default: "" }, file: { type: "string", default: "" }, look: { type: "enum", values: ["window", "tabs", "card", "light", "terminal"] }, anim: { type: "enum", values: ["type", "lines", "walk"], default: "type" } }, parts: "lines", drawable: true },
   { kind: "terminal", version: 1, layer: "svg", summary: 'terminal; lines starting "$ " are commands, the rest output: terminal "$ git status\\nOn branch main"', named: "none", texts: { min: 1, max: 1 }, link: false, params: { look: { type: "enum", values: ["window", "tabs", "card", "light", "terminal"] }, anim: { type: "enum", values: ["type", "lines", "walk"], default: "type" } }, parts: "lines", drawable: true },
@@ -368,7 +376,7 @@ export const TEMPLATES: readonly TemplateManifest[] = BASE_TEMPLATES.map((t) => 
   const extra = EXTRA_VARIANTS.filter((v) => v.template === t.name && v.status === "approved");
   const guide = TEMPLATE_GUIDES[t.name]!;
   const variants: Record<string, VariantGuide> = { ...guide.variants };
-  for (const v of extra) variants[v.name] ??= { when: v.summary };
+  for (const v of extra) variants[v.name] ??= { when: v.summary, ...(v.items && { items: v.items }) };
   return { ...t, variants: [...t.variants, ...extra.map((v) => v.name)], guide: { ...guide, variants } };
 });
 

@@ -300,8 +300,9 @@ export class Director {
       if (v !== tpl.variants[0]) set.variant = v;
     }
     if (a.grid !== undefined && a.mirror === undefined && this.rand() < 0.4) set.mirror = "true";
-    // Spacing and mirroring for template scenes: now and then, never two scenes in a row.
-    if (tpl) {
+    // Spacing and mirroring for template scenes: now and then, never two scenes in a row. (A scene drawn by one of the designer's
+    // pages has no layout of ours to space, mirror or frame, so it takes none of these.)
+    if (tpl && !tpl.html) {
       const k = this.knobRand;
       // A diagram written as chapters is already large and dense: it keeps its full size.
       const chapters = scene.steps.filter((st) => st.id !== undefined).length > 1;

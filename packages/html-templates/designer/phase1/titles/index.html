@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Titles and Openers Templates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="themes.css">
+<link rel="stylesheet" href="titles-core.css">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 48px 24px 64px; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--secondary); }
+  h1 { margin: 8px 0 8px; font-size: 40px; letter-spacing: -.02em; }
+  .lead { margin: 0 0 24px; color: var(--text-muted); max-width: 760px; line-height: 1.6; }
+  .themes-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 28px; }
+  .themes-bar button { display: inline-flex; align-items: center; gap: 9px; padding: 7px 16px 7px 8px; border-radius: 999px; font-size: 14px; cursor: pointer;
+    color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); }
+  .themes-bar button i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); display: inline-block; }
+  .themes-bar button.on { color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; display: flex; flex-direction: column; transition: border-color .2s, transform .2s; }
+  .card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .frame { position: relative; aspect-ratio: 16 / 9; background: var(--bg); }
+  .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .meta { padding: 18px 20px 22px; display: grid; gap: 8px; }
+  .meta h2 { margin: 0; font-size: 20px; }
+  .meta p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-muted); }
+  .src { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); } .src.new { color: var(--secondary); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tags span { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Template · titles and openers</div>
+    <h1>Titles and Openers — 14 ways to open a scene, 4 themes</h1>
+    <p class="lead">Variations 1–6 are fuller title scenes (kicker, title, subtitle, byline); 7–14 are the calm set, with one focal point (the title) and a quiet subtitle and nothing else. Every variation is a different way a title scene opens, and they share the same content, so the difference you see is the motion. Wrap a word in *asterisks* for the accent colour. Pace stretches or tightens the intro, hold and play-out; Play out adds the exit so the title leaves cleanly into the next scene. All colours and fonts come from the theme. Pick a theme below: it restyles every preview.</p>
+    <nav class="themes-bar" id="themes" aria-label="Theme"></nav>
+    <div class="grid">
+      <a class="card" href="v1-rise.html">
+        <div class="frame"><iframe data-src="v1-rise.html" title="Rise preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>01 · Rise</h2>
+          <div class="src">full title scene</div>
+          <p>Kicker pops, title words slide up from behind an invisible edge, an accent rule draws, then subtitle and byline settle in. The clean default opener.</p>
+        </div>
+      </a>
+      <a class="card" href="v2-curtain.html">
+        <div class="frame"><iframe data-src="v2-curtain.html" title="Curtain preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>02 · Curtain</h2>
+          <div class="src">full title scene</div>
+          <p>Two panels part to reveal the title while its letters draw together from wide spacing. A theatrical opener.</p>
+        </div>
+      </a>
+      <a class="card" href="v3-logo.html">
+        <div class="frame"><iframe data-src="v3-logo.html" title="Logo reveal preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>03 · Logo reveal</h2>
+          <div class="src">full title scene</div>
+          <p>A ring draws itself, the disc pops, the icon strokes in under a light sweep, then the name unfolds beside it.</p>
+        </div>
+      </a>
+      <a class="card" href="v4-shine.html">
+        <div class="frame"><iframe data-src="v4-shine.html" title="Shine preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>04 · Shine</h2>
+          <div class="src">full title scene</div>
+          <p>The title resolves from a soft blur while a band of light sweeps across it, with a slow glow pulse. Premium and calm.</p>
+        </div>
+      </a>
+      <a class="card" href="v5-card.html">
+        <div class="frame"><iframe data-src="v5-card.html" title="Card preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>05 · Card</h2>
+          <div class="src">full title scene</div>
+          <p>A title card tilts up in 3D with an icon disc and a progress line that fills across the hold. A chapter or episode card.</p>
+        </div>
+      </a>
+      <a class="card" href="v6-cinema.html">
+        <div class="frame"><iframe data-src="v6-cinema.html" title="Cinema preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>06 · Cinema</h2>
+          <div class="src">full title scene</div>
+          <p>Letterbox bars slide in, the title tracks together slowly under a push-in, a thin rule opens and the subtitle fades beneath.</p>
+        </div>
+      </a>
+      <a class="card" href="v7-beam.html">
+        <div class="frame"><iframe data-src="v7-beam.html" title="Beam preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>07 · Beam</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>A soft band of light travels across and the title is left sharp behind it, as if the light were writing it.</p>
+        </div>
+      </a>
+      <a class="card" href="v8-weight.html">
+        <div class="frame"><iframe data-src="v8-weight.html" title="Weight wave preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>08 · Weight wave</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>Letters start as hairlines and swell to full weight in a wave. Pure typography, nothing else moves.</p>
+        </div>
+      </a>
+      <a class="card" href="v9-elastic.html">
+        <div class="frame"><iframe data-src="v9-elastic.html" title="Elastic preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>09 · Elastic</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>Letters snap in from tall and thin, springing out from the centre of the title, and settle with a tiny wobble.</p>
+        </div>
+      </a>
+      <a class="card" href="v10-depth.html">
+        <div class="frame"><iframe data-src="v10-depth.html" title="Depth preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>10 · Depth</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>Each word arrives from far behind the screen, out of focus; earlier words ease back so the frame has depth.</p>
+        </div>
+      </a>
+      <a class="card" href="v11-reel.html">
+        <div class="frame"><iframe data-src="v11-reel.html" title="Reel preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>11 · Reel</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>Every letter is a small mechanical reel that spins through other characters and slows to land on the right one.</p>
+        </div>
+      </a>
+      <a class="card" href="v12-liquid.html">
+        <div class="frame"><iframe data-src="v12-liquid.html" title="Liquid preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>12 · Liquid</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>The title forms out of a rippling distortion that calms into crisp letters, like surfacing through water.</p>
+        </div>
+      </a>
+      <a class="card" href="v13-spot.html">
+        <div class="frame"><iframe data-src="v13-spot.html" title="Spotlight preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>13 · Spotlight</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>A pool of light travels along the dark title and leaves it lit behind it, then opens over the whole line.</p>
+        </div>
+      </a>
+      <a class="card" href="v14-converge.html">
+        <div class="frame"><iframe data-src="v14-converge.html" title="Convergence preview" loading="lazy"></iframe></div>
+        <div class="meta">
+          <h2>14 · Convergence</h2>
+          <div class="src new">calm set · title + subtitle only</div>
+          <p>Three colour layers drift apart and slide together into one sharp title, like a print coming into register.</p>
+        </div>
+      </a>
+    </div>
+  </div>
+<script src="themes.js"></script>
+<script>
+(function () {
+  var THEMES = window.TIMELINE_THEMES || [];
+  var KEY = 'timeline-motion-theme-v1';
+  var q = new URLSearchParams(location.search).get('theme'), saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { /* storage unavailable */ }
+  var cur = THEMES.filter(function (t) { return t.id === (q || saved || window.TIMELINE_DEFAULT_THEME); })[0] || THEMES[0];
+  var bar = document.getElementById('themes');
+  var frames = [].slice.call(document.querySelectorAll('.frame iframe'));
+  bar.innerHTML = THEMES.map(function (t) {
+    return '<button data-id="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.swatch[1] + ' 50%,' + t.swatch[0] + ' 50%)"></i>' + t.label + '</button>';
+  }).join('');
+  function apply() {
+    document.documentElement.dataset.theme = cur.id;
+    frames.forEach(function (f) { f.src = f.dataset.src + '?embed&theme=' + cur.id; });
+    [].forEach.call(bar.querySelectorAll('button'), function (b) { b.classList.toggle('on', b.dataset.id === cur.id); });
+    try { localStorage.setItem(KEY, cur.id); } catch (e) { /* storage unavailable */ }
+  }
+  bar.onclick = function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    cur = THEMES.filter(function (t) { return t.id === b.dataset.id; })[0] || cur;
+    apply();
+  };
+  apply();
+})();
+</script>
+</body>
+</html>

@@ -1,3 +1,5 @@
+import { CHART, COMPARE, STATS, STEPS, TIMELINE, TITLE, UI } from "@anim/html-templates";
+
 /**
  * Template cards: what each template means and when to use it, the single
  * source for the LLM prompts, the validator's misfit checks, the layout
@@ -28,6 +30,9 @@ export const SHAPES = {
   hierarchy: "a fixed hierarchy of parents and children: a file system, DNS, the DOM, an org chart, class inheritance (a tree being built or searched step by step is a structure instead)",
   states: "the states something can be in and the events that move it between them (a TCP connection, an order, a traffic light)",
   branching: "a history that branches and merges (Git branches, merge vs rebase, versions)",
+  numbers: "key figures with their units and how they changed (users, speed, cost, growth)",
+  chart: "values compared as bars, a trend line or shares of a whole",
+  ui: "a person using an interface: typing and sending, clicking, toggling, dragging, swiping",
   format: "the parts of one message or format laid side by side (a URL, a packet's header and payload, a JWT, an email address)",
 } as const;
 
@@ -52,62 +57,90 @@ export interface TemplateGuide {
 export const TEMPLATE_GUIDES: Record<string, TemplateGuide> = {
   title: {
     shape: "intro",
-    useWhen: "the first scene: the headline with at most 3 small visuals",
+    useWhen: "the first scene: the headline, an optional subtitle, and optionally a kicker above it, a byline and a brand (elements named kicker, subtitle, byline, brand); at most one icon, for the variants that show one",
     avoidWhen: "it is not the first scene; a closing takeaway → a grid page (quote, bullets or stat) or a diagram that recaps",
-    variants: {
-      center: { when: "a single headline, optional subtitle and up to 3 icons below", items: [0, 3] },
-      left: { when: "a left-aligned headline with 1–3 visuals stacked beside it", items: [0, 3] },
-      split: { when: "headline and one supporting visual given equal halves", items: [0, 2] },
-    },
-    example: `scene intro "Photosynthesis" template=title
-title = title "Photosynthesis"
-subtitle = text "How plants make food from light"
+    variants: Object.fromEntries(TITLE.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`headline up to ${v.titleChars} characters, subtitle up to ${v.detailChars}`})`}`, items: v.items }])),
+    example: `scene intro "Photosynthesis" template=title variant=rise
+title = title "How plants make food"
+subtitle = text "Light, water and air become sugar"
 > {1}Plants make their own food {2}from sunlight.
 1 write title
 2 fade subtitle`,
   },
   compare: {
     shape: "compare",
-    useWhen: "exactly two things are contrasted: A vs B, before/after, problem/solution. Each side says what makes it different: a box with a short sentence (left = box \"GET: data travels in the URL\"), not a bare icon, unless the picture is the contrast",
-    avoidWhen: "three or more things → cards or hub",
-    variants: {
-      side: { when: "two things of equal weight, side by side (GET vs POST, SQL vs NoSQL: any two parallel things)" },
-      stacked: { when: "two wide things (long text, charts) one above the other" },
-      diagonal: { when: "only a true before → after or problem → solution change over time, never two parallel things" },
-      asymmetric: { when: "one side matters more (set emphasis=left|right)" },
-    },
-    example: `scene cells "Two kinds of cell" template=compare
-title = title "Plant vs animal cells"
-left = asset:cell.plant "Plant cell"
-right = asset:cell.animal "Animal cell"
-> {1}A plant cell has a wall; {2}an animal cell does not.
-start write title
-1 fade left then visit left
-2 fade right then visit right`,
+    useWhen: "exactly two things are contrasted: A vs B, before/after, problem/solution. Name the sides (left, right as labels), then write one row per point: what is true of the left, what is true of the right. The right side is shown as the better or newer one",
+    avoidWhen: "three or more things → cards or hub; two pictures with nothing to say about them → spotlight",
+    variants: Object.fromEntries(COMPARE.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`rows of up to ${v.detailChars} characters`})`}`, items: v.items }])),
+    example: `scene sessions "Sessions or tokens" template=compare variant=verdict
+title = title "Sessions or tokens"
+left = label "Server session"
+right = label "Signed token"
+r1 = icon:database "State lives on the server" "State travels with the user"
+r2 = icon:server "Every request looks it up" "Every request checks a signature"
+> {1}A session keeps state on the server; {2}a token carries it with the user.
+1 pop r1
+2 pop r2`,
   },
   steps: {
     shape: "sequence",
-    useWhen: "2–6 stages in a fixed order, each happening after the previous",
-    avoidWhen: "the items are options, methods or kinds with no order → cards; the last stage leads back to the first → cycle; stages branch → flow",
-    variants: {
-      row: { when: "2–5 steps with short labels, read left to right", items: [2, 5] },
-      zigzag: { when: "4–6 steps; alternating heights add rhythm", items: [3, 6] },
-      column: { when: "2–4 steps with long text, read top to bottom", items: [2, 4] },
-      staircase: { when: "growth or progress: each step builds on the last", items: [3, 5] },
-      grid: { when: "5–6 steps that do not fit one row", items: [4, 6] },
-      arch: { when: "steps that rise to a peak in the middle and come back down", items: [3, 6] },
-      pipeline: { when: "stages that data or work flows through, joined as one pipeline (CI/CD, ETL, a compiler)", items: [3, 6] },
-    },
-    example: `scene stages "From seed to tree" template=steps
+    useWhen: "2–6 stages in a fixed order, each happening after the previous, each worth a title and one line of explanation",
+    avoidWhen: "the items are options, methods or kinds with no order → cards; the last stage leads back to the first → cycle; stages branch → flow; inputs go in and outputs come out → process; the step text is longer than a line → split it or use a grid page",
+    variants: Object.fromEntries(STEPS.variants.map((v) => [v.id, { when: `${v.when} (title up to ${v.titleChars} characters, detail up to ${v.detailChars})`, items: v.items }])),
+    example: `scene stages "From seed to tree" template=steps variant=rail
 title = title "From seed to tree"
-s1 = icon:droplet "Water the seed"
-s2 = icon:sprout "It sprouts"
-s3 = asset:tree "It grows"
+s1 = icon:droplet "Water the seed" "Moisture wakes the embryo inside"
+s2 = icon:sprout "It sprouts" "A root goes down and a shoot goes up"
+s3 = asset:tree "It grows" "Leaves feed the plant and the trunk thickens"
 > {1}Water the seed, {2}it sprouts, {3}and it grows.
-start write title
-1 pop s1 then visit s1
-2 pop s2 then visit s2
-3 pop s3 then visit s3 then mark s3 as=ok`,
+1 pop s1
+2 pop s2
+3 pop s3`,
+  },
+  stats: {
+    shape: "numbers",
+    useWhen: "1–6 key figures: a label, a value (with its unit) and optionally how much it changed (\"+45% vs Q3\"): users, speed, cost, growth",
+    avoidWhen: "the numbers are to be compared as a chart over categories or time → chart; the numbers are values inside an algorithm → trace",
+    variants: Object.fromEntries(STATS.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`label up to ${v.titleChars} characters`})`}`, items: v.items }])),
+    example: `scene growth "Users keep growing" template=stats variant=odometer
+title = title "Active users"
+s1 = icon:user "Q1" "12k"
+s2 = icon:user "Q2" "21k" "+75% vs Q1"
+s3 = icon:user "Q3" "33k" "+57% vs Q2"
+> {1}It began at twelve thousand, {2}reached twenty-one, {3}then thirty-three.
+1 pop s1
+2 pop s2
+3 pop s3`,
+  },
+  chart: {
+    shape: "chart",
+    useWhen: "values to compare: bars for categories, a line for a trend over time, a ring for shares of a whole. Each item is a label and a value with its unit (label \"Jan\" \"$42k\")",
+    avoidWhen: "one or two headline numbers → stats; the values change step by step inside an algorithm → trace",
+    variants: Object.fromEntries(CHART.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`label up to ${Math.min(v.titleChars, 24)} characters`})`}`, items: v.items }])),
+    example: `scene revenue "Revenue by month" template=chart variant=bar-rise
+title = title "Monthly revenue"
+b1 = label "Jan" "$42k"
+b2 = label "Feb" "$55k"
+b3 = label "Mar" "$48k"
+b4 = label "Apr" "$71k"
+> {1}January made forty-two thousand, {2}February fifty-five, {3}March dipped, {4}and April peaked.
+1 pop b1
+2 pop b2
+3 pop b3
+4 pop b4`,
+  },
+  ui: {
+    shape: "ui",
+    useWhen: "someone using a product: typing a request and sending it, clicking buttons, flipping settings, dragging a card, swiping a phone. Each item is a control (its label) and what it types or does (icon:name \"Send\" \"What is DNS?\")",
+    avoidWhen: "messages between systems rather than a person → exchange; the steps of a process → steps",
+    variants: Object.fromEntries(UI.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`label up to ${v.titleChars} characters, text up to ${v.detailChars}`})`}`, items: v.items }])),
+    example: `scene ask "Asking a question" template=ui variant=prompt
+title = title "Ask in plain words"
+q1 = icon:send "Send" "What is DNS?"
+q2 = icon:send "Send" "Why is it slow today?"
+> {1}You type a plain question {2}and ask a follow-up.
+1 pop q1
+2 pop q2`,
   },
   cycle: {
     shape: "loop",
@@ -149,21 +182,18 @@ e2 = n1 -> n3 "no"
   },
   timeline: {
     shape: "timeline",
-    useWhen: "2–7 events, each item starting with its date or year (\"1969 · ARPANET\")",
+    useWhen: "2–8 events, each with a date or year, a short title and one line of detail (label \"1969\" \"ARPANET\" \"Four computers talk\")",
     avoidWhen: "the stages have no dates → steps; never pad it with undated items",
-    variants: {
-      alternate: { when: "4–7 dated events, labels above and below the line", items: [3, 7] },
-      line: { when: "2–5 events with short labels on one line", items: [2, 5] },
-      vertical: { when: "events with long descriptions, top to bottom", items: [2, 5] },
-    },
-    example: `scene history "Vaccines" template=timeline
-t1 = box "1796 · First vaccine"
-t2 = box "1955 · Polio vaccine"
-t3 = box "2020 · mRNA vaccines"
+    variants: Object.fromEntries(TIMELINE.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`title up to ${v.titleChars} characters, detail up to ${v.detailChars}`})`}`, items: v.items }])),
+    example: `scene history "Vaccines" template=timeline variant=camera
+title = title "A short history of vaccines"
+t1 = label "1796" "First vaccine" "Jenner tests cowpox against smallpox"
+t2 = label "1955" "Polio vaccine" "Salk's shot ends the epidemics"
+t3 = label "2020" "mRNA vaccines" "Instructions, not virus, train the body"
 > {1}The first vaccine came in 1796, {2}polio in 1955, {3}mRNA in 2020.
-1 pop t1 then visit t1
-2 pop t2 then visit t2
-3 pop t3 then visit t3`,
+1 pop t1
+2 pop t2
+3 pop t3`,
   },
   hub: {
     shape: "hub",

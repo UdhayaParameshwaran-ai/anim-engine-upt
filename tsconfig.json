@@ -2,6 +2,9 @@
   "files": [],
   "references": [
     {
+      "path": "packages/html-templates"
+    },
+    {
       "path": "packages/registry"
     },
     {

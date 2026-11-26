@@ -159,7 +159,7 @@ function skip(seconds: number): void {
 /** Builds a fresh stage + player for a timeline (replacing any previous one). */
 function mount(ir: VideoIR, tl: ResolvedTimeline, live = false): Session {
   teardown();
-  const stage = new Stage(stageBox, ir, tl, { autoFit: !renderMode });
+  const stage = new Stage(stageBox, ir, tl, { autoFit: !renderMode, templateBase: "/tpl" });
   const player = new Player(stage, tl, {
     live,
     onTime: update,
@@ -190,7 +190,7 @@ async function extend(ir: VideoIR, tl: ResolvedTimeline, final: boolean, autopla
     return;
   }
   const old = session;
-  const stage = new Stage(stageBox, ir, tl, { autoFit: true });
+  const stage = new Stage(stageBox, ir, tl, { autoFit: true, templateBase: "/tpl" });
   stage.render(old.player.time);
   old.stage.destroy();
   session = { ...old, ir, tl, stage, ev: createEvaluator(tl), overlay: new Overlay(stage) };
