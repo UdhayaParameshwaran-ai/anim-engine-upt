@@ -131,7 +131,7 @@ export class SceneBreak {
     const tick = () => {
       const left = Math.max(0, this.deadline - performance.now());
       this.card.style.setProperty("--sb-left", String(left / (this.delay * 1000)));
-      this.card.querySelector(".sb-count")!.textContent = `Next scene in ${Math.ceil(left / 1000)} s`;
+      this.card.querySelector(".sb-count")!.textContent = `Starts in ${Math.ceil(left / 1000)} s`;
       if (left <= 0) this.continue();
     };
     tick();
