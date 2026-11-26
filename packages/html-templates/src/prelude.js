@@ -87,6 +87,107 @@
   }
 
   /*
+   * What the page really does, measured. The formulas in `starts` come from the designer's code and are right for some pages and wrong
+   * for others (comparison pages give their header the first slot, the timeline's camera takes longer per event, a bar chart shows its
+   * bars 0.2s apart). So the page is scanned once, here: for every item, when its text first becomes visible on the page (`appear`) and
+   * when it is fully there (`landed`). `items` is, per item, the strings it shows. A string that is already visible in the page's first
+   * moments (the front of a flip card, a title) says nothing about when the item arrives and is ignored; an item none of whose strings
+   * can be followed gets null (the caller falls back to `starts`).
+   */
+  var norm = function (s) { return String(s).split(' ').join('').split('\n').join('').split('\t').join('').toLowerCase(); };
+  function scanText() {
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), nodes = [], full = '';
+    for (var n; (n = walker.nextNode()); ) {
+      var el = n.parentElement;
+      if (!el || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') continue;
+      var s = norm(n.data);
+      if (!s) continue;
+      nodes.push({ el: el, start: full.length, len: s.length });
+      full += s;
+    }
+    return { nodes: nodes, full: full, cache: new Map() };
+  }
+  function effective(scan, el) {
+    if (scan.cache.has(el)) return scan.cache.get(el);
+    var o = 1;
+    for (var e = el; e && e !== document.documentElement; e = e.parentElement) {
+      var cs = getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden') { o = 0; break; }
+      o *= parseFloat(cs.opacity);
+      var f = cs.filter || '';
+      var at = f.indexOf('blur(');
+      if (at >= 0 && parseFloat(f.slice(at + 5)) > 1.5) o *= 0.35;
+    }
+    var r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2 || r.right < 0 || r.left > 1920 || r.bottom < 0 || r.top > 1080) o = 0;
+    // Text slid behind a mask (words rising out of a clipped line, a strip scrolled out of its window) is not there: only the part
+    // inside every clipping ancestor counts.
+    if (o > 0) {
+      var share = 1;
+      for (var p = el.parentElement; p && p !== document.body && share > 0; p = p.parentElement) {
+        var ps = getComputedStyle(p);
+        if (ps.overflowX === 'visible' && ps.overflowY === 'visible') continue;
+        var c = p.getBoundingClientRect();
+        var w = Math.min(r.right, c.right) - Math.max(r.left, c.left), h = Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top);
+        share = Math.min(share, (Math.max(0, w) * Math.max(0, h)) / (r.width * r.height));
+      }
+      o *= share;
+    }
+    scan.cache.set(el, o);
+    return o;
+  }
+  /** 0 to 1: how visible the text is (every character of it, so a half-typed or half-revealed string is not yet there). */
+  function visibility(scan, text) {
+    var nd = norm(text), best = 0, from = 0;
+    if (!nd) return 0;
+    for (;;) {
+      var i = scan.full.indexOf(nd, from);
+      if (i < 0) break;
+      from = i + 1;
+      var v = 1;
+      for (var k = 0; k < scan.nodes.length; k++) {
+        var node = scan.nodes[k];
+        if (node.start + node.len <= i) continue;
+        if (node.start >= i + nd.length) break;
+        v = Math.min(v, effective(scan, node.el));
+      }
+      if (v > best) best = v;
+    }
+    return best;
+  }
+  function measure(items, step) {
+    var d = duration(), dt = step || 0.1;
+    if (!d) return null;
+    var strings = items.map(function (list) {
+      return list.filter(function (s) { var t = String(s).trim(); return t.length >= 3 && /[A-Za-z]/.test(t); }).map(function (s) { return String(s).trim().slice(0, 18); });
+    });
+    var rec = strings.map(function (list) { return list.map(function () { return { initial: false, appear: null, landed: null }; }); });
+    for (var t = 0; t <= d + 1e-6; t += dt) {
+      seek(t);
+      var scan = scanText();
+      strings.forEach(function (list, i) {
+        list.forEach(function (text, j) {
+          var v = visibility(scan, text), r = rec[i][j];
+          if (t < 0.25 && v > 0.5) r.initial = true;
+          // Half visible is "there"; a faint placeholder (a card waiting for its text) does not count.
+          if (r.appear === null && v >= 0.5) r.appear = Math.round(t * 100) / 100;
+          if (r.landed === null && v >= 0.9) r.landed = Math.round(t * 100) / 100;
+        });
+      });
+    }
+    seek(0);
+    // Per item the earliest and the latest of its strings that are not there from the start: usually the same moment, but a flip card
+    // shows its front at once and the answer on its back later, and only the caller can say which of the two the item is about.
+    var pick = function (r) { return { appear: r.appear, landed: r.landed === null ? r.appear : r.landed }; };
+    return rec.map(function (list) {
+      var usable = list.filter(function (r) { return !r.initial && r.appear !== null; });
+      if (!usable.length) return null;
+      usable.sort(function (a, b) { return a.appear - b.appear; });
+      return { first: pick(usable[0]), last: pick(usable[usable.length - 1]) };
+    });
+  }
+
+  /*
    * Icons: every designer set draws them with `U.icon(name, size, strokeWidth)` from its own small table. Ours (cfg.icons: name ->
    * stroke-only markup) take precedence, so any icon name our scripts use works. The set's script assigns its global (StepsMotion,
    * StatsMotion, ...) before it mounts, so a setter on that global patches `U.icon` in time.
@@ -112,5 +213,5 @@
     });
   });
 
-  window.__tpl = { ready: ready, seek: seek, duration: duration, starts: starts, config: cfg };
+  window.__tpl = { ready: ready, seek: seek, duration: duration, starts: starts, measure: measure, config: cfg };
 })();

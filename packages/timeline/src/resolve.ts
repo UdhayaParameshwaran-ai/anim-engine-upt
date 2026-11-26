@@ -452,7 +452,8 @@ class Resolver {
         if (old && old.box.w > 0 && el.box.w > 0) props.scale = Math.min(3, Math.max(0.3, (num(props.scale, 1) * old.box.w) / el.box.w));
         this.initial[target] = props;
       } else {
-        this.initial[target] = { opacity: 0, x: el.box.x + el.box.w / 2, y: el.box.y + el.box.h / 2, scale: 1, rotate: 0, draw: 1, reveal: 1, tint: 0 };
+        // A designer's page (kind `motion`) is on screen from the scene's first frame: its own opening plays, nothing waits for a beat.
+        this.initial[target] = { opacity: el.kind === "motion" ? 1 : 0, x: el.box.x + el.box.w / 2, y: el.box.y + el.box.h / 2, scale: 1, rotate: 0, draw: 1, reveal: 1, tint: 0 };
       }
     }
   }

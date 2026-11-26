@@ -14,7 +14,10 @@ import {
   SHAPES,
   findTemplate,
   isSetIcon,
+  motionSet,
+  limitsText,
   templatesFor,
+  variantChoices,
   COMPOSE_PATTERNS,
   MOTIONS,
   THEME_SUMMARIES,
@@ -130,19 +133,14 @@ const EXAMPLE = `video 1 "Plant vs Animal Cells"
 theme chalk
 motion playful
 
-scene compare "Two kinds of cell" template=compare in=fade
+scene compare "Two kinds of cell" template=compare variant=sides in=fade
 title = title "Plant vs Animal Cells"
-left  = asset:cell.plant "Plant cell"
-right = asset:cell.animal "Animal cell"
-> Cells come in {1}two familiar kinds.
-start write title
-1 draw left,right /0.3
-> A {1 plant cell} has a rigid wall and green chloroplasts.
-1 highlight left.wall fit
-end highlight left.chloroplast 1
-> An {1 animal cell} has no wall, so it can change shape.
-1 highlight right fit
-1 dim left
+left = label "Plant cell"
+right = label "Animal cell"
+r1 = icon:shield "A rigid cell wall" "No wall, so it can change shape"
+r2 = icon:sun "Chloroplasts make food" "Eats food made elsewhere"
+> Cells come in two familiar kinds. {r1}A plant cell has a rigid wall and an animal cell does not.
+> {r2}Only plants carry chloroplasts, so only they make their own food.
 
 scene energy "Where the energy comes from" in=fade
 layout row
@@ -182,11 +180,18 @@ export function systemPrompt(assets: AssetManifest[], spec: LengthSpec = STANDAR
   return baseSystemPrompt(assets, spec, settings);
 }
 
+/** What may be written for variant=: the arrangements of a layout template; for a designed one only what changes the meaning (else nothing: the engine picks the motion). */
+function variantsOf(t: TemplateManifest): string {
+  if (!t.html) return ` · variants: ${t.variants.join("|")}`;
+  const choices = variantChoices(motionSet(t.name)!).map((c) => c.id);
+  return choices.length ? ` · variant=${choices.join("|")} (by meaning)` : "";
+}
+
 function baseSystemPrompt(assets: AssetManifest[], spec: LengthSpec, settings: PromptSettings): string {
   const verbs = VERBS.filter((v) => !v.internal).map((v) => `  ${v.name.padEnd(9)} ${v.category.padEnd(9)} ${v.summary}`).join("\n");
   const templates = TEMPLATES.map((t) => {
     const slots = t.slots.map((s) => `${s.name}${s.required ? "" : "?"}`).join(",");
-    return `  ${t.name.padEnd(10)} ${t.guide.useWhen}${slots ? ` [slots: ${slots}]` : ""}${itemsOf(t)} · variants: ${t.variants.join("|")}`;
+    return `  ${t.name.padEnd(10)} ${t.guide.useWhen}${slots ? ` [slots: ${slots}]` : ""}${itemsOf(t)}${variantsOf(t)}`;
   }).join("\n");
   // Grid-only elements are listed in the grid section instead.
   const gridOnly = new Set(GRID_ELEMENTS.map((e) => e.kind).filter((k) => !["icon", "asset", "chart", "formula"].includes(k)));
@@ -244,7 +249,7 @@ ARGS: 0.8 duration · fit (= length of the span cue) · +0.2 delay · /0.15 stag
 
 ${S.v("style_menu", styleSection())}
 
-TEMPLATES (variant=: usually leave it out; the engine picks the arrangement that fits the content)
+TEMPLATES (variant=: leave it out, except where a template lists variant=a|b|c: those mean different things, so choose by what the content is; the engine picks the arrangement or motion within it)
 ${S.v("templates", templates)}
 LAYOUTS (only when no template): ${S.v("layouts", LAYOUTS.join(" "))}
 SLOT HINTS: ${S.v("slot_hints", `@${SLOTS.join(" @")} · relative: ${RELATIONS.map((r) => `@${r}:<id>`).join(" ")}`)}
@@ -277,12 +282,15 @@ const STORY: Record<string, string> = {
   structure: "- Operate on the cells: drop c4 to push onto a stack, lift c4 to pop, swap c1,c2 to sort, visit c3 to move a search to a cell, mark c3 as=ok when found, strike c2 to cross out a rejected value, merge c1,c2,c3 to combine cells into the last one.",
   stack: "- Move data through the layers: send a packet along an arrow between layers, mark a layer as=fail where it breaks, drop a new layer onto the stack.",
   flow: "- Follow the path: visit n1, visit n2, … along the route the data takes; mark the end node as=ok|fail.",
-  steps: "- Write each step as `s1 = icon:name \"Title\" \"One line of detail\"` (the second string is the detail; keep both within the limits of the variant you chose) and show it on the sentence that says it: `1 pop s1`. A designed motion carries the rest (numbers, path, cards), so do not visit, mark, move or pulse a step, and do not write a title action: the heading is drawn by the motion.",
+  steps: "- Write each step as `s1 = icon:name \"Title\" \"One line of detail\"` and show it where the narration says it, by naming it in braces right before the words: `> First {s1}the runner builds it, then {s2}it runs the tests.` Write no action lines at all in this scene, not even `write title` (no pop, fade, visit, mark, move or pulse): the motion draws and moves everything. Optional: `kicker = text \"How it works\"` above the heading; pace=relaxed|normal|snappy on the scene line. Declare only the slots and the items: no carry=, keep= or emphasis=.",
+  ui: "- Write each action as `q1 = icon:send \"Send\" \"What is DNS?\"` (the control and what it types or does) and name each where the narration says it: `> {q1}You type a plain question {q2}and ask a follow-up.` Write no action lines at all in this scene, not even `write title` (no pop). variant= says what is done: prompt (type and send: the second string is the message typed), click (buttons), toggle (settings), drag (a card into a drop zone), swipe (a phone). Each item is one thing the person does, in order; it shows the controls and what is typed, never a result (an order created, a record saved, a payment made) and a clicked button looks done, so it must not stand for something the narration says has not happened yet. Do not use it to label parts of a program or to show output. Optional: `kicker = text \"Try it\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
+  chart: "- Write each value as `b1 = label \"Jan\" \"$42k\"` (label, value with its unit) and name each where the narration says it: `> {b1}January made forty-two thousand, {b2}February fifty-five.` Write no action lines at all in this scene, not even `write title` (no pop, pulse or mark). variant=bars for categories, variant=line for a trend over time (3 or more points, in order), variant=ring for shares of a whole. Every bar measures the same thing in the same unit: never put a total next to its parts, or a per-second value next to a count. Use a chart for numbers worth comparing, not to replay the steps of a run (that is a trace). The chart plays through once, starting at its first cue. Optional: `kicker = text \"Revenue\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
+  stats: "- Write each figure as `s1 = icon:name \"Label\" \"21k\" \"+75% vs Q1\"` (label, value with its unit, and optionally how much it changed) and show it where the narration says it, by naming it in braces: `> It began at {s1}twelve thousand, then {s2}reached twenty-one.` Write no action lines at all in this scene, not even `write title` (no pop, count or pulse): the motion rolls the numbers. variant=figures for separate figures or a series; variant=shares when the figures are parts of a whole or sizes to compare by area. The last stat glows; highlight=s2 on the scene line picks another. Optional: `kicker = text \"Growth\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
   gitgraph: "- Walk the history in order: pop each commit and draw the line to it, then visit that commit (the ring follows the latest commit); mark the merge commit as=ok, and shake a commit where there is a conflict.",
-  title: "- Keep the opening calm: write the title, fade the subtitle, pop the pictures; pulse the main picture once on the key word, nothing more.",
-  compare: "- Make the contrast move: pop one side, then the other; visit or pulse the side being described. A trade-off has no loser: strike a side only when the narration says that option is wrong or ruled out, and mark one as=ok only when it says that one wins.",
+  title: "- Write the headline as `title = title \"…\"`, the subtitle as `subtitle = text \"…\"`, and a kicker, byline or brand only when they help; at most one icon. A designed motion plays the opening, so there are no action lines and no cues. Options on the scene line: playout=true makes the title leave as the scene ends (use it when another scene follows), bg=base|tint|deep sets its backdrop, pace=relaxed|normal|snappy sets how fast it moves. Declare only the slots: no carry=, keep= or emphasis=.",
+  compare: "- Name the sides with `left = label \"…\"` and `right = label \"…\"`, then one row per point: `r1 = icon:name \"what is true of the left\" \"what is true of the right\"`, and show each row where the narration says it, by naming it in braces: `> A session {r1}keeps state on the server; a token {r2}carries it with the user.` Write no action lines at all in this scene, not even `write title` (no pop, strike, mark or visit). variant=sides (the usual choice) sets the two options point against point with no winner, right for a trade-off. variant=verdict only when the narration says the right side wins (it is the better, newer or correct one): it ticks the right and crosses the left on every row, so never use it for a trade-off. Optional: `kicker = text \"Before vs after\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
   cycle: "- Go round the loop: after each step appears, visit it (the ring moves c1 → c2 → c3), and visit the first one again when the cycle closes; pulse the step being named.",
-  timeline: "- Move along the time axis: pop each event and visit it as the narration reaches its date (the ring travels forward); mark the turning point as=ok.",
+  timeline: "- Write each event as `t1 = label \"1796\" \"First vaccine\" \"One line of detail\"` (date, title, detail) in date order and show it where the narration reaches its date, by naming it in braces: `> The first vaccine came in {t1}1796, and polio in {t2}1955.` Write no action lines at all in this scene, not even `write title` (no pop, visit or mark). A ribbon event may add a fourth string for its picture slot: a figure (\"10,000+ doses\", it counts up) or a short line of text, and a fifth as its caption; the other variants ignore them. Optional: `kicker = text \"History\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
   hub: "- Show what the centre does: pop the centre, then each spoke; pulse the centre once all the spokes are in; mark a spoke as=ok or as=fail when the narration judges it.",
   cards: "- Pop each card in turn and pulse or visit the one being named. Mark a card as=ok or strike it only when the narration picks it or rules it out.",
   spotlight: "- Point at the parts: write each label while you pulse the main picture, and highlight the label being spoken, so the eye follows the narration.",
@@ -538,7 +546,7 @@ ${S.v("domain_plan", domain ? `${DOMAINS[domain].plan}\n\n` : "")}PLANNING RULES
 - Decide the brief first (question, example, outcome), then the method, then give each scene a role and a beat. Choose templates last: they carry the roles, they are not the plan.
 - The video opens and ends the way its method says. template=title is only ever the first scene.
 - Grid pages (shape: page) are for numbers, quotes, bullet text, charts and tables, with at most one icon. Several pictures of equal weight → template=cards.
-- Vary scene types across the video; mirror=true on some grid pages. Leave variant= out: the engine picks the arrangement that fits.
+- Vary scene types across the video; mirror=true on some grid pages. Leave variant= out unless the template lists what to choose between (a chart: bars, line or ring, by what the numbers are); the engine picks the arrangement that fits.
 - Plan only facts you are sure of.${S.v("house_style", styleGuide(settings))}`);
 }
 
@@ -949,6 +957,31 @@ export function shapeTable(domain?: Domain): string {
 }
 
 /**
+ * How a designed template is cued and what else a scene can ask of it: its items appear where the narration names them (no action
+ * lines), plus the scene options its page really has.
+ */
+function designedCues(t: TemplateManifest): string {
+  const options = ["pace=relaxed|normal|snappy (how long its own animations take)"];
+  if (t.name === "title") options.push("playout=true (the title leaves as the scene ends)", "bg=base|tint|deep (its backdrop)");
+  if (t.name === "stats") options.push("highlight=<item id> (the stat that glows; the last by default)");
+  const named = t.items && t.items.max > 0 && t.name !== "title";
+  return `${named ? "Cues: name each item in braces where the narration says it ({id}, right before the words) and write no action lines at all in the scene (not even `write title`). " : "No cues and no action lines: the page plays the opening itself. "}Scene options: ${options.join("; ")}.`;
+}
+
+/** The variants part of a designed template's card: what to choose (if anything), and how much text the motions take. */
+function designedVariants(t: TemplateManifest): string {
+  const set = motionSet(t.name)!;
+  const choices = variantChoices(set);
+  if (!choices.length) {
+    const l = limitsText(set);
+    return `Variants: leave variant= out; the engine picks the motion. Text: ${l.safe} fit every motion; ${l.max} fit some; longer is an error. Shorter text leaves more motions to choose from.`;
+  }
+  const lines = choices.map((c) => `  ${c.id.padEnd(9)} ${c.when} (${limitsText(set, c.id).safe} fit every motion)`);
+  return `Variant (choose by what the content is; the engine picks the motion within it, and replaces one that does not fit the text):
+${lines.join("\n")}`;
+}
+
+/**
  * Everything about one template that writing a scene needs: when to use it,
  * its slots and items, what each variant is for, and a worked example. Sent
  * with the scene request, not in the shared system prompt (which stays cached).
@@ -960,8 +993,8 @@ export function templateCard(t: TemplateManifest): string {
   return `TEMPLATE ${t.name} (shape: ${t.guide.shape})
 Use when: ${t.guide.useWhen}. Not when: ${t.guide.avoidWhen}.
 ${t.summary}.${slots ? ` Slots: ${slots}; an element whose id is the slot name fills it.` : ""}${items}
-Variants (leave variant= out unless one clearly suits the content; the engine replaces one that does not fit):
-${variants.join("\n")}
+${t.html ? `${designedCues(t)}
+${designedVariants(t)}` : `Variants (leave variant= out unless one clearly suits the content; the engine replaces one that does not fit):\n${variants.join("\n")}`}
 Example:
 ${t.guide.example}`;
 }

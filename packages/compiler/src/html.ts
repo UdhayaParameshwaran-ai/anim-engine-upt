@@ -1,5 +1,5 @@
 import type { ElementDecl, Scene } from "@anim/dsl";
-import { motionSet, motionVariant, type MotionSet, type MotionVariant, type SceneData } from "@anim/html-templates";
+import { chooseVariant, motionSet, type MotionSet, type PageOptions, type MotionVariant, type SceneData } from "@anim/html-templates";
 import type { Box, ElementIR } from "@anim/ir";
 import { findTemplate } from "@anim/registry";
 import type { LayoutContext, SceneLayout } from "./layout.js";
@@ -28,6 +28,8 @@ export interface HtmlScene {
   named: Map<string, ElementDecl>;
   /** One of the designer's four themes, or `auto` (light or dark by the look's ink). */
   theme: string;
+  /** The scene attributes the page can use: pace, bg, highlight, playout. */
+  options: PageOptions;
 }
 
 export function htmlSceneOf(scene: Scene): HtmlScene | undefined {
@@ -41,14 +43,12 @@ export function htmlSceneOf(scene: Scene): HtmlScene | undefined {
   const title = declared.find((e) => e.id === "title");
   const named = new Map(declared.filter((e) => slots.has(e.id) && e.id !== "title").map((e) => [e.id, e] as const));
   const items = declared.filter((e) => !slots.has(e.id));
-  const wanted = scene.attrs.variant;
-  const fits = (v: MotionVariant) => items.length >= v.items[0] && items.length <= v.items[1];
-  let variant = motionVariant(set, wanted === "auto" ? undefined : wanted);
-  if (wanted === "auto") {
-    const ok = set.variants.filter(fits);
-    if (ok.length) variant = ok[hash(scene.id + (scene.title ?? "")) % ok.length]!;
-  }
-  return { set, variant, items, named, theme: scene.attrs.theme ?? "auto", ...(title && { title }) };
+  // A variant id is kept; a family (or auto, or nothing) gives the variant that takes this many items and this text.
+  const content = { items: items.map((e) => e.texts), slots: Object.fromEntries(declared.filter((e) => slots.has(e.id)).map((e) => [e.id, e.texts[0] ?? ""])) };
+  const variant = chooseVariant(set, scene.attrs.variant, content, hash(scene.id + (scene.title ?? "")));
+  const a = scene.attrs;
+  const options: PageOptions = { ...(a.pace && { pace: a.pace }), ...(a.bg && { bg: a.bg }), ...(a.highlight && { highlight: a.highlight }), ...(a.playout !== undefined && { playout: a.playout !== "false" }) };
+  return { set, variant, items, named, theme: a.theme ?? "auto", options, ...(title && { title }) };
 }
 
 /** Layout for an HTML scene: nothing to place. Every declared element is virtual (zero size at the centre). */
@@ -65,6 +65,7 @@ export function sceneData(h: HtmlScene): SceneData {
     heading: h.title?.texts[0] ?? "",
     items: h.items.map((e) => ({ id: e.id, texts: e.texts, title: e.texts[0] ?? "", detail: e.texts[1] ?? "", icon: e.name ?? "", kind: e.kind })),
     named: Object.fromEntries([...h.named].map(([id, e]) => [id, e.texts])),
+    ...(Object.keys(h.options).length && { options: h.options }),
   };
 }
 

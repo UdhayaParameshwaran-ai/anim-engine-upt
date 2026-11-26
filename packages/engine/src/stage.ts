@@ -182,6 +182,7 @@ export class Stage {
       if (!inst.setCues) continue;
       const ids = String(inst.el.params.items ?? "").split(",").filter(Boolean);
       inst.setCues(ids.map((id) => this.firstShown(`${view.res.id}/${id}`, view.res.t0)));
+      inst.setSceneEnd?.(Math.max(0, view.res.t1 - view.res.t0 - view.res.transitionOut.duration));
     }
 
     container.append(this.root);

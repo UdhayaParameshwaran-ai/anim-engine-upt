@@ -38,6 +38,8 @@ export interface Instance {
   ready?: Promise<void>;
   /** Told, once the timeline is known, when each item of the page is shown (scene-local seconds). */
   setCues?: (cues: (number | undefined)[]) => void;
+  /** Told how long the scene shows (scene-local seconds, before its closing transition): a page that plays out ends with it. */
+  setSceneEnd?: (seconds: number) => void;
   /** Connectors are re-routed every frame between their endpoints. */
   connector?: { from: string; to: string; path: SVGPathElement; head?: SVGPathElement; label?: SVGTextElement; token?: SVGCircleElement };
 }

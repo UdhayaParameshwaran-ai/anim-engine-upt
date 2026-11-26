@@ -1,4 +1,5 @@
 import { compile } from "@anim/compiler";
+import { findTemplate } from "@anim/registry";
 
 /**
  * Quality checks for a scene that compiles: problems the validator lets
@@ -164,7 +165,8 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
   }
   // Q4: a diagram of something that happens, shown only by things appearing.
   const tpl = scene.attrs.template;
-  if (tpl && STORY_TEMPLATES.has(tpl)) {
+  // (A designed template draws its own motion from the narration's cues; there is no verb for a script to add.)
+  if (tpl && STORY_TEMPLATES.has(tpl) && !findTemplate(tpl)?.html) {
     const verbs = scene.steps.flatMap((st) => st.beats.flatMap((b) => b.actions.flatMap((a) => a.calls.map((c) => c.verb))));
     if (verbs.length && !verbs.some((v) => STORY_VERBS.has(v))) {
       const hint = tpl === "exchange" ? "show each message with send (a packet travels along it)" : tpl === "structure" ? "operate on the cells (drop, lift, swap, visit, mark)" : tpl === "compare" ? "visit each side as it is described (mark or strike a side only if the narration says it wins or is wrong)" : tpl === "code" ? "visit each line as it is explained (or strike an old line and mark the new one ok)" : "move through it with visit (a ring follows the item being described) and mark";

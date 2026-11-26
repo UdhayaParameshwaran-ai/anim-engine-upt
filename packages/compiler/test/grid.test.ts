@@ -152,15 +152,15 @@ c = box "C"
   });
 
   it("mirror any layout, grid pages included", () => {
-    const plain = boxes(timeline(""));
-    const flipped = boxes(timeline("mirror=true"));
+    const plain = boxes(cards(""));
+    const flipped = boxes(cards("mirror=true"));
     expect(flipped.a!.x).toBe(1920 - plain.a!.x - plain.a!.w);
     const page = (m: string) => boxes(`video 1 "G"\nscene a "A" grid=L2-01 ${m}\ns1 = body "Left"\ns2 = stat "9" "right"\n> {1}Go {2}now.\n1 draw s1\n2 draw s2\n`);
     expect(page("mirror=true").s1!.x).toBeGreaterThan(page("").s1!.x);
   });
 
   it("pick a stable variant for variant=auto", () => {
-    expect(boxes(timeline("variant=auto"))).toEqual(boxes(timeline("variant=auto")));
+    expect(boxes(cards("variant=auto"))).toEqual(boxes(cards("variant=auto")));
   });
 
   it("left-align headlines in the left title variant", () => {

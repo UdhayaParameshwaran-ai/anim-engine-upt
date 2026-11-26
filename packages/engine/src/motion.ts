@@ -1,4 +1,4 @@
-import { motionSet, motionVariant, pageData, templateUrl, warpTime, THEMES, type SceneData } from "@anim/html-templates";
+import { motionSet, motionVariant, pageData, templateUrl, timing, warpTime, THEMES, type Measured, type Outro, type SceneData } from "@anim/html-templates";
 import type { ElementIR } from "@anim/ir";
 import { ICONS } from "./art.js";
 import type { Instance } from "./components.js";
@@ -8,7 +8,7 @@ import type { Theme } from "./theme.js";
 export const DEFAULT_TEMPLATE_BASE = "https://tpl.anim.local";
 
 interface Frame extends Window {
-  __tpl?: { ready: Promise<boolean>; seek(t: number): boolean; duration(): number; starts(n: number, pace: string): number[] | null };
+  __tpl?: { ready: Promise<boolean>; seek(t: number): boolean; duration(): number; starts(n: number, pace: string): number[] | null; measure?(items: string[][]): (Measured | null)[] | null };
 }
 
 const light = (hex: string) => {
@@ -63,13 +63,32 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
 
   let cues: (number | undefined)[] = [];
   let starts: number[] | null = null;
+  let spans: number[] | null = null;
+  let exit: { leave: number; gone: number } | null = null;
+  let sceneEnd = 0;
   const page = () => frame.contentWindow as Frame | null;
   inst.ready = new Promise<void>((resolve) => {
     frame.addEventListener("load", () => {
       const w = page();
       Promise.resolve(w?.__tpl?.ready)
         .then(() => {
-          starts = w?.__tpl?.starts(scene.items.length, "normal") ?? null;
+          // When each item really arrives is measured on the page (it varies by variant and by text); the designer's formula is the fallback.
+          const formula = w?.__tpl?.starts(scene.items.length, "normal") ?? null;
+          let measured: (Measured | null)[] | null = null;
+          try {
+            measured = w?.__tpl?.measure?.(scene.items.map((it) => it.texts)) ?? null;
+          } catch {
+            measured = null;
+          }
+          ({ starts, spans } = timing(measured, formula));
+          // A title that plays out leaves as the scene ends. Its exit is the designer's own: titles-core.js gives it out = 0.8 x max(0.8, pace)
+          // seconds, ending 0.3s before the page does (pace: relaxed 1.35, normal 1, snappy 0.72).
+          if (scene.options?.playout) {
+            const d = w?.__tpl?.duration() ?? 0;
+            const pace = ({ relaxed: 1.35, normal: 1, snappy: 0.72 } as Record<string, number>)[scene.options.pace ?? "normal"] ?? 1;
+            const out = 0.8 * Math.max(0.8, pace);
+            if (d > out + 0.3) exit = { leave: d - 0.3 - out, gone: d - 0.3 };
+          }
         })
         .catch(() => undefined)
         .then(() => resolve());
@@ -78,8 +97,12 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
   inst.setCues = (c) => {
     cues = c;
   };
+  inst.setSceneEnd = (s) => {
+    sceneEnd = s;
+  };
   inst.tick = (t) => {
-    page()?.__tpl?.seek(warpTime(t, cues, starts));
+    const outro: Outro | null = exit && sceneEnd > 0 ? { ...exit, end: sceneEnd } : null;
+    page()?.__tpl?.seek(warpTime(t, cues, starts, spans, outro));
   };
   return div;
 }

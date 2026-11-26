@@ -40,7 +40,7 @@ function printStep(step: Step, out: string[]): void {
 
 function printBeat(beat: Beat, out: string[]): void {
   out.push(beat.type === "wait" ? `wait ${num(beat.seconds)}` : `> ${narration(beat.text, beat.cues)}`);
-  for (const a of beat.actions) out.push(action(a));
+  for (const a of beat.actions) if (!a.implicit) out.push(action(a));
 }
 
 export function narration(text: string, cues: { id: string; start: number; end?: number }[]): string {

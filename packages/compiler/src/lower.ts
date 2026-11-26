@@ -261,10 +261,12 @@ function titleFirst(scene: SceneIR): void {
  */
 function hostHtml(scene: SceneIR, html: HtmlScene, canvas: { width: number; height: number }, motion: MotionProfile): void {
   for (const el of scene.elements) el.params = { ...el.params, virtual: true };
-  scene.elements.push(motionElement(html, canvas, html.theme, scene.steps[0]?.beats[0]?.line ?? 0));
-  const beat = scene.steps[0]?.beats[0];
-  const fade = findVerb("fade")!;
-  beat?.actions.unshift({ anchor: "start", line: beat.line, calls: [{ verb: "fade", verbVersion: fade.version, targets: [MOTION_ID], duration: round2(0.01 * motion.durScale), delay: 0, stagger: 0, params: {} }] });
+  // The first beat of the scene: a script that opens a `step` block right after its declarations has an empty first step.
+  const beat = scene.steps.flatMap((st) => st.beats)[0];
+  scene.elements.push(motionElement(html, canvas, html.theme, beat?.line ?? 0));
+  // No fade: the page is there from the scene's first frame (a scene starts 0.3s before its first beat, and a fade tied to that beat
+  // left the new scene blank for that long after the old one had gone). Its own opening is the page's.
+  void beat;
 }
 
 const later = (a: Moment, b: Moment) => (a.step - b.step || a.beat - b.beat || a.rank - b.rank || a.offset - b.offset) > 0;

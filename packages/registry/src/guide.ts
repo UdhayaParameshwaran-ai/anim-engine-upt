@@ -60,74 +60,60 @@ export const TEMPLATE_GUIDES: Record<string, TemplateGuide> = {
     useWhen: "the first scene: the headline, an optional subtitle, and optionally a kicker above it, a byline and a brand (elements named kicker, subtitle, byline, brand); at most one icon, for the variants that show one",
     avoidWhen: "it is not the first scene; a closing takeaway → a grid page (quote, bullets or stat) or a diagram that recaps",
     variants: Object.fromEntries(TITLE.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`headline up to ${v.titleChars} characters, subtitle up to ${v.detailChars}`})`}`, items: v.items }])),
-    example: `scene intro "Photosynthesis" template=title variant=rise
+    example: `scene intro "Photosynthesis" template=title
 title = title "How plants make food"
 subtitle = text "Light, water and air become sugar"
-> {1}Plants make their own food {2}from sunlight.
-1 write title
-2 fade subtitle`,
+> Plants make their own food from sunlight.`,
   },
   compare: {
     shape: "compare",
-    useWhen: "exactly two things are contrasted: A vs B, before/after, problem/solution. Name the sides (left, right as labels), then write one row per point: what is true of the left, what is true of the right. The right side is shown as the better or newer one",
+    useWhen: "exactly two things are contrasted: A vs B, before/after, problem/solution. Name the sides (left, right as labels), then write one row per point: what is true of the left, what is true of the right. Neither side wins unless you choose variant=verdict, which ticks the right side and crosses the left on every row",
     avoidWhen: "three or more things → cards or hub; two pictures with nothing to say about them → spotlight",
     variants: Object.fromEntries(COMPARE.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`rows of up to ${v.detailChars} characters`})`}`, items: v.items }])),
-    example: `scene sessions "Sessions or tokens" template=compare variant=verdict
+    example: `scene sessions "Sessions or tokens" template=compare variant=sides
 title = title "Sessions or tokens"
 left = label "Server session"
 right = label "Signed token"
 r1 = icon:database "State lives on the server" "State travels with the user"
 r2 = icon:server "Every request looks it up" "Every request checks a signature"
-> {1}A session keeps state on the server; {2}a token carries it with the user.
-1 pop r1
-2 pop r2`,
+> A session {r1}keeps state on the server; a token {r2}carries it with the user.`,
   },
   steps: {
     shape: "sequence",
     useWhen: "2–6 stages in a fixed order, each happening after the previous, each worth a title and one line of explanation",
     avoidWhen: "the items are options, methods or kinds with no order → cards; the last stage leads back to the first → cycle; stages branch → flow; inputs go in and outputs come out → process; the step text is longer than a line → split it or use a grid page",
     variants: Object.fromEntries(STEPS.variants.map((v) => [v.id, { when: `${v.when} (title up to ${v.titleChars} characters, detail up to ${v.detailChars})`, items: v.items }])),
-    example: `scene stages "From seed to tree" template=steps variant=rail
+    example: `scene stages "From seed to tree" template=steps
 title = title "From seed to tree"
 s1 = icon:droplet "Water the seed" "Moisture wakes the embryo inside"
 s2 = icon:sprout "It sprouts" "A root goes down and a shoot goes up"
 s3 = asset:tree "It grows" "Leaves feed the plant and the trunk thickens"
-> {1}Water the seed, {2}it sprouts, {3}and it grows.
-1 pop s1
-2 pop s2
-3 pop s3`,
+> First {s1}water the seed, then {s2}it sprouts, and {s3}it grows.`,
   },
   stats: {
     shape: "numbers",
     useWhen: "1–6 key figures: a label, a value (with its unit) and optionally how much it changed (\"+45% vs Q3\"): users, speed, cost, growth",
     avoidWhen: "the numbers are to be compared as a chart over categories or time → chart; the numbers are values inside an algorithm → trace",
     variants: Object.fromEntries(STATS.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`label up to ${v.titleChars} characters`})`}`, items: v.items }])),
-    example: `scene growth "Users keep growing" template=stats variant=odometer
+    example: `scene growth "Users keep growing" template=stats variant=figures
 title = title "Active users"
 s1 = icon:user "Q1" "12k"
 s2 = icon:user "Q2" "21k" "+75% vs Q1"
 s3 = icon:user "Q3" "33k" "+57% vs Q2"
-> {1}It began at twelve thousand, {2}reached twenty-one, {3}then thirty-three.
-1 pop s1
-2 pop s2
-3 pop s3`,
+> It began at {s1}twelve thousand, {s2}reached twenty-one, {s3}then thirty-three.`,
   },
   chart: {
     shape: "chart",
     useWhen: "values to compare: bars for categories, a line for a trend over time, a ring for shares of a whole. Each item is a label and a value with its unit (label \"Jan\" \"$42k\")",
     avoidWhen: "one or two headline numbers → stats; the values change step by step inside an algorithm → trace",
     variants: Object.fromEntries(CHART.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`label up to ${Math.min(v.titleChars, 24)} characters`})`}`, items: v.items }])),
-    example: `scene revenue "Revenue by month" template=chart variant=bar-rise
+    example: `scene revenue "Revenue by month" template=chart variant=bars
 title = title "Monthly revenue"
 b1 = label "Jan" "$42k"
 b2 = label "Feb" "$55k"
 b3 = label "Mar" "$48k"
 b4 = label "Apr" "$71k"
-> {1}January made forty-two thousand, {2}February fifty-five, {3}March dipped, {4}and April peaked.
-1 pop b1
-2 pop b2
-3 pop b3
-4 pop b4`,
+> {b1}January made forty-two thousand, {b2}February fifty-five, {b3}March dipped, {b4}and April peaked.`,
   },
   ui: {
     shape: "ui",
@@ -138,9 +124,7 @@ b4 = label "Apr" "$71k"
 title = title "Ask in plain words"
 q1 = icon:send "Send" "What is DNS?"
 q2 = icon:send "Send" "Why is it slow today?"
-> {1}You type a plain question {2}and ask a follow-up.
-1 pop q1
-2 pop q2`,
+> {q1}You type a plain question {q2}and ask a follow-up.`,
   },
   cycle: {
     shape: "loop",
@@ -185,15 +169,12 @@ e2 = n1 -> n3 "no"
     useWhen: "2–8 events, each with a date or year, a short title and one line of detail (label \"1969\" \"ARPANET\" \"Four computers talk\")",
     avoidWhen: "the stages have no dates → steps; never pad it with undated items",
     variants: Object.fromEntries(TIMELINE.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`title up to ${v.titleChars} characters, detail up to ${v.detailChars}`})`}`, items: v.items }])),
-    example: `scene history "Vaccines" template=timeline variant=camera
+    example: `scene history "Vaccines" template=timeline
 title = title "A short history of vaccines"
 t1 = label "1796" "First vaccine" "Jenner tests cowpox against smallpox"
 t2 = label "1955" "Polio vaccine" "Salk's shot ends the epidemics"
 t3 = label "2020" "mRNA vaccines" "Instructions, not virus, train the body"
-> {1}The first vaccine came in 1796, {2}polio in 1955, {3}mRNA in 2020.
-1 pop t1
-2 pop t2
-3 pop t3`,
+> {t1}The first vaccine came in 1796, {t2}polio in 1955, {t3}mRNA in 2020.`,
   },
   hub: {
     shape: "hub",

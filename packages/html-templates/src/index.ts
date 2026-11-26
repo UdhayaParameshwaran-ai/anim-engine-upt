@@ -32,6 +32,8 @@ export interface MotionVariant {
   detailChars: number;
   /** True when the limits were not seen on screen at the stated size. */
   provisional: boolean;
+  /** The meaning group it belongs to, when the set has one (a bar chart, a ring, a line): the LLM chooses it, the motion within is style. */
+  family?: string;
 }
 
 export interface MotionSet {
@@ -43,6 +45,13 @@ export interface MotionSet {
   /** Used when a script names no variant: the one with the most room for text. */
   defaultVariant: string;
   variants: readonly MotionVariant[];
+  /**
+   * What the LLM chooses with `variant=`: "family" when the variants differ in meaning (a bar chart, a line, a ring), "variant" when each
+   * is a different thing to show (the five kinds of interaction), "none" when they are all the same content in another motion (the
+   * Director picks one).
+   */
+  choose: "family" | "variant" | "none";
+  families?: readonly { id: string; when: string }[];
 }
 
 interface LimitRow { set: string; variant: string; items: { min: number; effectiveMax: number | null }; titleChars: number | null; detailChars: number | null; provisional?: boolean }
@@ -61,8 +70,9 @@ const PAGES = {
   interaction: { limitSet: "interaction", dir: "interaction-motion", key: "interaction-kit-data-v1" },
 } as const;
 type Pages = keyof typeof PAGES;
+const CHART_FAMILY: Partial<Record<Pages, string>> = { bar: "bars", line: "line", donut: "ring" };
 
-function variant(pages: Pages, id: string, file: string, name: string, when: string): MotionVariant {
+function variant(pages: Pages, id: string, file: string, name: string, when: string, family?: string): MotionVariant {
   const p = PAGES[pages];
   const r = rows.find((x) => x.set === p.limitSet && x.variant === file);
   if (!r || r.titleChars === null) throw new Error(`no measured limits for ${p.limitSet}/${file}; run scripts/html-limits.mjs`);
@@ -75,10 +85,12 @@ function variant(pages: Pages, id: string, file: string, name: string, when: str
     titleChars: headline ? Math.min(Math.round(r.titleChars * 1.6), 60) : Math.min(r.titleChars, TITLE_CHARS_MAX),
     detailChars: Math.min(r.detailChars ?? DETAIL_CHARS_MAX, DETAIL_CHARS_MAX),
     provisional: r.provisional ?? false,
+    ...((family ?? CHART_FAMILY[pages]) && { family: family ?? CHART_FAMILY[pages] }),
   };
 }
 
 export const STEPS: MotionSet = {
+  choose: "none",
   template: "steps", kind: "steps", phase: "phase1", defaultVariant: "rail",
   variants: [
     variant("steps", "rail", "v3-number-rail", "Number Rail", "a numbered how-to: a big numeral rolls to each step beside its title and detail; the most neutral choice"),
@@ -94,17 +106,23 @@ export const STEPS: MotionSet = {
 };
 
 export const COMPARE: MotionSet = {
+  choose: "family",
+  families: [
+    { id: "sides", when: "two options or a before and after put point against point, with no winner: a trade-off, or two things that differ" },
+    { id: "verdict", when: "the right side wins: it is the better, newer or correct one on every row (ticks and crosses, or a scale that tips toward it)" },
+  ],
   template: "compare", kind: "compare", phase: "phase1", defaultVariant: "split",
   variants: [
-    variant("comparison", "split", "v1-split-wipe", "Split Wipe", "a before and after, or two options, as rows of matching points; a slider sweeps the frame apart"),
-    variant("comparison", "verdict", "v2-verdict-columns", "Verdict Columns", "two cards where every row ends in a cross for the left and a tick for the right (the right is the better side)"),
-    variant("comparison", "balance", "v3-balance", "Balance", "a weighing scale that tips further toward the right side with every point (the right is the better side)"),
-    variant("comparison", "flip", "v4-flip-cards", "Flip Cards", "a problem on the front of each card and its solution on the back"),
-    variant("comparison", "versus", "v5-versus", "Versus", "two rivals that clash in the middle, then each point is called out"),
+    variant("comparison", "split", "v1-split-wipe", "Split Wipe", "a before and after, or two options, as rows of matching points; a slider sweeps the frame apart (neither wins)", "sides"),
+    variant("comparison", "verdict", "v2-verdict-columns", "Verdict Columns", "two cards where every row ends in a cross for the left and a tick for the right (the right is the better side)", "verdict"),
+    variant("comparison", "balance", "v3-balance", "Balance", "a weighing scale that tips further toward the right side with every point (the right is the better side)", "verdict"),
+    variant("comparison", "flip", "v4-flip-cards", "Flip Cards", "a problem on the front of each card and its solution on the back", "sides"),
+    variant("comparison", "versus", "v5-versus", "Versus", "two rivals that clash in the middle, then each point is called out", "sides"),
   ],
 };
 
 export const TIMELINE: MotionSet = {
+  choose: "none",
   template: "timeline", kind: "timeline", phase: "phase1", defaultVariant: "camera",
   variants: [
     variant("timeline", "camera", "v2-camera", "Camera Track", "dated events along a track while a camera moves from one to the next"),
@@ -114,6 +132,7 @@ export const TIMELINE: MotionSet = {
 };
 
 export const TITLE: MotionSet = {
+  choose: "none",
   template: "title", kind: "title", phase: "phase1", defaultVariant: "rise",
   variants: [
     variant("titles", "rise", "v1-rise", "Rise", "the clean default opener: words slide up under an accent rule, then the subtitle settles in"),
@@ -134,19 +153,30 @@ export const TITLE: MotionSet = {
 };
 
 export const STATS: MotionSet = {
+  choose: "family",
+  families: [
+    { id: "figures", when: "separate key figures one after another, or a series that changes (users, speed, cost, growth)" },
+    { id: "shares", when: "parts of a whole, or sizes compared by area (a share out of 100, who has the most)" },
+  ],
   template: "stats", kind: "stats", phase: "phase1", defaultVariant: "odometer",
   variants: [
-    variant("stats", "odometer", "v1-odometer", "Odometer", "one big number at a time as a rolling counter, with a history rail of the earlier ones"),
-    variant("stats", "tape", "v1-tape-measure", "Tape Measure", "values locked onto a ruler; the distance travelled is the change"),
-    variant("stats", "swarm", "v2-unit-swarm", "Unit Swarm", "each figure pulls its share out of a cloud of 100 dots (shares of a whole)"),
-    variant("stats", "tubes", "v3-liquid-tubes", "Liquid Tubes", "tubes that fill to each value, for comparing a few levels"),
-    variant("stats", "bubbles", "v4-bubble-pack", "Bubble Pack", "bubbles whose area is the value, packed into a cluster (3 at most for now)"),
-    variant("stats", "zoom", "v5-scale-zoom", "Scale Zoom", "nested squares whose area is the number; the camera pulls out as values grow (3 at most for now)"),
-    variant("stats", "comet", "v6-comet-trail", "Comet Trail", "a comet draws a line through the values and the number rides on it (a trend, 2 to 8 points)"),
+    variant("stats", "odometer", "v1-odometer", "Odometer", "one big number at a time as a rolling counter, with a history rail of the earlier ones", "figures"),
+    variant("stats", "tape", "v1-tape-measure", "Tape Measure", "values locked onto a ruler; the distance travelled is the change", "figures"),
+    variant("stats", "swarm", "v2-unit-swarm", "Unit Swarm", "each figure pulls its share out of a cloud of 100 dots (shares of a whole)", "shares"),
+    variant("stats", "tubes", "v3-liquid-tubes", "Liquid Tubes", "tubes that fill to each value, for comparing a few levels", "figures"),
+    variant("stats", "bubbles", "v4-bubble-pack", "Bubble Pack", "bubbles whose area is the value, packed into a cluster (3 at most for now)", "shares"),
+    variant("stats", "zoom", "v5-scale-zoom", "Scale Zoom", "nested squares whose area is the number; the camera pulls out as values grow (3 at most for now)", "shares"),
+    variant("stats", "comet", "v6-comet-trail", "Comet Trail", "a comet draws a line through the values and the number rides on it (a trend, 2 to 8 points)", "figures"),
   ],
 };
 
 export const CHART: MotionSet = {
+  choose: "family",
+  families: [
+    { id: "bars", when: "values compared across categories: sizes, a ranking, a few levels" },
+    { id: "line", when: "a trend: how one value changes over time" },
+    { id: "ring", when: "shares of a whole: each category's part of 100%" },
+  ],
   template: "chart", kind: "chart", phase: "phase1", defaultVariant: "bar-rise",
   variants: [
     variant("bar", "bar-rise", "v1-spring-rise", "Spring Rise", "vertical bars that spring up one after another, values counting up"),
@@ -166,6 +196,7 @@ export const CHART: MotionSet = {
 };
 
 export const UI: MotionSet = {
+  choose: "variant",
   template: "ui", kind: "interaction", phase: "phase1", defaultVariant: "prompt",
   variants: [
     variant("interaction", "prompt", "v3-prompt-send", "Prompt & Send", "someone typing a request and sending it (a chat or search box)"),
@@ -220,10 +251,111 @@ export function itemLimits(set: MotionSet, v: MotionVariant): number[] {
 /** Characters for elements that fill a named slot (the heading, a side name, the byline...). */
 export function slotLimits(set: MotionSet, v: MotionVariant): Record<string, number> {
   const heading = set.kind === "title" ? v.titleChars : 80;
-  const named: Record<string, number> = { title: heading };
+  const named: Record<string, number> = { title: heading, kicker: 40 };
   if (set.kind === "compare") Object.assign(named, { left: 24, right: 24 });
   if (set.kind === "title") Object.assign(named, { subtitle: v.detailChars, kicker: 40, byline: 40, brand: 24 });
   return named;
+}
+
+/** What a scene says, as far as choosing a motion goes: the strings of each item, and the text in each named slot (`left`, `subtitle`...). */
+export interface SceneContent {
+  items: readonly (readonly string[])[];
+  slots: Readonly<Record<string, string>>;
+}
+
+/** Whether every string of the scene is within what the variant was measured to hold. */
+export function fitsText(set: MotionSet, v: MotionVariant, content: SceneContent): boolean {
+  const per = itemLimits(set, v);
+  const named = slotLimits(set, v);
+  return content.items.every((texts) => texts.every((t, i) => t.length <= (per[i] ?? Infinity))) && Object.entries(content.slots).every(([id, t]) => t.length <= (named[id] ?? Infinity));
+}
+
+/** The names a script may write for `variant=` besides a variant id: the families the LLM chooses between. */
+export function isFamily(set: MotionSet, name: string): boolean {
+  return !!set.families?.some((f) => f.id === name);
+}
+
+/**
+ * The variants a scene may be drawn with, given what it asked for: a variant id (just that one), a family (its variants), or nothing
+ * / `auto` (the family of the default variant when the set has families, else all). Of those, the ones that take this many items
+ * and this text. `fits` is false when none of the variants that take the items takes the text: the text is too long for the scene
+ * (the pool then holds the variants that take the items, so the page still draws, with its own shrinking).
+ */
+export function motionPool(set: MotionSet, want: string | undefined, content: SceneContent): { pool: MotionVariant[]; fits: boolean } {
+  const exact = set.variants.find((v) => v.id === want);
+  if (exact) return { pool: [exact], fits: fitsText(set, exact, content) };
+  const home = set.variants.find((v) => v.id === set.defaultVariant)!;
+  const family = want && isFamily(set, want) ? want : home.family;
+  const scope = set.variants.filter((v) => !family || v.family === family);
+  const n = content.items.length;
+  const byCount = scope.filter((v) => n >= v.items[0] && n <= v.items[1]);
+  const roomy = (byCount.length ? byCount : scope).filter((v) => fitsText(set, v, content));
+  return roomy.length ? { pool: roomy, fits: true } : { pool: byCount.length ? byCount : scope, fits: false };
+}
+
+/**
+ * The variant a script gets when the Director has not picked one. A variant id is kept. With nothing written the default is used when
+ * it fits the scene, else one that does; a family or `auto` picks among the variants that fit, the same one for the same `seed`.
+ */
+export function chooseVariant(set: MotionSet, want: string | undefined, content: SceneContent, seed: number): MotionVariant {
+  const { pool } = motionPool(set, want, content);
+  const exact = set.variants.find((v) => v.id === want);
+  if (exact) return exact;
+  if (want === undefined) return pool.find((v) => v.id === set.defaultVariant) ?? pool[seed % pool.length]!;
+  return pool[seed % pool.length]!;
+}
+
+/** What the LLM may write for `variant=`, each with when to choose it. Empty when it is left to the engine. */
+export function variantChoices(set: MotionSet): { id: string; when: string }[] {
+  if (set.choose === "family") return [...(set.families ?? [])];
+  if (set.choose === "variant") return set.variants.map((v) => ({ id: v.id, when: v.when }));
+  return [];
+}
+
+/**
+ * How long a title and a detail may be: `safe` fits every variant of the choice (a family, or the whole set), `max` fits at least one,
+ * and past that it is an error. With text between the two, the engine has fewer motions to choose from.
+ */
+export function textLimits(set: MotionSet, choice?: string): { safe: { titleChars: number; detailChars: number }; max: { titleChars: number; detailChars: number } } {
+  const vs = set.variants.filter((v) => !choice || v.family === choice || v.id === choice);
+  const t = vs.map((v) => v.titleChars);
+  const d = vs.map((v) => v.detailChars);
+  return { safe: { titleChars: Math.min(...t), detailChars: Math.min(...d) }, max: { titleChars: Math.max(...t), detailChars: Math.max(...d) } };
+}
+
+/** What each string of an item is called, by template kind, for telling a writer how long it may be. */
+const STRING_NAMES: Record<SetKind, string[]> = {
+  steps: ["title", "detail"],
+  interaction: ["label", "text"],
+  compare: ["point", "point"],
+  timeline: ["date", "title", "detail"],
+  stats: ["label", "value", "change"],
+  chart: ["label", "value"],
+  title: [],
+};
+
+/**
+ * The text limits of a choice (a family, or the whole set) in words: `safe` is what every variant of it takes, `max` what at least one
+ * takes (past that it is an error). Per kind of string, so a chart says "label up to 14, value up to 12", not a title and a detail.
+ */
+export function limitsText(set: MotionSet, choice?: string): { safe: string; max: string } {
+  const vs = set.variants.filter((v) => !choice || v.family === choice || v.id === choice);
+  const per = vs.map((v) => ({ items: itemLimits(set, v), slots: slotLimits(set, v) }));
+  const names = STRING_NAMES[set.kind];
+  const words = (pick: (xs: number[]) => number) => {
+    const parts = names.map((n, i) => `${n} up to ${pick(per.map((p) => p.items[i] ?? Infinity))}`);
+    if (set.kind === "title") for (const slot of ["title", "subtitle"]) parts.push(`${slot === "title" ? "headline" : slot} up to ${pick(per.map((p) => p.slots[slot] ?? Infinity))}`);
+    if (set.kind === "compare") parts.push(`side names up to ${pick(per.map((p) => p.slots.left ?? Infinity))}`);
+    // Two strings with the same name (a compare row's two points) read as one limit.
+    return [...new Set(parts)].join(", ");
+  };
+  return { safe: words((xs) => Math.min(...xs)), max: words((xs) => Math.max(...xs)) };
+}
+
+/** The strings an item has by position (see limitsText) and how many of them it must have: a compare row without its right point is empty on the page. */
+export function itemStrings(set: MotionSet): { names: string[]; required: number } {
+  const names = STRING_NAMES[set.kind];
+  return { names, required: set.kind === "steps" ? 1 : names.length === 0 ? 0 : set.kind === "timeline" ? 2 : names.length > 2 ? 2 : names.length };
 }
 
 export * from "./page.js";

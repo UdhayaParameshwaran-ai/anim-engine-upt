@@ -177,12 +177,15 @@ Scene attributes that rearrange a template (or a grid page) without coordinates.
 
 | Template | `variant=` (first is the default) |
 |---|---|
-| `title` | `center` `left` (left-aligned headline, items beside it) `split` |
-| `compare` | `side` `stacked` `diagonal` `asymmetric` (golden ratio) |
-| `steps` | `rail` `deck` `accordion` `path` `stack` `domino` `orbit` `dolly` `morph` (the designer's HTML motions; 2 to 6 items; `auto` picks one that fits the item count) |
+| `title` | the designer's openers (`rise` `curtain` `logo` `shine` `card` `cinema` `beam` `weight` `elastic` `depth` `reel` `liquid` `spot` `converge`); nothing to choose, see "Designed templates" below |
+| `compare` | `sides` (point against point, no winner) or `verdict` (the right side wins every row: ticks and crosses, or a scale that tips): a family; the motion within it is picked for you |
+| `steps` | `rail` `deck` `accordion` `path` `stack` `domino` `orbit` `dolly` `morph` (the designer's HTML motions; 2 to 6 items); nothing to choose |
+| `stats` | `figures` (separate figures or a series) or `shares` (parts of a whole, sizes by area): a family |
+| `chart` | `bars`, `line` or `ring`: a family (what the numbers are) |
+| `ui` | `prompt` `click` `toggle` `drag` `swipe`: each is a different thing to show |
 | `cycle` | `ring` `arc` |
 | `hub` | `ring` `sides` |
-| `timeline` | `alternate` `line` `vertical` |
+| `timeline` | `camera` `ribbon` `filmstrip` (the designer's HTML motions); nothing to choose |
 | `cards` (alias `grid`) | `auto` `feature` (one large item, the rest beside it) `strip` |
 | `spotlight` | `center` `left` `right` |
 | `flow` | `auto` `down` `across` |
@@ -243,7 +246,38 @@ A domain pack for explaining software and technology. With `generate(topic, { do
 | `gitgraph` | branching | `b = zone "main"` starts a branch lane, the commits (`circle "init"`) declared after it are on it; the lines you declare join commits and take their lane's colour; a commit's column follows the links, so a merge comes after both parents | `lanes` |
 | `anatomy` | format | the parts of a URL, request, packet or token as one bar (widths follow their text) or as rows; name each part with `label "…" @below:<part>` (`@right-of` for rows) | `bar`, `stacked` |
 
-`steps` is drawn by one of the designer's HTML pages (`packages/html-templates`), not by our layout: `s1 = icon:send "Inject" "A harmless piece enters the arm"` gives a step its title and, as an optional second string, its detail line (`icon` and `asset` take it; `card "Title" "Detail"` works too). The declared elements are virtual (no box, nothing drawn for them) and the verbs on them say when each step is spoken; the compiler adds one page-sized `motion` element that hosts the page and time-warps it so each step appears on its cue. Each variant has measured text limits; a title or detail over them is NAR616.
+`title`, `steps`, `compare`, `timeline`, `stats`, `chart` and `ui` are drawn by the designer's HTML pages (`packages/html-templates`), not by our layout. The declared elements are virtual (no box, nothing drawn for them); the compiler adds one page-sized `motion` element that hosts the page, and the page is played so that each item appears when the narration says it. Each variant has measured text limits; a title or detail over them is NAR616.
+
+**Items and what each string means.** `s1 = icon:send "Inject" "A harmless piece enters the arm"` is a step (title, detail). A compare row is `r1 = icon:database "left point" "right point"` between `left = label "…"` and `right = label "…"`. A timeline event is `t1 = label "1796" "First vaccine" "Detail"`; a ribbon event may add a fourth string for its picture slot (a figure like `"10,000+ doses"` that counts up, or a short line of text) and a fifth as its caption. A stat is `s1 = icon:user "Q2" "21k" "+75% vs Q1"` (label, value, change). A chart value is `b1 = label "Jan" "$42k"`. A `ui` action is `q1 = icon:send "Send" "What is DNS?"`.
+
+**Cues: the narration names the item.** There are no action lines for these items (no `pop`, `fade`, `visit`, `mark`). Where the narration says an item, its id goes in braces right before the words: `> First {s1}the runner builds it, then {s2}it runs the tests.` The validator turns each such cue into an invisible action on the item (never printed back); the first cue of an item is where it appears. An item that no cue names is an error (NAR404, with the fix in the message); a cue that names no item and has no action is NAR304. The older form (`{1}` with `1 pop s1`) still works. A `title` template has no cues: its page plays the opening itself.
+
+**Optional slots and scene options.**
+- `kicker = text "…"` (any of these templates): the small line above the heading. `title` also takes `subtitle`, `byline` and `brand`.
+- `pace=relaxed|normal|snappy`: how long the page's own animations take.
+- `highlight=<item id>` (`stats`): the stat that glows (the last by default).
+- `bg=base|tint|deep|auto` and `playout=true` (`title`): its backdrop, and the title leaving as the scene ends.
+- `theme=` and `variant=` as above. An option on a template whose page does not use it is a warning and is dropped. The pages also list an entrance direction and an order; they only use them for the timeline's arrows, so they are not offered.
+
+**How the page is timed.** After a page loads it is scanned once (`__tpl.measure`) for when each item's text becomes visible, because the designer's own formulas are wrong for several variants. The page opens at its own speed, waits just before its first item, plays each item's animation at its own speed at the item's cue, holds while the narration goes on, and runs into the next item so that it lands on its cue (if the narration is quicker, the page is squeezed). Items a page starts less than a second apart (a bar chart) cannot be shown one at a time: the page plays once from the first cue. A title that plays out waits for the end of the scene, then leaves.
+
+### Designed templates and `variant=`
+
+`title`, `steps`, `compare`, `timeline`, `stats`, `chart` and `ui` are drawn by the designer's pages. Their variants are *motions*, and a writer chooses only what changes the meaning:
+
+- **A family** (`chart`: `bars` `line` `ring`; `stats`: `figures` `shares`; `compare`: `sides` `verdict`). Different families say different things (a ring means shares of a whole, a line a trend), so the writer chooses. The motion within the family is picked for them.
+- **A variant** (`ui`): each interaction is a different thing to show (typing and sending, clicking, toggling, dragging, swiping), so the writer chooses it.
+- **Nothing** (`title`, `steps`, `timeline`): the motions are the same content in another style, so the writer leaves `variant=` out and the Director picks one.
+
+A script may also name a motion directly (`variant=line-zoom`, `variant=rail`); it is kept. The card sent to the LLM lists only the families (or variants) to choose between, never the motion names.
+
+Which motion a scene gets, when it names none (or a family, or `auto`):
+
+1. **Scope.** A family gives its motions. Nothing or `auto` gives the family of the template's default (a chart is bars, never a line by accident), or all the motions of a set with no families.
+2. **Fit.** Only the motions that take this many items **and** every string of the written text (their limits are measured, `packages/html-templates/src/limits.json`; `motionPool`).
+3. **Pick.** The Director draws among them with its usual weights (never the same motion twice in a row, recent ones less likely). Without a Director, the compiler uses the default motion when nothing is written and it fits, else a motion from the pool, the same one for the same scene id.
+
+So NAR616 is raised only when *no* motion in the scope takes the text: it names the most any of them takes ("no motion that fits this scene takes more than 40"), or the motion the scene named. Shorter text leaves more motions to choose from; the card says how long a string is for every motion (`safe`) and for at least one (`max`).
 
 **Elements**
 - `code "line 1\nline 2" lang=js|py|sql|bash|json|…`: a dark editor panel with line numbers and simple syntax colours. `\n` inside a quoted string is a line break. Each line is a part: `write code.2` types line 2, and `highlight code.2` puts a bar behind it.

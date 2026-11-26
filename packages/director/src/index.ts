@@ -1,7 +1,7 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse, print, printScene, type Script } from "@anim/dsl";
-import { findTemplate, KITS, MOTIONS, THEMES, variantGuide } from "@anim/registry";
+import { findTemplate, isFamily, KITS, motionPool, motionSet, MOTIONS, THEMES, variantGuide } from "@anim/registry";
 
 const LINKS = new Set(["arrow", "line", "edge"]);
 
@@ -280,16 +280,25 @@ export class Director {
     const a = scene.attrs;
     const set: Record<string, string> = {};
     const tpl = a.template ? findTemplate(a.template) : undefined;
-    if (tpl && a.variant === undefined && tpl.variants.length > 1) {
+    // A designed template: the writer chose what it means (a family, or nothing), the motion within is ours to vary. Only motions that
+    // take the written text and this many items are in the draw (the text is final by now, so what fits here fits when it is drawn).
+    const designed = tpl?.html ? motionSet(tpl.name) : undefined;
+    const open = a.variant === undefined || a.variant === "auto" || (designed !== undefined && isFamily(designed, a.variant));
+    if (tpl && open && tpl.variants.length > 1) {
       const w: Weights = {};
       // Only arrangements whose card covers this many items (the layout engine still checks the real fit).
       const named = new Set(tpl.slots.map((x) => x.name));
-      const items = scene.steps.flatMap((st) => st.elements).filter((e) => !named.has(e.id) && !LINKS.has(e.kind)).length;
+      const declared = scene.steps.flatMap((st) => st.elements);
+      const items = declared.filter((e) => !named.has(e.id) && !LINKS.has(e.kind)).length;
       const fits = (v: string) => {
         const r = variantGuide(tpl, v).items;
         return !r || (items >= r[0] && items <= r[1]);
       };
-      const candidates = tpl.variants.filter(fits);
+      let candidates = tpl.variants.filter(fits);
+      if (designed) {
+        const content = { items: declared.filter((e) => !named.has(e.id)).map((e) => e.texts), slots: Object.fromEntries(declared.filter((e) => named.has(e.id)).map((e) => [e.id, e.texts[0] ?? ""])) };
+        candidates = motionPool(designed, a.variant, content).pool.map((v) => v.id);
+      }
       tpl.variants.forEach((v, i) => {
         if (candidates.length && !candidates.includes(v)) return;
         const key = `${tpl.name}:${v}`;
@@ -297,7 +306,7 @@ export class Director {
         w[v] = (i === 0 ? 2 : 1) * (key === this.last ? 0.05 : 1) * (this.recentLayouts.includes(key) ? 0.5 : 1);
       });
       const v = pick(w, this.rand);
-      if (v !== tpl.variants[0]) set.variant = v;
+      if (designed || v !== tpl.variants[0]) set.variant = v;
     }
     if (a.grid !== undefined && a.mirror === undefined && this.rand() < 0.4) set.mirror = "true";
     // Spacing and mirroring for template scenes: now and then, never two scenes in a row. (A scene drawn by one of the designer's

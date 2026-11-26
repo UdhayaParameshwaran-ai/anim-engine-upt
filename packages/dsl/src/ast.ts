@@ -109,6 +109,8 @@ export interface Action {
   /** Sequential chain: calls[i+1] starts when calls[i] ends (`then`). */
   calls: VerbCall[];
   span: Span;
+  /** Made by the validator, not written in the script (a designed template's cue named after an item): never printed back. */
+  implicit?: boolean;
 }
 
 export interface VerbCall {

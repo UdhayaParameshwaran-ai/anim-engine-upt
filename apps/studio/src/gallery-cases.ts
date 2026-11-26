@@ -133,7 +133,6 @@ const OVER = " and everything that comes after it, all the way to the very end o
 function hostedScript(t: TemplateManifest, variant: string, n: number, long: boolean): string {
   const s = (text: string) => (long ? `${text}${OVER}` : text);
   const decl: string[] = [];
-  const cues: string[] = [];
   const attrs = `template=${t.name} variant=${variant}`;
   const rows: string[][] = ({
     steps: [["icon:droplet", "Evaporate", "The sun lifts water into the air"], ["icon:cloud", "Condense", "Vapour cools into clouds"], ["icon:bolt", "Storm", "Clouds grow heavy and charged"], ["icon:droplet", "Rain", "Water falls back to the ground"], ["icon:globe", "Collect", "Rivers carry it to the sea"], ["icon:sun", "Repeat", "The cycle starts all over again"]],
@@ -148,8 +147,7 @@ function hostedScript(t: TemplateManifest, variant: string, n: number, long: boo
   if (t.slots.some((x) => x.name === "title")) decl.push(`title = title "${s(heading[t.name] ?? "Example")}"`);
   if (t.name === "title") {
     decl.push(`subtitle = text "${s("Light, water, air: sugar")}"`);
-    cues.push("1 write title", "2 fade subtitle");
-    return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> {1}Plants make their own food {2}from sunlight.\n${cues.join("\n")}\n`;
+    return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> Plants make their own food from sunlight.\n`;
   }
   if (t.name === "compare") decl.push(`left = label "${s("Server session")}"`, `right = label "${s("Signed token")}"`);
   const ids: string[] = [];
@@ -161,9 +159,9 @@ function hostedScript(t: TemplateManifest, variant: string, n: number, long: boo
     if (t.name === "timeline") decl.push(`${id} = label ${texts.map((x) => `"${s(x)}"`).join(" ")}`);
     else decl.push(`${id} = ${kind} ${texts.map((x) => `"${s(x)}"`).join(" ")}`);
   });
-  const words = ids.map((id, i) => `{${i + 1}}${id}`).join(" then ");
-  ids.forEach((id, i) => cues.push(`${i + 1} pop ${id}`));
-  return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> First ${words}.\n${cues.join("\n")}\n`;
+  // The narration names each item where it is said; the page draws it (no action lines).
+  const words = ids.map((id, i) => `{${id}}point ${i + 1}`).join(", then ");
+  return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> First, ${words}.\n`;
 }
 
 const TECH_TEMPLATES = new Set(["exchange", "architecture", "stack", "structure", "code", "tree", "states", "gitgraph", "anatomy"]);

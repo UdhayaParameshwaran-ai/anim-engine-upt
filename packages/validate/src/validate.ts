@@ -25,7 +25,7 @@ import {
   type ParamSpec,
   type VerbManifest,
 } from "@anim/registry";
-import { THEMES as MOTION_THEMES, itemLimits, motionSet, motionVariant, slotLimits } from "@anim/html-templates";
+import { PAGE_OPTION_VALUES, THEMES as MOTION_THEMES, isFamily, itemLimits, itemStrings, motionPool, motionSet, slotLimits, variantChoices, type MotionSet, type MotionVariant } from "@anim/html-templates";
 import { closest } from "./fuzzy.js";
 import { checkGrid } from "./grid.js";
 import { analyzeTrace } from "./trace.js";
@@ -109,6 +109,8 @@ export const ValidateCodes = {
   OutsideTemplate: "NAR411",
   DanglingConnector: "NAR412",
   TemplateText: "NAR616",
+  TemplateStrings: "NAR617",
+  TemplateVerb: "NAR618",
 } as const;
 
 const C = ValidateCodes;
@@ -134,6 +136,8 @@ class Validator {
   private readonly assets: AssetLibrary;
   private readonly maxBeatWords: number;
   private readonly maxSceneElements: number;
+  /** The items of the designed-template scene being checked: a cue naming one of them is never unused (an item is shown at its first cue). */
+  private cueItems = new Set<string>();
 
   constructor(opts: ValidateOptions) {
     this.autofix = opts.autofix ?? true;
@@ -307,6 +311,8 @@ class Validator {
       this.warn(C.TooManyElements, `scene has more than ${this.maxSceneElements} elements; consider splitting it`, scene.span);
     }
 
+    this.implicitCues(scene, sceneOwn);
+    this.designedVerbs(scene);
     // Beats: references first, then the visibility simulation over the fixed actions.
     let hasSpeech = false;
     scene.steps.forEach((step, i) => {
@@ -339,6 +345,11 @@ class Validator {
       // A zone appears with its first member (the layout shows it).
       if (shown.has(el.id) || el.kind === "zone") continue; // zones and lanes appear with their first member
       if (hosted && hostedSlots.has(el.id)) continue; // a hosted page draws its own heading, side names, subtitle...
+      if (hosted) {
+        // An item of a designed template appears where the narration names it; with no cue the page cannot be timed to it.
+        this.error(C.NeverShown, `\`${el.id}\` is never cued: name it in the sentence that says it, in braces right before the words, like \`{${el.id}}the runner builds it\``, el.span);
+        continue;
+      }
       const link = LINK_KINDS.has(el.kind);
       const beat = link ? beats.at(-1) : beats[0];
       this.warn(
@@ -355,9 +366,78 @@ class Validator {
   }
 
   /**
+   * A designed template draws its items itself, so a script has no verb to write for them: the narration says when each appears, by
+   * naming it in a cue (`> The runner {s1}builds the artifact.`). Each such cue becomes an invisible action on the item (never printed
+   * back), which gives the timeline the moment the item is shown. An item that already has an action (the older `1 pop s1`) keeps it.
+   */
+  private implicitCues(scene: Scene, own: ElementDecl[]): void {
+    const tpl = scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
+    this.cueItems = new Set();
+    if (!tpl?.html) return;
+    const slots = new Set(tpl.slots.map((x) => x.name));
+    const items = new Set(own.filter((e) => !slots.has(e.id)).map((e) => e.id));
+    this.cueItems = items;
+    const beats = scene.steps.flatMap((st) => st.beats);
+    const acted = new Set(beats.flatMap((b) => b.actions).flatMap((a) => a.calls.flatMap((c) => c.targets.map((t) => t.split(".")[0]!))));
+    for (const beat of beats) {
+      if (beat.type !== "speech") continue;
+      for (const cue of beat.cues) {
+        if (!items.has(cue.id) || acted.has(cue.id)) continue;
+        acted.add(cue.id);
+        beat.actions.push({ anchor: cue.id, calls: [{ verb: "fade", targets: [cue.id], args: { params: {} }, span: cue.span }], span: cue.span, implicit: true });
+      }
+    }
+  }
+
+  /**
+   * A designed template's page draws and moves everything itself: a verb that emphasises, moves or removes one of its elements (mark,
+   * shake, visit, pulse, hide, move...) has nothing to act on. Such a line is dropped. The verbs that only show an element (pop, fade,
+   * draw, write) stay: the older scripts use them as the cue.
+   */
+  private designedVerbs(scene: Scene): void {
+    const tpl = scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
+    if (!tpl?.html) return;
+    const ids = new Set(scene.steps.flatMap((st) => st.elements).map((e) => e.id));
+    for (const beat of scene.steps.flatMap((st) => st.beats)) {
+      for (const action of [...beat.actions]) {
+        if (action.implicit) continue;
+        for (const call of [...action.calls]) {
+          const verb = findVerb(call.verb);
+          if (!verb || verb.category === "enter" || !call.targets.some((t) => ids.has(t.split(".")[0]!))) continue;
+          this.warn(C.TemplateVerb, `\`${call.verb}\` has nothing to act on in \`${tpl.name}\`: the page draws and moves its items itself, so name the item in the narration (\`{id}\`) and write no action lines`, call.span, {
+            desc: "removed the line",
+            apply: () => {
+              remove(action.calls, call);
+              if (!action.calls.length) remove(beat.actions, action);
+            },
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * What a designed template cannot take from a script, whatever the text: an item without the strings its page reads (a compare row with
+   * no right-hand point is an empty cell), and attributes that arrange or carry things we do not draw (the page draws it all).
+   */
+  private htmlItems(scene: Scene, set: MotionSet, items: ElementDecl[]): void {
+    const { names, required } = itemStrings(set);
+    for (const el of items) {
+      if (el.texts.length >= required) continue;
+      const need = names.slice(0, required).join(", ");
+      this.error(C.TemplateStrings, `\`${el.id}\`: ${set.template === "compare" ? "a compare row" : `an item of \`${set.template}\``} needs ${required} string${required > 1 ? "s" : ""} (${need}); it has ${el.texts.length}. Every element that is not a slot (${scene.attrs.template === "compare" ? "title, left, right" : "title"}) is an item: carry nothing over into this scene`, el.span);
+    }
+    for (const key of ["carry", "keep", "emphasis", "density", "mirror", "frame"]) {
+      if (scene.attrs[key] === undefined) continue;
+      this.warn(C.BadLayoutKnob, `\`${key}=\` does nothing in \`${set.template}\`: the designer's page draws the whole scene`, scene.span, { desc: "removed", apply: () => delete scene.attrs[key] });
+    }
+  }
+
+  /**
    * A scene drawn by one of the designer's pages: its text has to fit the page. The limits were measured per variant
    * (packages/html-templates/src/limits.json); a title or detail past them would clip, so it is an error the writer can fix by
-   * shortening. With `variant=auto` the compiler may pick any variant that takes this many items, so the tightest of them counts.
+   * shortening. The compiler and the Director pick, among the variants a scene may use, one that takes its text, so a text is only
+   * an error when none of them does.
    */
   private htmlRules(scene: Scene): void {
     const name = scene.attrs.template;
@@ -367,26 +447,37 @@ class Validator {
     const slots = new Set(tpl.slots.map((x) => x.name));
     const declared = scene.steps.flatMap((s) => s.elements);
     const items = declared.filter((e) => !slots.has(e.id));
+    const named = declared.filter((e) => slots.has(e.id));
+    this.htmlItems(scene, set, items);
+    const content = { items: items.map((e) => e.texts), slots: Object.fromEntries(named.map((e) => [e.id, e.texts[0] ?? ""])) };
     const wanted = scene.attrs.variant;
-    const named = wanted && wanted !== "auto" ? set.variants.find((v) => v.id === wanted) : undefined;
-    const pool = named ? [named] : wanted === "auto" ? set.variants.filter((v) => items.length >= v.items[0] && items.length <= v.items[1]) : [motionVariant(set, undefined)];
-    if (!pool.length) return;
-    const which = named ? `\`${named.id}\` takes` : wanted === "auto" ? "the variants that fit take" : `the default (\`${pool[0]!.id}\`) takes`;
-    // The tightest limit of the candidate variants counts for each string of an item, and for each named slot.
-    const per = pool.map((v) => itemLimits(set, v));
-    const slotMax = pool.map((v) => slotLimits(set, v));
-    const nth = ["first", "second", "third"];
-    for (const el of items) {
-      el.texts.forEach((t, i) => {
-        const max = Math.min(...per.map((l) => l[i] ?? Infinity));
-        if (t.length > max) this.error(C.TemplateText, `\`${el.id}\`: the ${nth[i] ?? i + 1} string is ${t.length} characters; ${which} at most ${max}. Shorten it`, el.span);
-      });
-    }
-    for (const el of declared.filter((e) => slots.has(e.id))) {
-      const max = Math.min(...slotMax.map((l) => l[el.id] ?? Infinity));
-      const t = el.texts[0] ?? "";
-      if (t.length > max) this.error(C.TemplateText, `\`${el.id}\`: ${t.length} characters; ${which} at most ${max}. Shorten it`, el.span);
-    }
+    const { pool, fits } = motionPool(set, wanted, content);
+    if (fits || !pool.length) return;
+    // None takes it all. A string over what the roomiest candidate takes can only be shortened; if no string is, the strings are
+    // each fine for some variant but not together, so report the variant that comes closest.
+    const over = (limit: (v: MotionVariant) => { items: number[]; slots: Record<string, number> }, vs: MotionVariant[]) => {
+      const nth = ["first", "second", "third"];
+      const out: { el: ElementDecl; what: string; max: number }[] = [];
+      for (const el of items) {
+        el.texts.forEach((t, i) => {
+          const max = Math.max(...vs.map((v) => limit(v).items[i] ?? Infinity));
+          if (t.length > max) out.push({ el, what: `the ${nth[i] ?? i + 1} string is ${t.length} characters`, max });
+        });
+      }
+      for (const el of named) {
+        const t = el.texts[0] ?? "";
+        const max = Math.max(...vs.map((v) => limit(v).slots[el.id] ?? Infinity));
+        if (t.length > max) out.push({ el, what: `${t.length} characters`, max });
+      }
+      return out;
+    };
+    const limit = (v: MotionVariant) => ({ items: itemLimits(set, v), slots: slotLimits(set, v) });
+    const exact = wanted ? set.variants.find((v) => v.id === wanted) : undefined;
+    const who = exact ? `\`${exact.id}\` takes` : pool.length === 1 ? `\`${pool[0]!.id}\`, the only motion that fits this scene, takes` : "no motion that fits this scene takes more than";
+    const certain = over(limit, pool);
+    const bad = certain.length ? certain : pool.map((v) => over(limit, [v])).sort((x, y) => x.length - y.length)[0]!;
+    const phrase = certain.length ? who : "no single motion takes all of it; the closest takes";
+    for (const o of bad) this.error(C.TemplateText, `\`${o.el.id}\`: ${o.what}; ${phrase} ${certain.length && !exact && pool.length > 1 ? "" : "at most "}${o.max}. Shorten it`, o.el.span);
   }
 
   private sceneAttrs(scene: Scene, prevDeclared: Map<string, ElementDecl>): void {
@@ -468,8 +559,44 @@ class Validator {
     this.layoutKnobs(scene);
   }
 
+  /**
+   * The motions of a designed page that a scene can ask for (see PageOptions): `pace=`, `bg=`, `highlight=`, `playout=`.
+   * Each belongs to the templates whose pages use it; elsewhere it is ignored, so it is reported and dropped.
+   */
+  private pageOptions(scene: Scene): void {
+    const a = scene.attrs;
+    const tpl = a.template ? findTemplate(a.template) : undefined;
+    const uses: Record<string, string[]> = {
+      pace: ["steps", "compare", "timeline", "stats", "chart", "ui", "title"],
+      bg: ["title"],
+      highlight: ["stats"],
+      playout: ["title"],
+    };
+    for (const key of Object.keys(uses)) {
+      const value = a[key];
+      if (value === undefined) continue;
+      const drop = { desc: "removed", apply: () => delete a[key] };
+      if (!tpl?.html || !uses[key]!.includes(tpl.name)) {
+        this.warn(C.BadLayoutKnob, `\`${key}=\` is for ${uses[key]!.map((n) => `\`${n}\``).join(", ")}; ${tpl ? `\`${tpl.name}\` ignores it` : "it needs a template"}`, scene.span, drop);
+        continue;
+      }
+      if (key === "highlight") {
+        const slots = new Set(tpl.slots.map((x) => x.name));
+        const ids = scene.steps.flatMap((s) => s.elements).filter((e) => !slots.has(e.id)).map((e) => e.id);
+        if (!ids.includes(value)) this.warn(C.BadLayoutKnob, `highlight= takes the id of one of the stats (${ids.join(", ")}), not \`${value}\``, scene.span, drop);
+        continue;
+      }
+      const allowed: readonly string[] = key === "playout" ? ["true", "false"] : (PAGE_OPTION_VALUES as Record<string, readonly string[]>)[key]!;
+      if (!allowed.includes(value)) {
+        const near = closest(value, allowed);
+        this.warn(C.BadLayoutKnob, `${key}= takes ${allowed.join(", ")}, not \`${value}\``, scene.span, { desc: near ? `used \`${near}\`` : "removed", apply: () => (near ? (a[key] = near) : delete a[key]) });
+      }
+    }
+  }
+
   /** `variant=`, `emphasis=`, `density=`, `mirror=`: checked after the template is settled. */
   private layoutKnobs(scene: Scene): void {
+    this.pageOptions(scene);
     const a = scene.attrs;
     const knob = (key: string, message: string, fix?: string) =>
       this.warn(C.BadLayoutKnob, message, scene.span, {
@@ -479,9 +606,14 @@ class Validator {
     const tpl = a.template ? findTemplate(a.template) : undefined;
     if (a.variant !== undefined && a.variant !== "auto") {
       if (!tpl) knob("variant", a.grid !== undefined ? "grid scenes have no variants (pick another grid= code, or mirror=true)" : "variant= needs a template");
-      else if (!tpl.variants.includes(a.variant) && !(this.drafts && draftVariants(tpl.name).includes(a.variant))) {
+      else if (!tpl.variants.includes(a.variant) && !(tpl.html && isFamily(motionSet(tpl.name)!, a.variant)) && !(this.drafts && draftVariants(tpl.name).includes(a.variant))) {
         if (draftVariants(tpl.name).includes(a.variant)) knob("variant", `variant \`${a.variant}\` is a draft that hasn't been approved yet (pnpm variant check, then approve)`);
-        else knob("variant", `template \`${tpl.name}\` has no variant \`${a.variant}\` (variants: ${tpl.variants.join(", ")}, auto)`, closest(a.variant, tpl.variants));
+        else {
+          // A designed template is chosen by meaning (bars, a line, a ring): those names are what to write.
+          const asked = tpl.html ? variantChoices(motionSet(tpl.name)!).map((c) => c.id) : [];
+          const names = asked.length ? asked : tpl.variants;
+          knob("variant", `template \`${tpl.name}\` has no variant \`${a.variant}\` (${asked.length ? "choose between" : "variants"}: ${names.join(", ")}, auto)`, closest(a.variant, names));
+        }
       }
     }
     if (a.emphasis !== undefined && !["first", "last"].includes(a.emphasis) && !scene.steps.some((s) => s.elements.some((e) => e.id === a.emphasis))) {
@@ -687,7 +819,7 @@ class Validator {
     if (beat.type === "speech") {
       const used = new Set(beat.actions.flatMap((a) => [a.anchor, ...a.calls.map((c) => c.args.params.until ?? "")]));
       for (const cue of beat.cues) {
-        if (!used.has(cue.id)) this.warn(C.UnusedCue, `cue \`${cue.id}\` has no action`, cue.span);
+        if (!used.has(cue.id) && !this.cueItems.has(cue.id)) this.warn(C.UnusedCue, `cue \`${cue.id}\` has no action`, cue.span);
       }
     }
   }

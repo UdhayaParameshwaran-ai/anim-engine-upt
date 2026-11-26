@@ -90,9 +90,7 @@ const OUTLINE = '```\nvideo 1 "Plants"\ntheme paper\nscene need "Needs" template
 const NEED_OK = `scene need "Needs" template=steps
 sun = icon:sun "Light"
 water = icon:droplet "Water"
-> Plants need {1}light and {2}water.
-1 pop sun then visit sun
-2 pop water then visit water`;
+> Plants need {sun}light and {water}water.`;
 const LEAF_BROKEN = `Here is the scene:
 scene leaf "Leaf" template=spotlight
 main = asset:leaf
@@ -448,7 +446,7 @@ describe("generation fixes from the traced run", () => {
   });
 
   it("flags valid but weak scenes", () => {
-    const boxes = 'scene a "A" template=compare\nleft = box "Light in"\nright = box "Light out"\n> Light goes {1}in and {2}out.\n1 fade left\n2 fade right';
+    const boxes = 'scene a "A" template=cards\nleft = box "Light in"\nright = box "Light out"\n> Light goes {1}in and {2}out.\n1 fade left\n2 fade right';
     expect(qualityIssues(HEADER, boxes).map((q) => q.code)).toEqual(["Q1", "Q4"]);
     const quote = 'scene q "Q" grid=L1-01\ns1 = quote "The sky is on fire." "— Atmospheric Scientist"\n> As one {1}scientist said.\n1 draw s1';
     expect(qualityIssues(HEADER, quote)).toMatchObject([{ code: "Q3", line: 2 }]);
@@ -458,7 +456,7 @@ describe("generation fixes from the traced run", () => {
   });
 
   it("gives a weak scene one improvement pass and keeps it only if it is better", async () => {
-    const weak = 'scene need "Needs" template=steps\na = box "Light"\nb = box "Water"\n> Plants need {1}light and {2}water.\n1 fade a\n2 fade b';
+    const weak = 'scene need "Needs" template=cards\na = box "Light"\nb = box "Water"\n> Plants need {1}light and {2}water.\n1 fade a\n2 fade b';
     const answer = (improved: string) => (last: string) =>
       last.startsWith("This scene is valid") ? improved : last.startsWith("Plan") ? OUTLINE : last.includes('"need"') ? weak : LEAF_OK;
     const better = new ScriptedLlm(answer(NEED_OK));
@@ -471,7 +469,7 @@ describe("generation fixes from the traced run", () => {
 
     const same = await generate("plants", { client: new ScriptedLlm(answer(weak)), decideTeaching: false });
     expect(same.script).toContain('box "Light"');
-    expect(same.quality).toHaveLength(2);
+    expect(same.quality).toHaveLength(1);
 
     const off = new ScriptedLlm(answer(NEED_OK));
     await generate("plants", { client: off, qualityRepairs: false });
@@ -560,13 +558,12 @@ describe("template knowledge", () => {
 
 describe("local fixes", () => {
   it("adds missing cues itself instead of spending a repair call", async () => {
-    const UNMARKED = `scene need "Needs" template=steps
+    const UNMARKED = `scene need "Needs" template=cards
 sun = icon:sun "Light"
 water = icon:droplet "Water"
-a1 = arrow sun->water
 > Plants need light and then they need water.
 1 pop sun then visit sun
-2 draw a1 then pop water then visit water`;
+2 pop water then visit water`;
     const llm = new ScriptedLlm((last) => (last.startsWith("Plan a narrated") ? OUTLINE : last.includes('Write scene "need"') ? UNMARKED : last.includes('Write scene "leaf"') ? LEAF_OK : "x"));
     const r = await generate("plants", { client: llm, qualityRepairs: false });
     expect(r.ok).toBe(true);
@@ -853,11 +850,12 @@ describe("choosing between one diagram and scenes", () => {
 
 describe("extras that fit no slot", () => {
   const header = ["video 1", "theme paper", ""].join("\n");
-  const scene = ["scene s \"Two\" template=compare", "title = title \"A or B\"", "left = box \"A: one thing\"", "right = box \"B: another\"", "extra = icon:users \"Extra\"", "> {1}A and {2}B and {3}extra.", "1 fade left", "2 fade right", "3 pop extra", ""].join("\n");
+  // A spotlight shows labels around its picture; an icon among them has no place.
+  const scene = ["scene s \"Two\" template=spotlight", "main = asset:earth \"Earth\"", "land = label \"Land\"", "extra = icon:users \"Extra\"", "> {1}The Earth, {2}its land and {3}extra.", "1 fade main", "2 fade land", "3 pop extra", ""].join("\n");
 
   it("is repaired like an error, so the picture is not cluttered", () => {
     const r = checkScene(header, scene);
-    expect(r.errorCodes).toContain("NAR411");
+    expect(r.errorCodes).toContain("NAR407");
     expect(r.errors).toBeGreaterThan(0);
   });
 });
@@ -866,7 +864,7 @@ describe("quality Q4 beyond the story templates", () => {
   const HEADER = 'video 1 "Plants"';
   const body = (tpl: string, actions: string) => `scene a "A" template=${tpl}\na = icon:sun "Light"\nb = icon:droplet "Water"\nc = icon:leaf "Leaf"\n> {1}Light, {2}water, {3}leaf.\n${actions}`;
   it("asks for motion in any diagram that only shows things appearing, but not in a title", () => {
-    for (const tpl of ["steps", "cycle", "timeline", "cards", "hub", "process", "stack"]) {
+    for (const tpl of ["cycle", "cards", "hub", "process", "stack"]) {
       expect(qualityIssues(HEADER, body(tpl, "1 pop a\n2 pop b\n3 pop c")).map((q) => q.code), tpl).toContain("Q4");
       expect(qualityIssues(HEADER, body(tpl, "1 pop a then visit a\n2 pop b\n3 pop c")).map((q) => q.code), tpl).not.toContain("Q4");
     }
