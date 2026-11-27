@@ -72,7 +72,8 @@ export class Stage {
   private readonly scenes: SceneView[] = [];
   /** Instances that host a designer page; they are told the time every frame and the frame waits for them. */
   private readonly pages: Instance[] = [];
-  private readonly evaluator: ReturnType<typeof createEvaluator>;
+  private evaluator: ReturnType<typeof createEvaluator>;
+  private readonly templateBase: string | undefined;
   private readonly tints = new Map<string, Tween[]>();
   private readonly revealBy = new Map<string, string>();
   /** `send` tweens per connector: while one runs, its packet travels along the connector. */
@@ -97,24 +98,18 @@ export class Stage {
 
   constructor(
     private readonly container: HTMLElement,
-    readonly ir: VideoIR,
-    readonly timeline: ResolvedTimeline,
+    public ir: VideoIR,
+    public timeline: ResolvedTimeline,
     opts: StageOptions = {},
   ) {
+    this.templateBase = opts.templateBase;
     const doc = container.ownerDocument;
     this.theme = { ...getTheme(opts.theme ?? ir.theme), ...(ir.kit && { kit: ir.kit }) };
     this.width = ir.canvas.width;
     this.height = ir.canvas.height;
     this.evaluator = createEvaluator(timeline);
     this.idle = findMotion(ir.motion).idle * (this.width / 1920);
-    for (const tw of timeline.tracks) {
-      if (tw.prop === "opacity" && tw.to === 1 && !this.shownAt.has(tw.target)) this.shownAt.set(tw.target, tw.t1);
-      if (tw.prop === "tint") (this.tints.get(tw.target) ?? this.tints.set(tw.target, []).get(tw.target)!).push(tw);
-      if (tw.prop === "reveal" && tw.meta?.by && !this.revealBy.has(tw.target)) this.revealBy.set(tw.target, String(tw.meta.by));
-      if (tw.prop === "reveal" && tw.meta?.send) (this.sends.get(tw.target) ?? this.sends.set(tw.target, []).get(tw.target)!).push(tw);
-      if (tw.prop === "scale" && tw.meta?.set !== undefined) (this.sets.get(tw.target) ?? this.sets.set(tw.target, []).get(tw.target)!).push(tw);
-      if (tw.prop === "count") (this.counts.get(tw.target) ?? this.counts.set(tw.target, []).get(tw.target)!).push(tw);
-    }
+    this.indexTracks();
 
     this.root = doc.createElement("div");
     this.root.className = "anim-stage";
@@ -143,48 +138,9 @@ export class Stage {
     this.htmlCameraBase = this.htmlCamera.style.cssText;
     this.root.append(this.svgRoot, this.htmlCamera);
 
-    for (const res of timeline.scenes) {
-      const sceneIr = ir.scenes.find((s) => s.id === res.id)!;
-      const g = svg(doc, "g", { "data-scene": res.id }) as SVGGElement;
-      const html = doc.createElement("div");
-      html.dataset.scene = res.id;
-      html.style.cssText = SCENE_HTML_BASE;
-      const instances = new Map<string, Instance>();
-      // Panels and axes at the back, then connectors (behind what they connect), then elements, then badges.
-      const depth = (e: (typeof sceneIr.elements)[number]) => (e.kind === "panel" || e.kind === "rule" || e.kind === "zone" || e.kind === "chevron" ? 0 : e.link ? 1 : e.kind === "badge" ? 3 : 2);
-      const ordered = [...sceneIr.elements].sort((a, b) => depth(a) - depth(b));
-      for (const el of ordered) {
-        const inst = build(doc, el, this.theme, `${this.markId}-${res.id}-${el.id}`, opts.templateBase);
-        paintFills(inst, this.theme);
-        this.baseStyle.set(inst.root, inst.root.style.cssText);
-        for (const nodes of inst.parts.values()) for (const n of nodes) this.baseStyle.set(n, (n as SVGElement).style.cssText);
-        instances.set(el.id, inst);
-        if (inst.setCues) this.pages.push(inst);
-        (inst.layer === "html" ? html : g).append(inst.root);
-        // An element that gets struck through carries its line from the start (hidden until `strike`).
-        if (inst.layer === "svg" && !inst.connector && timeline.tracks.some((tw) => tw.prop === "strike" && tw.target === `${res.id}/${el.id}`)) {
-          const line = svg(doc, "line", { x1: round(-el.box.w * 0.46), y1: 0, x2: round(el.box.w * 0.46), y2: 0, pathLength: 1, "stroke-width": 7, "stroke-linecap": "round", stroke: color(this.theme, "warn") }) as SVGLineElement;
-          line.style.opacity = "0";
-          inst.root.append(line);
-          inst.strikeLine = line;
-        }
-      }
-      // Connector labels sit above everything else in the scene: a node drawn over a label would cut its ends off.
-      // (The connector's own group has no transform, so the label keeps its coordinates; applyElement keeps it in step.)
-      const labels = svg(doc, "g", { "data-layer": "labels" }) as SVGGElement;
-      for (const inst of instances.values()) if (inst.connector?.label) labels.append(inst.connector.label);
-      if (labels.childNodes.length) g.append(labels);
-      this.svgCamera.append(g);
-      this.htmlCamera.append(html);
-      this.scenes.push({ res, ir: sceneIr, svg: g, html, instances, hosted: [...instances.values()].some((i) => i.setCues) });
-    }
+    for (const res of timeline.scenes) this.addScene(res);
 
-    // A hosted page shows each item when the script shows it: the first moment its element becomes visible in its scene.
-    for (const view of this.scenes) for (const inst of view.instances.values()) {
-      if (!inst.setCues) continue;
-      const ids = String(inst.el.params.items ?? "").split(",").filter(Boolean);
-      inst.setCues(ids.map((id) => this.firstShown(`${view.res.id}/${id}`, view.res.t0)));
-    }
+    this.wirePages();
 
     container.append(this.root);
     if (opts.autoFit ?? true) {
@@ -193,6 +149,97 @@ export class Stage {
       if (RO) (this.resizer = new RO(() => this.fit())).observe(container);
     }
     this.render(0);
+  }
+
+  /** Indexes the timeline's tracks by what they do to an element (read every frame). */
+  private indexTracks(): void {
+    for (const m of [this.shownAt, this.tints, this.revealBy, this.sends, this.sets, this.counts] as Map<string, unknown>[]) m.clear();
+    const timeline = this.timeline;
+    for (const tw of timeline.tracks) {
+      if (tw.prop === "opacity" && tw.to === 1 && !this.shownAt.has(tw.target)) this.shownAt.set(tw.target, tw.t1);
+      if (tw.prop === "tint") (this.tints.get(tw.target) ?? this.tints.set(tw.target, []).get(tw.target)!).push(tw);
+      if (tw.prop === "reveal" && tw.meta?.by && !this.revealBy.has(tw.target)) this.revealBy.set(tw.target, String(tw.meta.by));
+      if (tw.prop === "reveal" && tw.meta?.send) (this.sends.get(tw.target) ?? this.sends.set(tw.target, []).get(tw.target)!).push(tw);
+      if (tw.prop === "scale" && tw.meta?.set !== undefined) (this.sets.get(tw.target) ?? this.sets.set(tw.target, []).get(tw.target)!).push(tw);
+      if (tw.prop === "count") (this.counts.get(tw.target) ?? this.counts.set(tw.target, []).get(tw.target)!).push(tw);
+    }
+  }
+
+  /** Builds one scene's layers from the current ir and timeline and puts them on the stage (after the scenes already there). */
+  private addScene(res: ResolvedScene): void {
+    const doc = this.container.ownerDocument;
+    const sceneIr = this.ir.scenes.find((s) => s.id === res.id)!;
+    const g = svg(doc, "g", { "data-scene": res.id }) as SVGGElement;
+    const html = doc.createElement("div");
+    html.dataset.scene = res.id;
+    html.style.cssText = SCENE_HTML_BASE;
+    const instances = new Map<string, Instance>();
+    // Panels and axes at the back, then connectors (behind what they connect), then elements, then badges.
+    const depth = (e: (typeof sceneIr.elements)[number]) => (e.kind === "panel" || e.kind === "rule" || e.kind === "zone" || e.kind === "chevron" ? 0 : e.link ? 1 : e.kind === "badge" ? 3 : 2);
+    const ordered = [...sceneIr.elements].sort((a, b) => depth(a) - depth(b));
+    for (const el of ordered) {
+      const inst = build(doc, el, this.theme, `${this.markId}-${res.id}-${el.id}`, this.templateBase);
+      paintFills(inst, this.theme);
+      this.baseStyle.set(inst.root, inst.root.style.cssText);
+      for (const nodes of inst.parts.values()) for (const n of nodes) this.baseStyle.set(n, (n as SVGElement).style.cssText);
+      instances.set(el.id, inst);
+      if (inst.setCues) this.pages.push(inst);
+      (inst.layer === "html" ? html : g).append(inst.root);
+      // An element that gets struck through carries its line from the start (hidden until `strike`).
+      if (inst.layer === "svg" && !inst.connector && this.timeline.tracks.some((tw) => tw.prop === "strike" && tw.target === `${res.id}/${el.id}`)) {
+        const line = svg(doc, "line", { x1: round(-el.box.w * 0.46), y1: 0, x2: round(el.box.w * 0.46), y2: 0, pathLength: 1, "stroke-width": 7, "stroke-linecap": "round", stroke: color(this.theme, "warn") }) as SVGLineElement;
+        line.style.opacity = "0";
+        inst.root.append(line);
+        inst.strikeLine = line;
+      }
+    }
+    // Connector labels sit above everything else in the scene: a node drawn over a label would cut its ends off.
+    // (The connector's own group has no transform, so the label keeps its coordinates; applyElement keeps it in step.)
+    const labels = svg(doc, "g", { "data-layer": "labels" }) as SVGGElement;
+    for (const inst of instances.values()) if (inst.connector?.label) labels.append(inst.connector.label);
+    if (labels.childNodes.length) g.append(labels);
+    this.svgCamera.append(g);
+    this.htmlCamera.append(html);
+    this.scenes.push({ res, ir: sceneIr, svg: g, html, instances, hosted: [...instances.values()].some((i) => i.setCues) });
+  }
+
+  /** A hosted page shows each item when the script shows it: the first moment its element becomes visible in its scene. */
+  private wirePages(): void {
+    for (const view of this.scenes) {
+      for (const inst of view.instances.values()) {
+        if (!inst.setCues) continue;
+        const ids = String(inst.el.params.items ?? "").split(",").filter(Boolean);
+        inst.setCues(ids.map((id) => this.firstShown(`${view.res.id}/${id}`, view.res.t0)));
+      }
+    }
+  }
+
+  /**
+   * Adds the scenes a longer timeline brings, on this stage, so what is on screen is not rebuilt: a designer page that is playing
+   * would reload (and flash) with a new stage. The scenes already here keep their layers and their pages; they only learn their
+   * resolved times again (a scene that was last may now end with a transition). Returns false when that is not possible (the
+   * canvas, the look or the motion changed, the scenes are not the old ones followed by new ones, or an old scene was rewritten):
+   * the caller then builds a new stage.
+   */
+  extend(ir: VideoIR, timeline: ResolvedTimeline): boolean {
+    const old = this.scenes;
+    if (ir.canvas.width !== this.width || ir.canvas.height !== this.height || ir.theme !== this.ir.theme || ir.motion !== this.ir.motion) return false;
+    if (timeline.scenes.length < old.length || old.some((v, i) => timeline.scenes[i]!.id !== v.res.id)) return false;
+    // A scene that was the last has a closing transition of its own; once another follows it gets the transition between the two.
+    // That is the only thing that changes in an old scene when scenes are appended (the timeline carries it too).
+    const same = (a: SceneIR, b: SceneIR) => JSON.stringify({ ...a, transitionOut: undefined }) === JSON.stringify({ ...b, transitionOut: undefined });
+    const next = old.map((v) => ir.scenes.find((x) => x.id === v.res.id));
+    if (next.some((n, i) => !n || !same(n, old[i]!.ir))) return false;
+    old.forEach((v, i) => (v.ir = next[i]!));
+    this.ir = ir;
+    this.timeline = timeline;
+    this.evaluator = createEvaluator(timeline);
+    this.indexTracks();
+    old.forEach((v, i) => (v.res = timeline.scenes[i]!));
+    for (const res of timeline.scenes.slice(old.length)) this.addScene(res);
+    this.wirePages();
+    this.render(this.time);
+    return true;
   }
 
   /** The earliest time (scene-local) at which an element's opacity rises above zero, or undefined when it never does. */

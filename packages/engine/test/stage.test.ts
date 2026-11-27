@@ -64,6 +64,54 @@ describe("stage", () => {
     expect((stage.root.querySelector('g[data-scene="need"]') as SVGGElement).style.display).toBe("none");
   });
 
+  describe("extend: scenes arrive while the video plays", () => {
+    const SRC = (n: number) => {
+      const scenes = ["a", "b", "c"].slice(0, n).map((id, i) => `scene ${id} "${id}"\nx${i} = icon:sun "Sun"\nt${i} = text "Words ${i}"\n> A {1}sun ${i}.\n1 pop x${i}\n1 fade t${i}\n`);
+      return `video 1\n${scenes.join("\n")}`;
+    };
+    const normal = (stage: Stage) => stage.root.innerHTML.replace(/anim-mark-\d+/g, "mark");
+
+    it("adds the new scenes to the stage that is playing: the scenes already there keep their layers, and the picture is the one a new stage would draw", async () => {
+      const first = await loadSource(SRC(1));
+      const full = await loadSource(SRC(3));
+      const stage = new Stage(container, first.ir, first.tl, { autoFit: false });
+      const layerA = stage.root.querySelector('div[data-scene="a"]');
+      const sunA = node(stage, "a", "x0");
+      const mid = (full.tl.scenes[0]!.t0 + full.tl.scenes[0]!.t1) / 2;
+      stage.render(mid);
+
+      expect(stage.extend(full.ir, full.tl)).toBe(true);
+      expect(stage.duration).toBe(full.tl.duration);
+      // not rebuilt: the very same nodes (a designer page in them would not reload)
+      expect(stage.root.querySelector('div[data-scene="a"]')).toBe(layerA);
+      expect(node(stage, "a", "x0")).toBe(sunA);
+      expect(stage.root.querySelector('div[data-scene="c"]')).toBeTruthy();
+
+      const fresh = new Stage(document.createElement("div"), full.ir, full.tl, { autoFit: false });
+      for (const t of [mid, full.tl.scenes[1]!.t0 + 0.6, full.tl.scenes[2]!.t1 - 0.3]) {
+        stage.render(t);
+        fresh.render(t);
+        expect(normal(stage), `at ${t}`).toBe(normal(fresh));
+      }
+    });
+
+    it("can be extended again and again", async () => {
+      const [one, two, three] = [await loadSource(SRC(1)), await loadSource(SRC(2)), await loadSource(SRC(3))];
+      const stage = new Stage(container, one.ir, one.tl, { autoFit: false });
+      expect(stage.extend(two.ir, two.tl)).toBe(true);
+      expect(stage.extend(three.ir, three.tl)).toBe(true);
+      expect(stage.root.querySelectorAll("div[data-scene]").length).toBe(3);
+    });
+
+    it("says no when a scene that was already there changed, or the look did: the caller builds a new stage", async () => {
+      const first = await loadSource(SRC(1));
+      const rewritten = await loadSource(SRC(2).replace('t0 = text "Words 0"', 't0 = text "Other words"'));
+      expect(new Stage(container, first.ir, first.tl, { autoFit: false }).extend(rewritten.ir, rewritten.tl)).toBe(false);
+      const other = await loadSource(SRC(2).replace("video 1", "video 1\ntheme chalk"));
+      expect(new Stage(container, first.ir, first.tl, { autoFit: false }).extend(other.ir, other.tl)).toBe(false);
+    });
+  });
+
   it("keeps a waiting hosted page laid out: hidden, never display:none, or weight/reel/logo titles measure nothing", async () => {
     // The page fixes its letter widths on its first frame. An iframe under `display: none` has no layout, so that frame would
     // lock every width at zero (the weight title piled its letters in one spot, the reel title never showed).

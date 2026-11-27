@@ -190,10 +190,17 @@ async function extend(ir: VideoIR, tl: ResolvedTimeline, final: boolean, autopla
     return;
   }
   const old = session;
-  const stage = new Stage(stageBox, ir, tl, { autoFit: true, templateBase: "/tpl" });
-  stage.render(old.player.time);
-  old.stage.destroy();
-  session = { ...old, ir, tl, stage, ev: createEvaluator(tl), overlay: new Overlay(stage) };
+  // The new scenes are added to the stage that is playing: a new stage would reload every designer page on screen (a flash and a
+  // restart of the scene being watched) each time a scene arrives. Only when the scenes already there changed is a new one built.
+  let stage = old.stage;
+  let overlay = old.overlay;
+  if (!old.stage.extend(ir, tl)) {
+    stage = new Stage(stageBox, ir, tl, { autoFit: true, templateBase: "/tpl" });
+    stage.render(old.player.time);
+    old.stage.destroy();
+    overlay = new Overlay(stage);
+  }
+  session = { ...old, ir, tl, stage, ev: createEvaluator(tl), overlay };
   showTimeline();
   try {
     await old.player.extend(stage, tl, final);

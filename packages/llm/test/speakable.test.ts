@@ -23,3 +23,24 @@ describe("narration a voice cannot say well", () => {
     expect(q18[0]!.message).toContain("letter by letter");
   });
 });
+
+describe("a designed page is empty until its first item is named", () => {
+  const scene = (narration: string) => `scene s "Tea" template=steps\ntitle = title "Tea"\ns1 = icon:flame "Boil" "Fill the kettle"\ns2 = icon:cup-soda "Warm" "Warm the cup"\n${narration}\n`;
+  const q19 = (n: string) => qualityIssues("video 1", scene(n)).filter((i) => i.code === "Q19");
+
+  it("is fine when the first item is named in the first or second sentence", () => {
+    expect(q19("> First, {s1}boil the water.\n> Then {s2}warm the cup.")).toHaveLength(0);
+    expect(q19("> A good cup of tea needs the right order.\n> First, {s1}boil the water, then {s2}warm the cup.")).toHaveLength(0);
+  });
+
+  it("is reported when the first item comes in the third sentence or later", () => {
+    const issues = q19("> Tea is simple.\n> But the order matters a lot.\n> First, {s1}boil the water, then {s2}warm the cup.");
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.message).toContain("sentence 3");
+  });
+
+  it("does not apply to the older templates", () => {
+    const old = 'scene s "Parts" template=cards\nc1 = icon:sun "Sun"\nc2 = icon:cloud "Cloud"\n> Intro one.\n> Intro two.\n> Intro three.\n> {1}The sun and {2}the cloud.\n1 pop c1\n2 pop c2\n';
+    expect(qualityIssues("video 1", old).filter((i) => i.code === "Q19")).toHaveLength(0);
+  });
+});

@@ -132,6 +132,19 @@ export function pageData(set: MotionSet, data: SceneData): unknown {
  */
 const LEAD = 0.6;
 
+/**
+ * The page's own opening (its heading, its axes or frame) is over after about this long. Before the first item the page waits, and it
+ * must not wait in a frame that is still empty: a chart whose first bar starts at 0.25s would otherwise sit blank (not even its
+ * heading) until the narration reaches the first item, seconds into the scene.
+ */
+const INTRO = 1;
+
+/** The first item is taken to start no earlier than this: the heading needs about this long to be fully there (a page may start an item at 0.15s). */
+const OPENING = 0.3;
+
+/** The page time at which a page waits for its first item (which it starts at `start`): the end of its opening, just before the item. */
+const holdBefore = (start: number) => Math.max(0, Math.max(start - LEAD, Math.min(start - 0.02, INTRO)));
+
 /** Items the page starts closer together than this overlap (a bar takes about a second to rise): they cannot be shown one at a time. */
 const MIN_GAP = 1;
 
@@ -217,15 +230,16 @@ export function warpTime(t: number, cues: readonly (number | undefined)[], start
     const s = starts[i];
     if (c === undefined || s === undefined) return;
     const last = a[a.length - 1];
-    if (!last || (c > last.c + 0.01 && s > last.s + 0.01)) a.push({ c, s, span: spans?.[i] ?? 0 });
+    if (!last || (c > last.c + 0.01 && s > last.s + 0.01)) a.push({ c, s: last ? s : Math.max(s, OPENING), span: spans?.[i] ?? 0 });
   });
   if (!a.length) return t;
   if (a.some((p, i) => i < a.length - 1 && a[i + 1]!.s - p.s < Math.max(MIN_GAP, p.span * 0.9))) a = [a[0]!];
   const first = a[0]!;
   if (t <= first.c) {
     if (first.c > first.s) {
-      const lead = Math.min(LEAD, first.s);
-      return t <= first.c - lead ? Math.max(0, Math.min(t, first.s - lead)) : first.s - (first.c - t);
+      const hold = holdBefore(first.s);
+      const runIn = first.s - hold;
+      return t <= first.c - runIn ? Math.max(0, Math.min(t, hold)) : first.s - (first.c - t);
     }
     // The cue is earlier than the page would get there: the page starts part-way in, so that the item still lands on its cue.
     return Math.max(0, first.s - (first.c - t));

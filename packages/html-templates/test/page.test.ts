@@ -13,9 +13,9 @@ describe("warpTime: scene time to the page's own time", () => {
   it("before the first cue the page opens at its own speed and waits just before its first item, which lands on its cue", () => {
     expect(warpTime(0, cues, starts)).toBe(0);
     expect(warpTime(0.3, cues, starts)).toBeCloseTo(0.3, 10); // the heading and the frame play from the scene's start
-    expect(warpTime(1.2, cues, starts)).toBeCloseTo(0.4, 10); // held 0.6s before the first item (it starts at 1s)
-    expect(warpTime(1.4, cues, starts)).toBeCloseTo(0.4, 10);
-    expect(warpTime(1.7, cues, starts)).toBeCloseTo(0.7, 10); // the last 0.6s run at the page's own speed into the first item
+    expect(warpTime(1.2, cues, starts)).toBeCloseTo(0.98, 10); // held at the end of the page's opening, just before the first item (it starts at 1s)
+    expect(warpTime(1.7, cues, starts)).toBeCloseTo(0.98, 10);
+    expect(warpTime(1.99, cues, starts)).toBeCloseTo(0.99, 10); // the last moment runs into the first item
     expect(warpTime(2, cues, starts)).toBe(1); // the cue lands on the item's start
     // Never before the page's beginning.
     expect(warpTime(-3, cues, starts)).toBe(0);
@@ -28,10 +28,24 @@ describe("warpTime: scene time to the page's own time", () => {
   });
 
   it("is never blank for a long first sentence: the page is past its opening well before the first cue", () => {
-    // The first item is spoken at 6s, the page shows it at 1.1s: at 2s the page is at 0.5s (heading up), not still at 0.
-    expect(warpTime(2, [6], [1.1])).toBeCloseTo(0.5, 10);
+    // The first item is spoken at 6s, the page shows it at 1.1s: at 2s the page waits at the end of its opening (1s: heading and frame
+    // up), not still at 0.
+    expect(warpTime(2, [6], [1.1])).toBeCloseTo(1, 10);
     expect(warpTime(0.3, [6], [1.1])).toBeCloseTo(0.3, 10);
     expect(warpTime(6, [6], [1.1])).toBeCloseTo(1.1, 10);
+  });
+
+  it("a page whose first item starts within its opening (every chart) waits with its heading and frame up, never at a blank frame 0", () => {
+    // A bar chart starts its first bar at 0.25s; the narration names it at 5s. The page must wait with its heading up (a first item is
+    // taken to start no earlier than 0.3s, the heading's time), at 0.28s, not at 0.
+    expect(warpTime(1, [5], [0.25])).toBeCloseTo(0.28, 10);
+    expect(warpTime(4, [5], [0.25])).toBeCloseTo(0.28, 10);
+    expect(warpTime(5, [5], [0.25])).toBeCloseTo(0.3, 10);
+    expect(warpTime(2, [5], [0.05])).toBeCloseTo(0.28, 10);
+    // A page that starts later keeps its run-in: item at 2.65s, waits 0.6s before it.
+    expect(warpTime(1, [6], [2.65])).toBeCloseTo(1, 10);
+    expect(warpTime(4, [6], [2.65])).toBeCloseTo(2.05, 10);
+    expect(warpTime(6, [6], [2.65])).toBeCloseTo(2.65, 10);
   });
 
   it("between cues the page plays at its own speed, waits, then runs into the next item so that it lands on its cue", () => {

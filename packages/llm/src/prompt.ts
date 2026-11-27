@@ -967,7 +967,7 @@ function designedCues(t: TemplateManifest): string {
   if (t.name === "title") options.push("bg=base|tint|deep (its backdrop)");
   if (t.name === "stats") options.push("highlight=<item id> (the stat that glows; the last by default)");
   const named = t.items && t.items.max > 0 && t.name !== "title";
-  return `${named ? "Cues: name each item in braces where the narration says it ({id}, right before the words) and write no action lines at all in the scene (not even `write title`). " : "No cues and no action lines: the page plays the opening itself. "}Scene options: ${options.join("; ")}.`;
+  return `${named ? "Cues: name each item in braces where the narration says it ({id}, right before the words) and write no action lines at all in the scene (not even `write title`). Until the first item is named the page shows only its heading and frame, so name the first item in the scene's first or second sentence, then the others as the narration reaches them. " : "No cues and no action lines: the page plays the opening itself. "}Scene options: ${options.join("; ")}.`;
 }
 
 /** The variants part of a designed template's card: what to choose (if anything), and how much text the motions take. */

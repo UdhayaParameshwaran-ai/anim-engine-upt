@@ -8,7 +8,7 @@ import { findTemplate } from "@anim/registry";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12" | "Q13" | "Q14" | "Q15" | "Q16" | "Q17" | "Q18";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12" | "Q13" | "Q14" | "Q15" | "Q16" | "Q17" | "Q18" | "Q19";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -252,6 +252,17 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
   // Q4 for number pages: a stat or gauge that only appears, when it could count up.
   if (scene.attrs.grid && !verbsOf(scene).some((v) => STORY_VERBS.has(v)) && elements.some((e) => ["stat", "multistat", "gauge", "progress"].includes(e.kind))) {
     issues.push({ code: "Q4", message: `scene \`${scene.id}\` only makes things appear; let the numbers move: count a stat from=0 to=<value> (suffix="%" or prefix="$")` });
+  }
+  // Q19: a designed page shows only its heading and frame until its first item is named: name it in the first or second sentence.
+  const designed = scene.attrs.template ? findTemplate(scene.attrs.template) : undefined;
+  if (designed?.html && designed.name !== "title") {
+    const slots = new Set(designed.slots.map((x) => x.name));
+    const ids = elements.filter((e) => !slots.has(e.id)).map((e) => e.id);
+    const lines = narrationLines(sceneText);
+    const at = lines.findIndex((l) => ids.some((id) => l.includes(`{${id}}`) || l.includes(`{${id} `)));
+    if (ids.length && at >= 2) {
+      issues.push({ code: "Q19", message: `scene \`${scene.id}\` names its first item only in sentence ${at + 1}; until then its page shows just a heading and a frame, so name the first item in the first or second sentence` });
+    }
   }
   // Q18: an address, a path or an id in the narration: the voice would read it out character by character.
   for (const line of narrationLines(sceneText)) {
