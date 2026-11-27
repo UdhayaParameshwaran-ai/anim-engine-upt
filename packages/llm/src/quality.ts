@@ -8,7 +8,7 @@ import { findTemplate } from "@anim/registry";
  * into a repair prompt.
  */
 export interface QualityIssue {
-  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12" | "Q13" | "Q14" | "Q15" | "Q16" | "Q17";
+  code: "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12" | "Q13" | "Q14" | "Q15" | "Q16" | "Q17" | "Q18";
   /** Scene-relative line, when the issue belongs to one element. */
   line?: number;
   message: string;
@@ -73,6 +73,21 @@ const trigrams = (s: string) => {
 };
 /** Words a spoken sentence opens with when it carries on from what came before. */
 const CARRIES_ON = /^(so|but|and|that|this|these|those|now|then|which|because|still|yet|once|with|back|here|instead|after|before|meanwhile|even|only|remember|again|at this|at that)\b/i;
+
+/**
+ * Things a voice cannot say well: a web address, an address with a domain, a file path, a commit hash or id. (Numbers, units and
+ * acronyms are fine: the speech step reads them out; see packages/tts spoken.ts.)
+ */
+export function unspeakable(line: string): string | undefined {
+  const text = line.replace(/\{\w+\s?/g, " ").replace(/\}/g, " ");
+  return (
+    /\bhttps?:\/\/\S+|\bwww\.\S+/i.exec(text)?.[0] ??
+    /\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b/i.exec(text)?.[0] ??
+    /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|io|org|net|dev|app|ai|co|so|xyz|gov|edu)(?:\/\S*)?\b/i.exec(text)?.[0] ??
+    /(?:^|\s)\/[\w.-]+(?:\/[\w.-]+)+/.exec(text)?.[0]?.trim() ??
+    /\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i.exec(text)?.[0]
+  );
+}
 
 /** Narration checks against the scene's place in the teaching arc. */
 function arcIssues(sceneId: string, sceneText: string, arc: SceneArc): QualityIssue[] {
@@ -237,6 +252,14 @@ export function qualityIssues(header: string, sceneText: string, usecase?: strin
   // Q4 for number pages: a stat or gauge that only appears, when it could count up.
   if (scene.attrs.grid && !verbsOf(scene).some((v) => STORY_VERBS.has(v)) && elements.some((e) => ["stat", "multistat", "gauge", "progress"].includes(e.kind))) {
     issues.push({ code: "Q4", message: `scene \`${scene.id}\` only makes things appear; let the numbers move: count a stat from=0 to=<value> (suffix="%" or prefix="$")` });
+  }
+  // Q18: an address, a path or an id in the narration: the voice would read it out character by character.
+  for (const line of narrationLines(sceneText)) {
+    const bad = unspeakable(line);
+    if (bad) {
+      issues.push({ code: "Q18", message: `scene \`${scene.id}\` has "${bad.slice(0, 50)}" in its narration, which the voice would read out letter by letter; say what it is instead (the repository, the commit, the config file) and show the exact text in the picture` });
+      break;
+    }
   }
   if (arc) issues.push(...arcIssues(scene.id, sceneText, arc));
   return issues;

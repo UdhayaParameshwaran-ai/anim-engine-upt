@@ -221,6 +221,7 @@ HOW TIMING WORKS
 - {n} = the moment the next word is spoken. {n some words} = while those words are spoken.
 - Anchors: a cue id, "start" (sentence start) or "end" (after the sentence).
 - Several action lines on one anchor run together; "then" runs the next verb after the previous.
+- Narration is spoken by a voice. Write numbers the usual way (1957, $18M, 60%, 2.5B): they are read aloud correctly. Never put a web address, a file path, a commit hash, an id or code in the narration: say what it is (the repository, the commit, the config file) and show the exact text in the picture. Avoid symbols like -> ~ and slashes between words; write them as words.
 
 RULES
 - One idea per sentence, at most ${S.v("max_words", settings.maxWords ?? DEFAULT_MAX_WORDS)} words. ${S.v("sentences", span(spec.sentences))} sentences per scene.
@@ -396,6 +397,7 @@ HOW TIMING WORKS
 - Cue ids restart at 1 on every "> " line; each action uses a cue of the sentence just above it.
 - Anchors: a cue id, "start" (sentence start) or "end" (after the sentence).
 - Several action lines on one anchor run together; "then" runs the next verb after the previous.
+- Narration is spoken by a voice. Write numbers the usual way (1957, $18M, 60%, 2.5B): they are read aloud correctly. Never put a web address, a file path, a commit hash, an id or code in the narration: say what it is (the repository, the commit, the config file) and show the exact text in the picture. Avoid symbols like -> ~ and slashes between words; write them as words.
 
 SHAPE OF A SCENE (each sentence, then its own actions)
 scene heat "How water rises" template=steps

@@ -91,6 +91,37 @@ describe("scene synthesis", () => {
   });
 });
 
+describe("the voice is given what a person says", () => {
+  const { ir } = compile('video 1 "X"\n\nscene a "A"\nx = text "Hi"\n> In {1}1961 Gagarin flew, and $18M of the 60% went to a1f3c9e.\n1 fade x\n');
+
+  it("speaks numbers and ids in words, while the words (captions, cues) stay the written ones", async () => {
+    const asked: string[] = [];
+    const mock = new MockTtsProvider({ audio: false, timing: "word" });
+    const spy: TtsProvider = { id: mock.id, capabilities: mock.capabilities, synthesize: (r) => (asked.push(r.text), mock.synthesize(r)) };
+    const sp = await speakScene(ir.scenes[0]!, ir, { provider: spy, cache: new MemoryCache() });
+    expect(asked).toEqual(["In nineteen sixty-one Gagarin flew, and eighteen million dollars of the sixty percent went to A one F three C nine E."]);
+    // what the scene says it said, and the timed words, are the written ones
+    expect(sp.text).toBe("In 1961 Gagarin flew, and $18M of the 60% went to a1f3c9e.");
+    expect(sp.words.map((w) => w.text)).toEqual(sp.text.split(" "));
+    expect(sp.words.every((w) => sp.text.slice(w.start, w.end) === w.text)).toBe(true);
+    // a written word spans the spoken words it became: "1961" takes the time of "nineteen sixty-one"
+    const year = sp.words.find((w) => w.text === "1961")!;
+    const next = sp.words.find((w) => w.text === "Gagarin")!;
+    expect(year.t1 - year.t0).toBeGreaterThan(next.t1 - next.t0);
+    for (let i = 1; i < sp.words.length; i++) expect(sp.words[i]!.t0).toBeGreaterThanOrEqual(sp.words[i - 1]!.t0);
+  });
+
+  it("is cached per spoken text and per written text", async () => {
+    let calls = 0;
+    const mock = new MockTtsProvider({ audio: false });
+    const counting: TtsProvider = { id: mock.id, capabilities: mock.capabilities, synthesize: (r) => (calls++, mock.synthesize(r)) };
+    const cache = new MemoryCache();
+    await speakScene(ir.scenes[0]!, ir, { provider: counting, cache });
+    await speakScene(ir.scenes[0]!, ir, { provider: counting, cache });
+    expect(calls).toBe(1);
+  });
+});
+
 describe("overlapping builds", () => {
   it("speak a scene once when two builds ask for it at the same time", async () => {
     const { ir } = compile('video 1 "X"\n\nscene a "A"\nx = text "Hi"\n> Hello {1}there, this is shared.\n1 fade x\n');

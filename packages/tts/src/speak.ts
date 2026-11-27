@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { SceneIR, SceneSpeech, VideoIR, WordTiming } from "@anim/ir";
 import { align } from "./align.js";
+import { toSpoken, type SpokenText } from "./spoken.js";
 import type { TtsProvider, TtsRequest } from "./provider.js";
 
 /** Cached synthesis result: audio bytes plus normalized word timings. */
@@ -59,10 +60,25 @@ export class FileCache implements SpeechCache {
   }
 }
 
-/** Cache key: everything that can change the audio. */
-export function speechKey(provider: TtsProvider, req: TtsRequest): string {
+/**
+ * Cache key: everything that can change the audio. `written` is the narration as written when `req.text` is how it is spoken
+ * (the cached word timings are over the written one).
+ */
+export function speechKey(provider: TtsProvider, req: TtsRequest, written?: string): string {
   const settings = Object.fromEntries(Object.entries(req.settings ?? {}).sort(([a], [b]) => a.localeCompare(b)));
-  return createHash("sha256").update(JSON.stringify([provider.id, req.voice, req.lang, settings, req.text])).digest("hex").slice(0, 32);
+  return createHash("sha256").update(JSON.stringify([provider.id, req.voice, req.lang, settings, req.text, ...(written === undefined ? [] : [written])])).digest("hex").slice(0, 32);
+}
+
+/** The voice's word timings (over the spoken text) as timings of the written words: a written word takes the span of the words it became. */
+function toWritten(written: string, spoken: SpokenText, timed: WordTiming[]): WordTiming[] {
+  let prevEnd = 0;
+  return spoken.words.map((w) => {
+    const covered = timed.filter((x) => x.start >= w.sStart && x.end <= w.sEnd);
+    const t0 = covered.length ? covered[0]!.t0 : prevEnd;
+    const t1 = covered.length ? covered[covered.length - 1]!.t1 : prevEnd;
+    prevEnd = t1;
+    return { text: written.slice(w.start, w.end), start: w.start, end: w.end, t0, t1, precision: covered.length ? covered[0]!.precision : ("interpolated" as const) };
+  });
 }
 
 /**
@@ -96,24 +112,27 @@ export interface SpeakOptions {
 export async function speakScene(scene: SceneIR, video: Pick<VideoIR, "voice" | "lang">, opts: SpeakOptions): Promise<SceneSpeech> {
   const cache = opts.cache ?? new MemoryCache();
   const { text, beats } = sceneText(scene);
-  const req: TtsRequest = { text, voice: video.voice, lang: video.lang, ...(opts.settings && { settings: opts.settings }) };
-  const key = speechKey(opts.provider, req);
+  // The voice is given what a person would say (numbers, ids and addresses in words); the captions and the cues keep what is written.
+  const spoken = toSpoken(text, video.lang);
+  const changed = spoken.text !== text;
+  const req: TtsRequest = { text: spoken.text, voice: video.voice, lang: video.lang, ...(opts.settings && { settings: opts.settings }) };
+  const key = speechKey(opts.provider, req, changed ? text : undefined);
 
   let cached = await cache.get(key);
   if (!cached) {
-    if (text.length > opts.provider.capabilities.maxChars) {
-      throw new Error(`scene ${scene.id}: ${text.length} chars exceeds ${opts.provider.id} limit of ${opts.provider.capabilities.maxChars}`);
+    if (spoken.text.length > opts.provider.capabilities.maxChars) {
+      throw new Error(`scene ${scene.id}: ${spoken.text.length} chars exceeds ${opts.provider.id} limit of ${opts.provider.capabilities.maxChars}`);
     }
     // A scene already being spoken (an earlier build of the same script) is shared, not spoken twice.
     let pending = inFlight.get(key);
     if (!pending) {
       pending = (async () => {
-        const result = text ? await opts.provider.synthesize(req) : { audio: new Uint8Array(), format: "wav" as const, duration: 0 };
+        const result = spoken.text ? await opts.provider.synthesize(req) : { audio: new Uint8Array(), format: "wav" as const, duration: 0 };
         const speech: CachedSpeech = {
           audio: result.audio,
           format: result.format,
           duration: result.duration,
-          words: align(text, result.duration, "timings" in result ? result.timings : undefined),
+          words: changed ? toWritten(text, spoken, align(spoken.text, result.duration, "timings" in result ? result.timings : undefined)) : align(text, result.duration, "timings" in result ? result.timings : undefined),
         };
         await cache.set(key, speech);
         return speech;
