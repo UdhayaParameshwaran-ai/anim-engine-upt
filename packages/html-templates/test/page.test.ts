@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { motionSet, motionVariant, pageData, keepUnitSpace, parseValue, STEPS, timing, templateUrl, warpTime } from "../src/index.js";
+import { motionSet, motionVariant, pageData, keepUnitSpace, parseValue, STEPS, timing, templateUrl, warpTime, quietLeads } from "../src/index.js";
 
 describe("warpTime: scene time to the page's own time", () => {
   // Three items cued at 2s, 5s and 6s of the scene; the page shows them at its own 1s, 3s and 4s.
@@ -13,9 +13,9 @@ describe("warpTime: scene time to the page's own time", () => {
   it("before the first cue the page opens at its own speed and waits just before its first item, which lands on its cue", () => {
     expect(warpTime(0, cues, starts)).toBe(0);
     expect(warpTime(0.3, cues, starts)).toBeCloseTo(0.3, 10); // the heading and the frame play from the scene's start
-    expect(warpTime(1.2, cues, starts)).toBeCloseTo(0.98, 10); // held at the end of the page's opening, just before the first item (it starts at 1s)
-    expect(warpTime(1.7, cues, starts)).toBeCloseTo(0.98, 10);
-    expect(warpTime(1.99, cues, starts)).toBeCloseTo(0.99, 10); // the last moment runs into the first item
+    expect(warpTime(1.2, cues, starts)).toBeCloseTo(0.7, 10); // held at the end of the page's opening, shortly before the first item (it starts at 1s)
+    expect(warpTime(1.4, cues, starts)).toBeCloseTo(0.7, 10);
+    expect(warpTime(1.8, cues, starts)).toBeCloseTo(0.8, 10); // the last 0.3s run into the first item
     expect(warpTime(2, cues, starts)).toBe(1); // the cue lands on the item's start
     // Never before the page's beginning.
     expect(warpTime(-3, cues, starts)).toBe(0);
@@ -28,9 +28,9 @@ describe("warpTime: scene time to the page's own time", () => {
   });
 
   it("is never blank for a long first sentence: the page is past its opening well before the first cue", () => {
-    // The first item is spoken at 6s, the page shows it at 1.1s: at 2s the page waits at the end of its opening (1s: heading and frame
+    // The first item is spoken at 6s, the page shows it at 1.1s: at 2s the page waits at the end of its opening (0.8s: heading and frame
     // up), not still at 0.
-    expect(warpTime(2, [6], [1.1])).toBeCloseTo(1, 10);
+    expect(warpTime(2, [6], [1.1])).toBeCloseTo(0.8, 10);
     expect(warpTime(0.3, [6], [1.1])).toBeCloseTo(0.3, 10);
     expect(warpTime(6, [6], [1.1])).toBeCloseTo(1.1, 10);
   });
@@ -216,9 +216,9 @@ describe("timing: when each item really arrives, from what the page was measured
   });
 
   it("falls back to the designer's formula when nothing could be followed", () => {
-    expect(timing(null, [0.7, 3.2])).toEqual({ starts: [0.7, 3.2], spans: null });
-    expect(timing([null, null], [0.7, 3.2])).toEqual({ starts: [0.7, 3.2], spans: null });
-    expect(timing(null, null)).toEqual({ starts: null, spans: null });
+    expect(timing(null, [0.7, 3.2])).toEqual({ starts: [0.7, 3.2], spans: null, leads: null });
+    expect(timing([null, null], [0.7, 3.2])).toEqual({ starts: [0.7, 3.2], spans: null, leads: null });
+    expect(timing(null, null)).toEqual({ starts: null, spans: null, leads: null });
   });
 
   it("uses the later string when the earlier ones are there at once (a flip card: front shown for every item, the answer on its back later)", () => {
@@ -323,5 +323,45 @@ describe("the options a scene can ask of a page", () => {
 describe("warpTime: a page without items plays at its own speed", () => {
   it("a title has no cues: the page time is the scene time, and the page never leaves by itself", () => {
     for (const t of [0, 3, 9, 17]) expect(warpTime(t, [], null)).toBe(t);
+  });
+});
+
+describe("held in a quiet moment, never half way through a motion", () => {
+  // A page that walks a traveller to each item: still from 0.7s after an item until the walk, which takes about a second and arrives at the next one.
+  const step = 0.1;
+  const activity = (starts: number[], walk = 1.0) =>
+    Array.from({ length: 140 }, (_, i) => {
+      const t = i * step;
+      const moving = t < 0.9 || starts.some((s, k) => (k > 0 && t > s - walk - 0.1 && t <= s + 0.5) || (k === 0 && t <= s + 0.5));
+      return moving ? 600 : 14;
+    });
+
+  it("finds the quiet moment before each item: the lead covers the whole walk", () => {
+    const starts = [1, 3.5, 6, 8.5];
+    const leads = quietLeads(activity(starts), step, starts);
+    for (const l of leads.slice(1)) expect(l!).toBeGreaterThan(1.0);
+    for (const l of leads.slice(1)) expect(l!).toBeLessThan(2);
+  });
+
+  it("falls back to the default when the page is never quiet, or nothing was measured", () => {
+    const starts = [1, 3.5, 6];
+    expect(quietLeads(Array(140).fill(500), step, starts)).toEqual([undefined, undefined, undefined]);
+    expect(quietLeads(undefined, step, starts)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("warpTime holds at the end of the quiet moment and runs the walk at its own speed into the cue", () => {
+    const starts = [1, 3.5];
+    const cues = [2, 8];
+    const leads = [undefined, 1.25];
+    // after the first cue the page plays on at its own speed until 1.25s before the second item (page time 2.25), then waits there
+    expect(warpTime(2.5, cues, starts, null, leads)).toBeCloseTo(1.5, 10);
+    expect(warpTime(3.25, cues, starts, null, leads)).toBeCloseTo(2.25, 10);
+    expect(warpTime(5, cues, starts, null, leads)).toBeCloseTo(2.25, 10);
+    expect(warpTime(6.7, cues, starts, null, leads)).toBeCloseTo(2.25, 10);
+    // the walk then plays at its own speed and the item lands on its cue
+    expect(warpTime(7.4, cues, starts, null, leads)).toBeCloseTo(2.9, 10);
+    expect(warpTime(8, cues, starts, null, leads)).toBeCloseTo(3.5, 10);
+    // without leads it is the default 0.6s
+    expect(warpTime(5, cues, starts)).toBeCloseTo(2.9, 10);
   });
 });

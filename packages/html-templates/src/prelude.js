@@ -158,6 +158,24 @@
     }
     return best;
   }
+  /*
+   * How much the page moves at this moment: the summed change of every element's box and (inline) opacity since the last call. Where it
+   * is quiet the page can be held without freezing anything mid-motion (a traveller half way along a road).
+   */
+  var lastBoxes = null;
+  function movement() {
+    var els = document.body.querySelectorAll('*'), n = Math.min(els.length, 700), cur = new Array(n * 6), sum = 0;
+    for (var i = 0; i < n; i++) {
+      var st = els[i].style, b = els[i].getBoundingClientRect(), o = st && st.opacity !== '' ? parseFloat(st.opacity) * 100 : 100, num = 0;
+      // what the box does not show (a clip-path wipe, a filter, a gradient position): the numbers in the inline style
+      var text = st ? st.cssText : '', m = text ? text.match(/-?\d+\.?\d*/g) : null;
+      if (m) for (var k = 0; k < m.length; k++) num += parseFloat(m[k]);
+      cur[i * 6] = b.x; cur[i * 6 + 1] = b.y; cur[i * 6 + 2] = b.width; cur[i * 6 + 3] = b.height; cur[i * 6 + 4] = o; cur[i * 6 + 5] = num;
+    }
+    if (lastBoxes && lastBoxes.length === cur.length) for (var j = 0; j < cur.length; j++) sum += Math.abs(cur[j] - lastBoxes[j]);
+    lastBoxes = cur;
+    return Math.round(sum);
+  }
   function measure(items, step) {
     var d = duration(), dt = step || 0.1;
     if (!d) return null;
@@ -165,8 +183,11 @@
       return list.filter(function (s) { var t = String(s).trim(); return (t.length >= 3 && /[A-Za-z]/.test(t)) || (t.length >= 2 && /[0-9]/.test(t)); }).map(function (s) { return String(s).trim().slice(0, 18); });
     });
     var rec = strings.map(function (list) { return list.map(function () { return { initial: false, appear: null, landed: null }; }); });
+    var activity = [];
+    lastBoxes = null;
     for (var t = 0; t <= d + 1e-6; t += dt) {
       seek(t);
+      activity.push(movement());
       var scan = scanText();
       strings.forEach(function (list, i) {
         list.forEach(function (text, j) {
@@ -182,12 +203,16 @@
     // Per item the earliest and the latest of its strings that are not there from the start: usually the same moment, but a flip card
     // shows its front at once and the answer on its back later, and only the caller can say which of the two the item is about.
     var pick = function (r) { return { appear: r.appear, landed: r.landed === null ? r.appear : r.landed }; };
-    return rec.map(function (list) {
+    var result = rec.map(function (list) {
       var usable = list.filter(function (r) { return !r.initial && r.appear !== null; });
       if (!usable.length) return null;
       usable.sort(function (a, b) { return a.appear - b.appear; });
       return { first: pick(usable[0]), last: pick(usable[usable.length - 1]) };
     });
+    // The page's movement per step (activity[i] is the change into time i * step), for finding where it is quiet.
+    result.activity = activity;
+    result.step = dt;
+    return result;
   }
 
   /*

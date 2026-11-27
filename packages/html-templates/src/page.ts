@@ -132,6 +132,9 @@ export function pageData(set: MotionSet, data: SceneData): unknown {
  */
 const LEAD = 0.6;
 
+/** The shortest run-in a quiet moment may give (the page needs a little time to run into an item). */
+const MIN_LEAD = 0.3;
+
 /**
  * The page's own opening (its heading, its axes or frame) is over after about this long. Before the first item the page waits, and it
  * must not wait in a frame that is still empty: a chart whose first bar starts at 0.25s would otherwise sit blank (not even its
@@ -143,7 +146,9 @@ const INTRO = 1;
 const OPENING = 0.3;
 
 /** The page time at which a page waits for its first item (which it starts at `start`): the end of its opening, just before the item. */
-const holdBefore = (start: number) => Math.max(0, Math.max(start - LEAD, Math.min(start - 0.02, INTRO)));
+// (a page that starts its first item later than 0.8s has room to wait a little before it: an item's own motion, a tile starting to tip, begins just
+// before the moment its text is read)
+const holdBefore = (start: number) => Math.max(0, Math.max(start - LEAD, Math.min(start - (start >= 0.8 ? 0.3 : 0.02), INTRO)));
 
 /** Items the page starts closer together than this overlap (a bar takes about a second to rise): they cannot be shown one at a time. */
 const MIN_GAP = 1;
@@ -155,6 +160,70 @@ const ANCHOR = 0.25;
 export interface Measured {
   first: { appear: number; landed: number };
   last: { appear: number; landed: number };
+}
+
+/** The movement the page measured (per step of `step` seconds), when it did. */
+interface Moving {
+  activity?: number[];
+  step?: number;
+}
+
+/**
+ * For each item, how long before it starts the page should be held: in a quiet moment between the item before and this one, so that
+ * nothing is frozen half way (a traveller part-way along a road, a card half turned). The page then plays its run-in at its own speed
+ * and lands on the cue. Undefined where the page never goes quiet in between (the default lead applies).
+ */
+export function quietLeads(activity: readonly number[] | undefined, step: number, starts: readonly number[]): (number | undefined)[] {
+  if (!activity || activity.length < 8) return starts.map(() => undefined);
+  const sorted = [...activity].sort((x, y) => x - y);
+  const floor = sorted[Math.floor(sorted.length * 0.2)]!;
+  // quiet is a little above the page's own idle movement (a counter that always rolls, liquid that always sloshes)
+  const quiet = Math.max(40, floor * 1.6 + 40);
+  // a page that never rises above it has no bursts of motion to avoid freezing in
+  if (!activity.some((a) => a > quiet)) return starts.map(() => undefined);
+  // runs of quiet steps, as [from, to] in seconds (activity[i] is the change into time i * step)
+  const windows: [number, number][] = [];
+  let from = -1;
+  activity.forEach((a, i) => {
+    if (a <= quiet && from < 0) from = i;
+    if ((a > quiet || i === activity.length - 1) && from >= 0) {
+      const to = a > quiet ? i - 1 : i;
+      if ((to - from + 1) * step >= 0.2 - 1e-9) windows.push([(from - 1) * step, to * step]);
+      from = -1;
+    }
+  });
+  const lo = (h: number) => Math.max(0, Math.floor((h - 0.2) / step + 1e-9));
+  const hi = (h: number) => Math.ceil(h / step - 1e-9);
+  /** How much the page moved in the 0.2s before h (what a hold at h would freeze). */
+  const before = (h: number) => Math.max(0, ...activity.slice(lo(h), hi(h) + 1));
+  /** How much it moves in the `secs` after h (the movement a hold at h is about to interrupt). */
+  const ahead = (h: number, secs: number) => Math.max(0, ...activity.slice(hi(h) + 1, hi(h + secs) + 1));
+  return starts.map((s, i) => {
+    // the latest quiet window between the end of the previous item's own motion (for the first item: the page's opening, whose heading
+    // needs about OPENING) and this item's start. For the first item only a pause after the opening has moved counts: the stillness
+    // before anything has moved is a blank frame.
+    const after = i === 0 ? OPENING : starts[i - 1]! + 0.3;
+    const moved = (from: number) => i > 0 || Math.max(0, ...activity.slice(0, Math.max(1, Math.round(from / step)))) > quiet * 3;
+    const last = windows.filter(([a, b]) => b > after && a < s - 0.15 && moved(a)).pop();
+    let hold = last ? Math.max(i === 0 ? OPENING : 0, Math.min(last[1], s - 0.15)) : undefined;
+    if (i === 0) {
+      // Where the usual hold (the end of the opening) would freeze the page in the middle of a big movement (dots in flight, a count
+      // rolling) or just as one is starting (a camera pan, a wipe: an item's motion begins before the moment its text is read), go back
+      // to the calm before it. A page that is settling after its opening keeps the usual hold, and so does one with no calm moment.
+      const usual = holdBefore(Math.max(s, OPENING));
+      const here = before(usual);
+      const rising = ahead(usual, 0.3) >= Math.max(1.25 * here, 250);
+      if ((rising || here > Math.max(quiet * 6, 1000)) && usual > OPENING + 0.3) {
+        const limit = Math.max(quiet * 3, 0.05 * ahead(usual, 1.5));
+        let h = usual;
+        while (h > OPENING && before(h) > limit) h -= step;
+        if (h > OPENING) hold = Math.max(hold ?? 0, h);
+      }
+    }
+    if (hold === undefined) return undefined;
+    hold = Math.min(hold, s - 0.15);
+    return Math.min(i === 0 ? 3 : 2, Math.max(MIN_LEAD, s - hold));
+  });
 }
 
 const median = (xs: number[], fallback: number): number => {
@@ -171,8 +240,8 @@ const median = (xs: number[], fallback: number): number => {
  * - An item that does not come after the one before it was found somewhere else on the page (a number on a ruler): it is dropped and
  *   filled in, like an item that could not be followed, from its neighbours (even spacing).
  */
-export function timing(measured: readonly (Measured | null)[] | null, formula: readonly number[] | null): { starts: number[] | null; spans: number[] | null } {
-  if (!measured || measured.every((m) => !m)) return { starts: formula ? [...formula] : null, spans: null };
+export function timing(measured: readonly (Measured | null)[] | null, formula: readonly number[] | null): { starts: number[] | null; spans: number[] | null; leads: (number | undefined)[] | null } {
+  if (!measured || measured.every((m) => !m)) return { starts: formula ? [...formula] : null, spans: null, leads: null };
   // A set of strings tells the items apart when they follow each other with room between them: gaps of a second or more count most (a
   // number on a ruler shows early as a tick, and would otherwise tie with the right strings at the first small step).
   const score = (xs: ({ appear: number } | undefined)[]) =>
@@ -204,7 +273,9 @@ export function timing(measured: readonly (Measured | null)[] | null, formula: r
   });
   const own = chosen.map((x, i) => (x && at[i] !== null ? x.landed - x.appear + ANCHOR : null));
   const span = median(own.filter((x): x is number => x !== null), ANCHOR);
-  return { starts: times.map((t) => Math.max(0, t - ANCHOR)), spans: own.map((x) => x ?? span) };
+  const starts = times.map((t) => Math.max(0, t - ANCHOR));
+  const m = measured as Moving;
+  return { starts, spans: own.map((x) => x ?? span), leads: quietLeads(m.activity, m.step ?? 0.1, starts) };
 }
 
 /**
@@ -223,21 +294,22 @@ export function timing(measured: readonly (Measured | null)[] | null, formula: r
  * - A page that starts its items closer together than a second (a bar chart: bars 0.2s apart, each rising for 0.9s) has no state with
  *   one item there and the next not yet started, so its items cannot be shown one by one: it plays once, from the first cue.
  */
-export function warpTime(t: number, cues: readonly (number | undefined)[], starts: readonly number[] | null, spans?: readonly number[] | null): number {
+export function warpTime(t: number, cues: readonly (number | undefined)[], starts: readonly number[] | null, spans?: readonly number[] | null, leads?: readonly (number | undefined)[] | null): number {
   if (!starts) return t;
-  let a: { c: number; s: number; span: number }[] = [];
+  let a: { c: number; s: number; span: number; lead: number; quiet: boolean }[] = [];
   cues.forEach((c, i) => {
     const s = starts[i];
     if (c === undefined || s === undefined) return;
     const last = a[a.length - 1];
-    if (!last || (c > last.c + 0.01 && s > last.s + 0.01)) a.push({ c, s: last ? s : Math.max(s, OPENING), span: spans?.[i] ?? 0 });
+    if (!last || (c > last.c + 0.01 && s > last.s + 0.01)) a.push({ c, s: last ? s : Math.max(s, OPENING), span: spans?.[i] ?? 0, lead: leads?.[i] ?? LEAD, quiet: leads?.[i] !== undefined });
   });
   if (!a.length) return t;
   if (a.some((p, i) => i < a.length - 1 && a[i + 1]!.s - p.s < Math.max(MIN_GAP, p.span * 0.9))) a = [a[0]!];
   const first = a[0]!;
   if (t <= first.c) {
     if (first.c > first.s) {
-      const hold = holdBefore(first.s);
+      // held where the page is quiet when it has such a moment (not in the middle of a count or a flight), else at the end of its opening
+      const hold = first.quiet ? Math.max(0, first.s - first.lead) : holdBefore(first.s);
       const runIn = first.s - hold;
       return t <= first.c - runIn ? Math.max(0, Math.min(t, hold)) : first.s - (first.c - t);
     }
@@ -251,7 +323,7 @@ export function warpTime(t: number, cues: readonly (number | undefined)[], start
     const gapC = q.c - p.c;
     const gapS = q.s - p.s;
     if (gapC <= gapS) return p.s + ((t - p.c) / gapC) * gapS;
-    const lead = Math.min(LEAD, gapS);
+    const lead = Math.min(q.lead, gapS);
     const hold = q.s - lead;
     if (t <= p.c + (hold - p.s)) return p.s + (t - p.c);
     if (t >= q.c - lead) return q.s - (q.c - t);

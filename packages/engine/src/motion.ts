@@ -64,6 +64,7 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
   let cues: (number | undefined)[] = [];
   let starts: number[] | null = null;
   let spans: number[] | null = null;
+  let leads: (number | undefined)[] | null = null;
   const page = () => frame.contentWindow as Frame | null;
   inst.ready = new Promise<void>((resolve) => {
     frame.addEventListener("load", () => {
@@ -78,7 +79,7 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
           } catch {
             measured = null;
           }
-          ({ starts, spans } = timing(measured, formula));
+          ({ starts, spans, leads } = timing(measured, formula));
         })
         .catch(() => undefined)
         .then(() => resolve());
@@ -89,7 +90,7 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
   };
   // The page never plays its own exit: the scene's transition (ours, the same for every template) takes it away.
   inst.tick = (t) => {
-    page()?.__tpl?.seek(warpTime(t, cues, starts, spans));
+    page()?.__tpl?.seek(warpTime(t, cues, starts, spans, leads));
   };
   return div;
 }

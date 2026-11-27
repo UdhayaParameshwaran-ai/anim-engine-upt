@@ -44,13 +44,17 @@ async function measureVariant(template: string, variant: string, items: { texts:
     const frame = await (await page.waitForSelector("#f")).contentFrame();
     await frame!.waitForFunction(() => (window as unknown as { __tpl?: unknown }).__tpl, null, { timeout: 15000 });
     await frame!.evaluate(() => (window as unknown as { __tpl: { ready: Promise<boolean> } }).__tpl.ready);
-    return await frame!.evaluate(
+    const found = await frame!.evaluate(
       ({ texts, n }) => {
         const t = (window as unknown as { __tpl: { starts(n: number, p: string): number[] | null; measure(i: string[][]): unknown } }).__tpl;
-        return { formula: t.starts(n, "normal"), measured: t.measure(texts) as (Measured | null)[] };
+        const measured = t.measure(texts) as (Measured | null)[] & { activity?: number[]; step?: number };
+        return { formula: t.starts(n, "normal"), measured, activity: measured.activity, step: measured.step };
       },
       { texts: items.map((i) => i.texts), n: items.length },
     );
+    // the page's movement (what `timing` reads to find quiet moments) is a property of the array, which evaluate does not carry over
+    const measured = Object.assign(found.measured, { activity: found.activity, step: found.step });
+    return { formula: found.formula, measured };
   } finally {
     await ctx.close();
   }
@@ -142,6 +146,21 @@ describe.skipIf(!browser)("measuring the designer's pages", () => {
       const tape = await measureVariant("stats", "tape", [["1950", "2.5B"], ["1975", "4.1B", "+1.6B"], ["2000", "6.1B", "+2.0B"], ["2023", "8.0B", "+1.9B"]].map((texts) => ({ texts, icon: "users" })));
       const tp = timing(tape.measured, tape.formula);
       for (let i = 1; i < 4; i++) expect(tp.starts![i]! - tp.starts![i - 1]!, `tape gap ${i}`).toBeGreaterThan(1.5);
+    },
+    60000,
+  );
+
+  it(
+    "steps path: the traveller is held while it rests, a second or more before the next item, not half way along the road",
+    async () => {
+      // The walk to the next stop takes about a second and arrives at the item. Held 0.6s before it, the traveller froze mid-road.
+      const items = [["Forecasts revised", "Analysts trim their outlook"], ["Fair value drops", "Lower growth, lower price"], ["Sell orders flow", "Holders sell shares"], ["Machines pile on", "Algorithms add more selling"]].map((texts) => ({ texts, icon: "user" }));
+      const { measured, formula } = await measureVariant("steps", "path", items);
+      const t = timing(measured, formula);
+      for (const l of t.leads!.slice(1)) expect(l!, "path lead").toBeGreaterThan(1);
+      // a page that is still right up to its item keeps a short run-in
+      const stack = await measureVariant("steps", "stack", items);
+      for (const l of timing(stack.measured, stack.formula).leads!.slice(1)) expect(l!, "stack lead").toBeLessThan(1);
     },
     60000,
   );
