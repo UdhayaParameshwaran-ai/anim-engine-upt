@@ -28,7 +28,7 @@ export interface HtmlScene {
   named: Map<string, ElementDecl>;
   /** One of the designer's four themes, or `auto` (light or dark by the look's ink). */
   theme: string;
-  /** The scene attributes the page can use: pace, bg, highlight, playout. */
+  /** The scene attributes the page can use: pace, bg, highlight. */
   options: PageOptions;
 }
 
@@ -47,7 +47,7 @@ export function htmlSceneOf(scene: Scene): HtmlScene | undefined {
   const content = { items: items.map((e) => e.texts), slots: Object.fromEntries(declared.filter((e) => slots.has(e.id)).map((e) => [e.id, e.texts[0] ?? ""])) };
   const variant = chooseVariant(set, scene.attrs.variant, content, hash(scene.id + (scene.title ?? "")));
   const a = scene.attrs;
-  const options: PageOptions = { ...(a.pace && { pace: a.pace }), ...(a.bg && { bg: a.bg }), ...(a.highlight && { highlight: a.highlight }), ...(a.playout !== undefined && { playout: a.playout !== "false" }) };
+  const options: PageOptions = { ...(a.pace && { pace: a.pace }), ...(a.bg && { bg: a.bg }), ...(a.highlight && { highlight: a.highlight }) };
   return { set, variant, items, named, theme: a.theme ?? "auto", options, ...(title && { title }) };
 }
 

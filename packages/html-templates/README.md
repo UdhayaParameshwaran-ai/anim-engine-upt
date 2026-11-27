@@ -57,8 +57,19 @@ looked at by eye before it becomes a limit.
 ## Known issues to raise with the designer
 
 - The shared steps shell caps every set at 6 items, so Bar/Line (listed as 8) show 6; minimums are not enforced.
-- Bubble Pack runs off the bottom of the frame from the 4th bubble; Scale Zoom's nested labels overprint at 4 items; Glow Wipe
-  labels wrap and overprint the next row (limits are set from what was seen).
+- Glow Wipe labels wrap and overprint the next row (limits are set from what was seen). (Bubble Pack and Scale Zoom, which used to run
+  off the frame / overprint from the 4th item, were fixed in the designer's stats update of 2026-11-27: six items fit.)
 - Long item text clips in several variants; `adapt.js` shrinks it, and the validator limits copy per variant, but a fix in the
   pages would be better.
 - No per-item start times can be passed in: we read them from the page's timing kit instead.
+
+## Overrides (`patches/`)
+
+The designer's pages stay exactly as delivered. When a page does something we do not want in a video, a small script in `patches/` is
+injected in front of that one page (`PATCHES` in `src/files.mjs`) and corrects what it drew after every frame (`__tpl.afterSeek`, see
+`src/prelude.js`). An override names the selectors and times it relies on; if the designer updates the page, check them again, or drop
+the override.
+
+- `compare-split.js` (comparison / Split Wipe): hides the slider pill with its arrows glyph, and keeps the divider in the middle. The
+  page overshoots the middle as it sweeps in and nudges the divider 26px on every row; now it sweeps in once and rests, and each point is
+  carried by the row itself.

@@ -160,13 +160,13 @@ export const STATS: MotionSet = {
   ],
   template: "stats", kind: "stats", phase: "phase1", defaultVariant: "odometer",
   variants: [
-    variant("stats", "odometer", "v1-odometer", "Odometer", "one big number at a time as a rolling counter, with a history rail of the earlier ones", "figures"),
-    variant("stats", "tape", "v1-tape-measure", "Tape Measure", "values locked onto a ruler; the distance travelled is the change", "figures"),
-    variant("stats", "swarm", "v2-unit-swarm", "Unit Swarm", "each figure pulls its share out of a cloud of 100 dots (shares of a whole)", "shares"),
-    variant("stats", "tubes", "v3-liquid-tubes", "Liquid Tubes", "tubes that fill to each value, for comparing a few levels", "figures"),
-    variant("stats", "bubbles", "v4-bubble-pack", "Bubble Pack", "bubbles whose area is the value, packed into a cluster (3 at most for now)", "shares"),
-    variant("stats", "zoom", "v5-scale-zoom", "Scale Zoom", "nested squares whose area is the number; the camera pulls out as values grow (3 at most for now)", "shares"),
-    variant("stats", "comet", "v6-comet-trail", "Comet Trail", "a comet draws a line through the values and the number rides on it (a trend, 2 to 8 points)", "figures"),
+    variant("stats", "odometer", "v1-odometer", "Odometer", "one headline counter climbing to a final total, with a history rail of the earlier numbers (sign-ups, funds raised); not for numbers to compare", "figures"),
+    variant("stats", "tape", "v1-tape-measure", "Tape Measure", "values locked onto a ruler; the distance travelled is the change: how a number moved from one value to the next, and by how much", "figures"),
+    variant("stats", "swarm", "v2-unit-swarm", "Unit Swarm", "each figure pulls its share out of a cloud of 100 dots (a count of things, or shares of a whole; no decimals or huge totals)", "shares"),
+    variant("stats", "tubes", "v3-liquid-tubes", "Liquid Tubes", "tubes that fill to each value, for levels against a capacity (budget used, storage, quota); needs a natural maximum", "figures"),
+    variant("stats", "bubbles", "v4-bubble-pack", "Bubble Pack", "bubbles whose area is the value, packed into a cluster with a legend: relative size across categories", "shares"),
+    variant("stats", "zoom", "v5-scale-zoom", "Scale Zoom", "nested squares whose area is the number; the camera pulls out as values grow: how much bigger each value is than the one before", "shares"),
+    variant("stats", "comet", "v6-comet-trail", "Comet Trail", "a comet draws a line through the values and the number rides on it, with the periods along an axis (a trend over time in order, 2 to 8 points)", "figures"),
   ],
 };
 
@@ -253,6 +253,7 @@ export function slotLimits(set: MotionSet, v: MotionVariant): Record<string, num
   const heading = set.kind === "title" ? v.titleChars : 80;
   const named: Record<string, number> = { title: heading, kicker: 40 };
   if (set.kind === "compare") Object.assign(named, { left: 24, right: 24 });
+  if (set.kind === "stats") Object.assign(named, { metric: 60, xaxis: 24, yaxis: 40 });
   if (set.kind === "title") Object.assign(named, { subtitle: v.detailChars, kicker: 40, byline: 40, brand: 24 });
   return named;
 }

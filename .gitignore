@@ -10,3 +10,6 @@ coverage/
 out/
 *.mp4
 *.wav
+
+# review scripts for the designed templates (local scratch, one scene per variant)
+examples/review/

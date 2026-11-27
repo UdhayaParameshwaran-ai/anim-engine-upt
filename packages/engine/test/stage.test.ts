@@ -64,6 +64,23 @@ describe("stage", () => {
     expect((stage.root.querySelector('g[data-scene="need"]') as SVGGElement).style.display).toBe("none");
   });
 
+  it("keeps a waiting hosted page laid out: hidden, never display:none, or weight/reel/logo titles measure nothing", async () => {
+    // The page fixes its letter widths on its first frame. An iframe under `display: none` has no layout, so that frame would
+    // lock every width at zero (the weight title piled its letters in one spot, the reel title never showed).
+    const { ir, tl } = await loadSource(`video 1\nscene a "A" template=title variant=rise\ntitle = title "First"\n> One.\n\nscene b "B" template=title variant=weight\ntitle = title "Gravity"\n> Two.\n\nscene c "C" template=cards\nx = icon:sun "Sun"\n> A {1}sun.\n1 pop x\n`);
+    const stage = new Stage(container, ir, tl, { autoFit: false });
+    const layer = (id: string) => stage.root.querySelector(`div[data-scene="${id}"]`) as HTMLElement;
+    stage.render((tl.scenes[0]!.t0 + tl.scenes[0]!.t1) / 2);
+    expect(layer("a").style.visibility).toBe("");
+    expect(layer("b").style.display).toBe("");
+    expect(layer("b").style.visibility).toBe("hidden");
+    // A scene that draws no page is removed as before.
+    expect(layer("c").style.display).toBe("none");
+    stage.render((tl.scenes[1]!.t0 + tl.scenes[1]!.t1) / 2);
+    expect(layer("b").style.visibility).toBe("");
+    expect(layer("a").style.visibility).toBe("hidden");
+  });
+
   it("produces the same DOM for a time regardless of how it was reached", async () => {
     const { ir, tl } = await load("photosynthesis.txt");
     const stage = new Stage(container, ir, tl, { autoFit: false });

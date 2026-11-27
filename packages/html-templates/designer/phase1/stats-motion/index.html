@@ -30,6 +30,7 @@
   .src { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); } .src.new { color: var(--secondary); }
   .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .tags span { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+.use b { color: var(--secondary); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-right: 6px; }
 </style>
 </head>
 <body>
@@ -45,6 +46,7 @@
           <h2>01 · Tape Measure</h2>
           <div class="src new">New motion</div>
           <p>The value is read off a ruler. The tape scrolls under a fixed needle and locks on, with blur following its speed. The distance travelled is the change: a band spans from the last flag to the needle, and every stat leaves a flag behind.</p>
+          <p class="use"><b>Use when</b> Showing how a number moved from one value to the next, and by how much.</p>
           <div class="tags"><span>measurement</span><span>distance = change</span><span>flags</span></div>
         </div>
       </a>
@@ -54,6 +56,7 @@
           <h2>02 · Unit Swarm</h2>
           <div class="src new">New motion</div>
           <p>The number is made of 100 units. Dots fly out of a drifting cloud on curved paths and lock into a 10×10 grid. Dots added this beat glow and older ones settle back, so the growth shows without reading.</p>
+          <p class="use"><b>Use when</b> Showing a count of things, or one value as a share of a whole (customers, orders, tickets).</p>
           <div class="tags"><span>visual metaphor</span><span>particles</span><span>1 dot = unit</span></div>
         </div>
       </a>
@@ -63,6 +66,7 @@
           <h2>03 · Liquid Tubes</h2>
           <div class="src new">New motion</div>
           <p>Glass tubes fill with liquid that sloshes and settles while bubbles rise. The value floats on the surface. Focus walks from tube to tube with a camera lean, then every tube returns and the highlight glows.</p>
+          <p class="use"><b>Use when</b> Comparing levels against a capacity: how full each bucket is (budget used, storage, quota).</p>
           <div class="tags"><span>slosh physics</span><span>focus walk</span><span>camera lean</span></div>
         </div>
       </a>
@@ -72,6 +76,7 @@
           <h2>04 · Bubble Pack</h2>
           <div class="src new">New motion</div>
           <p>Each stat inflates as a bubble whose area is the value. It floats into the cluster and shoulders the others aside with real collision physics, then everything settles with a soft wobble. The newest bubble is lit.</p>
+          <p class="use"><b>Use when</b> Relative size and share across several categories, where the biggest should stand out.</p>
           <div class="tags"><span>area = value</span><span>collision physics</span><span>soft wobble</span></div>
         </div>
       </a>
@@ -81,6 +86,7 @@
           <h2>05 · Scale Zoom</h2>
           <div class="src new">New motion</div>
           <p>Each value is a square whose area is the number, all growing from one corner. The newest square always fills the frame: the camera pulls back and older squares shrink inside it. The panel shows ×-times vs the first.</p>
+          <p class="use"><b>Use when</b> How much bigger a value is than the one before: growth across periods.</p>
           <div class="tags"><span>area = value</span><span>camera pull-back</span><span>× ratio</span></div>
         </div>
       </a>
@@ -90,6 +96,7 @@
           <h2>06 · Comet Trail</h2>
           <div class="src new">New motion</div>
           <p>A glowing comet draws the line, and the number riding on it is the value of the line under it, so it flows between points. A level line reads its height off the axis, and pins drop in at each point.</p>
+          <p class="use"><b>Use when</b> A trend over time, where the order of the points matters.</p>
           <div class="tags"><span>live value</span><span>axis read-off</span><span>pin drop</span></div>
         </div>
       </a>
@@ -99,6 +106,7 @@
           <h2>07 · Odometer</h2>
           <div class="src new">New motion</div>
           <p>Each digit is a mechanical reel. The ones digit spins most, like a real counter, and motion blur follows each reel's speed. The label flips down like a counter wheel, and finished numbers drop into a history rail.</p>
+          <p class="use"><b>Use when</b> One headline counter climbing to a final total (sign-ups, funds raised, visitors).</p>
           <div class="tags"><span>digit reels</span><span>speed blur</span><span>history rail</span></div>
         </div>
       </a>

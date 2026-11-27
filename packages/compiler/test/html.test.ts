@@ -179,9 +179,9 @@ describe("what a designed scene asks of its page reaches the page's data", () =>
     return JSON.parse(r.ir!.scenes[0]!.elements.find((e) => e.kind === "motion")!.params.data as string) as { options?: Record<string, unknown>; named?: Record<string, string[]> };
   };
 
-  it("scene attributes (pace, bg, playout, highlight) and a kicker slot", () => {
-    const d = motionData(['video 1 "T"', 'scene t "Open" template=title bg=deep playout=true pace=snappy', 'title = title "Hello"', 'kicker = text "Chapter one"', "> Welcome to the first chapter of this explainer.", ""].join("\n"));
-    expect(d.options).toEqual({ pace: "snappy", bg: "deep", playout: true });
+  it("scene attributes (pace, bg, highlight) and a kicker slot", () => {
+    const d = motionData(['video 1 "T"', 'scene t "Open" template=title bg=deep pace=snappy', 'title = title "Hello"', 'kicker = text "Chapter one"', "> Welcome to the first chapter of this explainer.", ""].join("\n"));
+    expect(d.options).toEqual({ pace: "snappy", bg: "deep" });
     expect(d.named).toEqual({ kicker: ["Chapter one"] });
   });
 

@@ -73,9 +73,9 @@ describe("a designed template is cued by the narration: a cue named after an ite
 describe("the page options a scene can ask for", () => {
   const knobs = (src: string) => check(src).diagnostics.filter((d) => d.code === C.BadLayoutKnob).map((d) => d.message);
 
-  it("accepts pace, kicker, bg, playout and highlight where their page uses them", () => {
+  it("accepts pace, kicker, bg and highlight where their page uses them", () => {
     expect(knobs(scene(NAMED, "", "pace=snappy"))).toEqual([]);
-    expect(knobs(`video 1\nscene t "Open" template=title bg=deep playout=true pace=relaxed\ntitle = title "Hello"\n> Welcome.\n`)).toEqual([]);
+    expect(knobs(`video 1\nscene t "Open" template=title bg=deep pace=relaxed\ntitle = title "Hello"\n> Welcome.\n`)).toEqual([]);
     expect(knobs(`video 1\nscene s "Users" template=stats highlight=s2\ntitle = title "Users"\ns1 = icon:user "Q1" "12k"\ns2 = icon:user "Q2" "21k"\n> It began at {s1}twelve thousand and {s2}reached twenty-one.\n`)).toEqual([]);
   });
 
@@ -97,6 +97,18 @@ describe("the page options a scene can ask for", () => {
   it("there is no enter= or order=: the pages only use them for the timeline's arrows", () => {
     const r = check(scene(NAMED, "", "enter=left"));
     expect(r.diagnostics.map((d) => d.code)).toContain(C.UnknownSceneAttr);
+  });
+
+  it("there is no playout=: a page never leaves by itself, the scene's transition takes it away", () => {
+    const r = check(`video 1\nscene t "Open" template=title playout=true\ntitle = title "Hello"\n> Welcome.\n`);
+    expect(r.diagnostics.map((d) => d.code)).toContain(C.UnknownSceneAttr);
+  });
+
+  it("a stats scene can say what its numbers measure: metric, yaxis and xaxis are slots, with limits", () => {
+    const stats = (extra: string) => `video 1\nscene s "Users" template=stats variant=comet\ntitle = title "Users"\n${extra}s1 = icon:user "Q1" "12k"\ns2 = icon:user "Q2" "21k"\n> It began at {s1}twelve thousand and {s2}reached twenty-one.\n`;
+    expect(check(stats('metric = text "Users per quarter"\nyaxis = text "Users (thousands)"\nxaxis = text "Quarter"\n')).diagnostics).toEqual([]);
+    const long = check(stats(`yaxis = text "${"y".repeat(41)}"\n`));
+    expect(long.diagnostics.map((d) => d.code)).toEqual([C.TemplateText]);
   });
 
   it("a kicker is a slot: optional, up to 40 characters", () => {

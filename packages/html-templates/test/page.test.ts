@@ -282,11 +282,19 @@ describe("the options a scene can ask of a page", () => {
     expect(glow({ highlight: "s1" })).toEqual([true, false]);
   });
 
-  it("title: bg and playout reach the page", () => {
-    const d = pageData(motionSet("title")!, { heading: "H", items: [], options: { bg: "deep", playout: true } }) as { bg: string; playout: boolean };
-    expect([d.bg, d.playout]).toEqual(["deep", true]);
+  it("title: bg reaches the page, and the page never plays an exit of its own", () => {
+    const d = pageData(motionSet("title")!, { heading: "H", items: [], options: { bg: "deep" } }) as { bg: string; playout: boolean };
+    expect([d.bg, d.playout]).toEqual(["deep", false]);
     const plain = pageData(motionSet("title")!, { heading: "H", items: [] }) as { bg: string; playout: boolean };
     expect([plain.bg, plain.playout]).toEqual(["auto", false]);
+  });
+
+  it("stats: what the numbers measure (metric, yaxis, xaxis) reaches the page; empty when not written", () => {
+    const items = [{ texts: ["Q1", "12k"], icon: "user" }, { texts: ["Q2", "21k", "+75% vs Q1"], icon: "user" }];
+    const d = pageData(motionSet("stats")!, { heading: "H", items, named: { metric: ["Users per quarter"], yaxis: ["Users (thousands)"], xaxis: ["Quarter"] } }) as { metric: string; yAxis: string; xAxis: string };
+    expect([d.metric, d.yAxis, d.xAxis]).toEqual(["Users per quarter", "Users (thousands)", "Quarter"]);
+    const none = pageData(motionSet("stats")!, { heading: "H", items }) as { metric: string; yAxis: string; xAxis: string };
+    expect([none.metric, none.yAxis, none.xAxis]).toEqual(["", "", ""]);
   });
 
   it("a timeline event's fourth string is a figure that counts up, or a line of text; the fifth is its caption", () => {
@@ -298,26 +306,8 @@ describe("the options a scene can ask of a page", () => {
   });
 });
 
-describe("warpTime: a title that plays out leaves as the scene ends", () => {
-  // The page's own exit runs from 4.6s to 4.8s of its time; the scene shows for 17s.
-  const outro = { leave: 4.6, gone: 4.8, end: 17 };
-
-  it("holds just before the exit for as long as the narration runs, then plays the exit at its own speed, ending with the scene", () => {
-    expect(warpTime(1, [], null, null, outro)).toBeCloseTo(1, 10); // the opening plays as it is
-    expect(warpTime(9, [], null, null, outro)).toBeCloseTo(4.6, 10); // waits
-    expect(warpTime(16.7, [], null, null, outro)).toBeCloseTo(4.6, 10);
-    expect(warpTime(16.9, [], null, null, outro)).toBeCloseTo(4.7, 10); // the exit
-    expect(warpTime(17, [], null, null, outro)).toBeCloseTo(4.8, 10); // gone with the scene
-  });
-
-  it("changes nothing for a page without an exit", () => {
-    for (const t of [0, 3, 9, 17]) expect(warpTime(t, [], null, null, null)).toBe(t);
-  });
-
-  it("items and the exit together: the items come first, the exit still waits for the end", () => {
-    const cues = [2, 8], starts = [0.9, 3.4];
-    expect(warpTime(2, cues, starts, null, outro)).toBeCloseTo(0.9, 10);
-    expect(warpTime(12, cues, starts, null, outro)).toBeLessThanOrEqual(4.6);
-    expect(warpTime(17, cues, starts, null, outro)).toBeCloseTo(4.8, 10);
+describe("warpTime: a page without items plays at its own speed", () => {
+  it("a title has no cues: the page time is the scene time, and the page never leaves by itself", () => {
+    for (const t of [0, 3, 9, 17]) expect(warpTime(t, [], null)).toBe(t);
   });
 });

@@ -26,8 +26,9 @@ export interface SceneData {
 
 /**
  * The visible options of the designer's pages that a script can set (a scene attribute each). A page ignores an option it has no use
- * for: `bg` and `playout` belong to the opening titles, `highlight` to stats. (The pages also list an entrance direction and an order; they
- * only use them for the timeline's arrows, so they are not offered.)
+ * for: `bg` belongs to the opening titles, `highlight` to stats. (The pages also list an entrance direction and an order; they
+ * only use them for the timeline's arrows, so they are not offered.) A page never leaves by itself: how a scene ends and the next one
+ * begins is the script's own transition (`in=`, `out=`, the motion preset), the same for every template.
  */
 export interface PageOptions {
   /** relaxed | normal | snappy: how long the page's own animations take. */
@@ -36,8 +37,6 @@ export interface PageOptions {
   bg?: string;
   /** The id of the stat that gets the glow (default: the last). */
   highlight?: string;
-  /** The title plays its own exit at the end of the scene. */
-  playout?: boolean;
 }
 
 /** The values each option takes (the validator and the prompt read these). */
@@ -110,6 +109,8 @@ export function pageData(set: MotionSet, data: SceneData): unknown {
     case "stats":
       return {
         pace: data.options?.pace ?? "normal", motion: "rise", order: "forward", kicker: named.kicker?.[0] ?? "", heading: data.heading,
+        // What the numbers measure (a line under the heading) and the axis titles the charts draw; the pages leave out what is empty.
+        metric: named.metric?.[0] ?? "", xAxis: named.xaxis?.[0] ?? "", yAxis: named.yaxis?.[0] ?? "",
         items: items.map((i, k) => {
           const v = parseValue(text(i, 1));
           const d = parseDelta(text(i, 2));
@@ -118,7 +119,7 @@ export function pageData(set: MotionSet, data: SceneData): unknown {
       };
     case "title":
       return {
-        pace: data.options?.pace ?? "normal", bg: data.options?.bg ?? "auto", playout: data.options?.playout ?? false,
+        pace: data.options?.pace ?? "normal", bg: data.options?.bg ?? "auto", playout: false,
         kicker: named.kicker?.[0] ?? "", title: data.heading, subtitle: named.subtitle?.[0] ?? "", byline: named.byline?.[0] ?? "", brand: named.brand?.[0] ?? "",
         icon: items[0]?.icon || "star",
       };
@@ -159,7 +160,13 @@ const median = (xs: number[], fallback: number): number => {
  */
 export function timing(measured: readonly (Measured | null)[] | null, formula: readonly number[] | null): { starts: number[] | null; spans: number[] | null } {
   if (!measured || measured.every((m) => !m)) return { starts: formula ? [...formula] : null, spans: null };
-  const score = (xs: ({ appear: number } | undefined)[]) => xs.reduce<number>((n, x, i) => n + (i > 0 && x && xs[i - 1] && x.appear - xs[i - 1]!.appear >= 0.25 ? 1 : 0), 0);
+  // A set of strings tells the items apart when they follow each other with room between them: gaps of a second or more count most (a
+  // number on a ruler shows early as a tick, and would otherwise tie with the right strings at the first small step).
+  const score = (xs: ({ appear: number } | undefined)[]) =>
+    xs.reduce<number>((n, x, i) => {
+      const gap = i > 0 && x && xs[i - 1] ? x.appear - xs[i - 1]!.appear : 0;
+      return n + (gap >= MIN_GAP ? 10 : gap >= 0.25 ? 1 : 0);
+    }, 0);
   const firsts = measured.map((m) => m?.first);
   const lasts = measured.map((m) => m?.last);
   const chosen = score(lasts) > score(firsts) ? lasts : firsts;
@@ -203,24 +210,7 @@ export function timing(measured: readonly (Measured | null)[] | null, formula: r
  * - A page that starts its items closer together than a second (a bar chart: bars 0.2s apart, each rising for 0.9s) has no state with
  *   one item there and the next not yet started, so its items cannot be shown one by one: it plays once, from the first cue.
  */
-export function warpTime(t: number, cues: readonly (number | undefined)[], starts: readonly number[] | null, spans?: readonly number[] | null, outro?: Outro | null): number {
-  const p = warpItems(t, cues, starts, spans);
-  if (!outro) return p;
-  // The exit (a title leaving) is the last thing the page does: it plays at its own speed and ends with the scene, and the page waits
-  // before it, however long the narration runs.
-  const length = outro.gone - outro.leave;
-  const at = outro.end - length;
-  return t < at ? Math.min(p, outro.leave) : outro.leave + (t - at);
-}
-
-/** When a page's exit plays (page time: it starts to leave, it is gone) and the scene time at which it should be over. */
-export interface Outro {
-  leave: number;
-  gone: number;
-  end: number;
-}
-
-function warpItems(t: number, cues: readonly (number | undefined)[], starts: readonly number[] | null, spans?: readonly number[] | null): number {
+export function warpTime(t: number, cues: readonly (number | undefined)[], starts: readonly number[] | null, spans?: readonly number[] | null): number {
   if (!starts) return t;
   let a: { c: number; s: number; span: number }[] = [];
   cues.forEach((c, i) => {

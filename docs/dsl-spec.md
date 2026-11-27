@@ -256,10 +256,11 @@ A domain pack for explaining software and technology. With `generate(topic, { do
 - `kicker = text "…"` (any of these templates): the small line above the heading. `title` also takes `subtitle`, `byline` and `brand`.
 - `pace=relaxed|normal|snappy`: how long the page's own animations take.
 - `highlight=<item id>` (`stats`): the stat that glows (the last by default).
-- `bg=base|tint|deep|auto` and `playout=true` (`title`): its backdrop, and the title leaving as the scene ends.
+- `metric = text "…"`, `yaxis = text "…"`, `xaxis = text "…"` (`stats`): what the numbers measure. `metric` is a line under the heading (up to 60 characters); `yaxis` (up to 40) is the unit or quantity the motion prints as an axis title, scale, legend or caption ("Bubble size = …", "Square area = …"); `xaxis` (up to 24) names what runs along a series (comet, tubes). Each is optional; the page leaves out what is empty.
+- `bg=base|tint|deep|auto` (`title`): its backdrop. A page never plays an exit of its own (there is no `playout`): how a scene ends and the next begins is the script's transition (`in=`, `out=`, the motion preset), the same for every template.
 - `theme=` and `variant=` as above. An option on a template whose page does not use it is a warning and is dropped. The pages also list an entrance direction and an order; they only use them for the timeline's arrows, so they are not offered.
 
-**How the page is timed.** After a page loads it is scanned once (`__tpl.measure`) for when each item's text becomes visible, because the designer's own formulas are wrong for several variants. The page opens at its own speed, waits just before its first item, plays each item's animation at its own speed at the item's cue, holds while the narration goes on, and runs into the next item so that it lands on its cue (if the narration is quicker, the page is squeezed). Items a page starts less than a second apart (a bar chart) cannot be shown one at a time: the page plays once from the first cue. A title that plays out waits for the end of the scene, then leaves.
+**How the page is timed.** After a page loads it is scanned once (`__tpl.measure`) for when each item's text becomes visible, because the designer's own formulas are wrong for several variants. The page opens at its own speed, waits just before its first item, plays each item's animation at its own speed at the item's cue, holds while the narration goes on, and runs into the next item so that it lands on its cue (if the narration is quicker, the page is squeezed). Items a page starts less than a second apart (a bar chart) cannot be shown one at a time: the page plays once from the first cue.
 
 ### Designed templates and `variant=`
 

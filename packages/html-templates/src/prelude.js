@@ -51,12 +51,15 @@
     var m = el && /\/\s*([\d.]+)s/.exec(el.textContent || '');
     return m ? Number(m[1]) : 0;
   }
+  var afterSeek = [];
   function seek(t) {
     var s = scrub(), d = duration();
     if (!s || !d) return false;
     s.step = 'any';
     s.value = String(Math.min(1000, Math.max(0, (t / d) * 1000)));
     s.dispatchEvent(new Event('input'));
+    // Overrides (patches/) correct what the page drew, after every frame it draws.
+    for (var i = 0; i < afterSeek.length; i++) { try { afterSeek[i](t); } catch (_) { /* a broken override must not stop the page */ } }
     return true;
   }
 
@@ -159,7 +162,7 @@
     var d = duration(), dt = step || 0.1;
     if (!d) return null;
     var strings = items.map(function (list) {
-      return list.filter(function (s) { var t = String(s).trim(); return t.length >= 3 && /[A-Za-z]/.test(t); }).map(function (s) { return String(s).trim().slice(0, 18); });
+      return list.filter(function (s) { var t = String(s).trim(); return (t.length >= 3 && /[A-Za-z]/.test(t)) || (t.length >= 2 && /[0-9]/.test(t)); }).map(function (s) { return String(s).trim().slice(0, 18); });
     });
     var rec = strings.map(function (list) { return list.map(function () { return { initial: false, appear: null, landed: null }; }); });
     for (var t = 0; t <= d + 1e-6; t += dt) {
@@ -213,5 +216,5 @@
     });
   });
 
-  window.__tpl = { ready: ready, seek: seek, duration: duration, starts: starts, measure: measure, config: cfg };
+  window.__tpl = { ready: ready, seek: seek, afterSeek: function (fn) { afterSeek.push(fn); }, duration: duration, starts: starts, measure: measure, config: cfg };
 })();

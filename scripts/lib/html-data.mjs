@@ -43,7 +43,7 @@ export const REVIEWED = {
   "titles/v3-logo": { level: 1, note: "clean" },
   "comparison/v4-flip-cards": { level: 1, note: "cards flip in 3D, so words overlap mid-turn; settled frames are clean" },
   "transitions/v6-split": { level: 1, note: "the halves leave the frame on purpose" },
-  "stats/v4-bubble-pack": { level: 1, max: 3, provisional: true, note: "bubbles run off the bottom of the frame from the 4th (20-character labels); the designer's table says 6" },
-  "stats/v5-scale-zoom": { level: 1, max: 3, provisional: true, note: "the nested labels overprint each other at 4 items; 3 not yet seen" },
+  "stats/v4-bubble-pack": { level: 1, note: "re-checked with the updated page (it now has a legend panel): six bubbles with 20-character labels stay in the frame; the legend cuts a long label with an ellipsis" },
+  "stats/v5-scale-zoom": { level: 1, note: "re-checked with the updated page: six nested squares stay readable (the smallest labels are tiny but do not overprint)" },
   "bar/v5-glow-wipe": { level: 0, max: 5, labelChars: 14, note: "long labels wrap and overprint the next row; 5 rows with short labels are clean" },
 };

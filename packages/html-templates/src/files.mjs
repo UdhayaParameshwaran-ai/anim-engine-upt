@@ -19,11 +19,13 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; ch
 const WEIGHTS = [400, 500, 600, 700, 800, 900];
 const NOT_FOUND = { status: 404, type: "text/plain", body: Buffer.from("not found") };
 
-let injected;
-/** The code that goes first in every page: the prelude, then the fitting overlay. */
+/**
+ * The code that goes first in every page: the prelude, then the fitting overlay. Read on every request (two small files): a Studio
+ * dev server that started before an edit would otherwise keep serving the old prelude, and pages without `__tpl.measure` fall back to
+ * the designer's own timing formulas, which are wrong for several variants (the timeline filmstrip lit the wrong event).
+ */
 function injection() {
-  injected ??= `<script>${readFileSync(join(here, "prelude.js"), "utf8")}</script><script>${readFileSync(join(pkgRoot, "adapt", "adapt.js"), "utf8")}</script>`;
-  return injected;
+  return `<script>${readFileSync(join(here, "prelude.js"), "utf8")}</script><script>${readFileSync(join(pkgRoot, "adapt", "adapt.js"), "utf8")}</script>`;
 }
 
 /** The Inter faces the pages use, from the local files (relative URLs, so any mount point works). */
@@ -34,6 +36,14 @@ function interCss() {
 const within = (root, p) => {
   const n = normalize(p);
   return n.startsWith(root + sep) ? n : null;
+};
+
+/** Pages we correct (patches/): the designer's files stay as delivered, the override runs in front of them. Keyed by the path under designer/. */
+const PATCHES = { "phase1/comparison-motion/v1-split-wipe.html": "compare-split.js" };
+const patchFor = (file) => {
+  const rel = normalize(file).split(sep).join("/");
+  const hit = Object.keys(PATCHES).find((k) => rel.endsWith("/designer/" + k));
+  return hit ? "<script>" + readFileSync(join(pkgRoot, "patches", PATCHES[hit]), "utf8") + "</script>" : "";
 };
 
 /** Answer for a path under the template root. */
@@ -50,7 +60,7 @@ export function respondPath(path) {
   if (extname(file) !== ".html") return { status: 200, type, body: readFileSync(file) };
   const html = readFileSync(file, "utf8")
     .replace(/<link[^>]+fonts\.googleapis\.com\/css2[^>]*>/gi, '<link rel="stylesheet" href="../../_fonts.css">')
-    .replace(/<head[^>]*>/i, (m) => m + injection());
+    .replace(/<head[^>]*>/i, (m) => m + injection() + patchFor(file));
   return { status: 200, type, body: Buffer.from(html) };
 }
 

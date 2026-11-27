@@ -56,6 +56,40 @@ async function measureVariant(template: string, variant: string, items: { texts:
   }
 }
 
+/** Opens the compare/split page and reports, at each time, where its divider is (the handle's translateX in px) and whether its slider pill shows. */
+async function splitDivider(times: number[]) {
+  const set = motionSet("compare")!;
+  const v = motionVariant(set, "split");
+  const ctx = await browser!.newContext({ viewport: { width: 1920, height: 1080 } });
+  await ctx.route("**/*", (route) => {
+    const url = route.request().url();
+    if (url.startsWith("about:") || url.startsWith("data:")) return route.continue();
+    const r = respond(url);
+    return r ? route.fulfill({ status: r.status, contentType: r.type, body: r.body }) : route.abort();
+  });
+  try {
+    const page = await ctx.newPage();
+    await page.setContent('<body style="margin:0"><iframe id="f" width="1920" height="1080" style="border:0"></iframe></body>');
+    const hash = encodeURIComponent(JSON.stringify({ key: v.key, data: pageData(set, { heading: "Heading", items: ROWS }), icons: {} }));
+    await page.evaluate((src) => { (document.getElementById("f") as HTMLIFrameElement).src = src; }, `${TEMPLATE_ORIGIN}/${set.phase}/${v.dir}/${v.file}.html?embed&paused&theme=daylight-clean#${hash}`);
+    const frame = await (await page.waitForSelector("#f")).contentFrame();
+    await frame!.waitForFunction(() => (window as unknown as { __tpl?: unknown }).__tpl, null, { timeout: 15000 });
+    await frame!.evaluate(() => (window as unknown as { __tpl: { ready: Promise<boolean> } }).__tpl.ready);
+    return await frame!.evaluate((ts) => {
+      const t = (window as unknown as { __tpl: { seek(t: number): boolean } }).__tpl;
+      return ts.map((time) => {
+        t.seek(time);
+        const h = document.querySelector(".cs-handle") as HTMLElement;
+        const pill = h.querySelector("b") as HTMLElement;
+        const m = /translateX\(([-\d.]+)px\)/.exec(h.style.transform);
+        return { time, x: m ? parseFloat(m[1]!) : NaN, pill: getComputedStyle(pill).display };
+      });
+    }, times);
+  } finally {
+    await ctx.close();
+  }
+}
+
 describe.skipIf(!browser)("measuring the designer's pages", () => {
   it(
     "steps (rail): each step arrives about 2.5s after the one before, and the page lands it within a moment",
@@ -92,6 +126,34 @@ describe.skipIf(!browser)("measuring the designer's pages", () => {
       const flip = await measureVariant("compare", "flip", ROWS);
       const tf = timing(flip.measured, flip.formula);
       for (let i = 1; i < 3; i++) expect(tf.starts![i]! - tf.starts![i - 1]!, `flip gap ${i}`).toBeGreaterThan(2);
+    },
+    60000,
+  );
+
+  it(
+    "stats tubes and tape: the value (\"83%\", \"8.0B\") tells the items apart, not the labels that are on the page from the start",
+    async () => {
+      // The tube labels are visible from the first moment, and a ruler shows "8.0B" as a tick long before the value locks on: only the
+      // right strings give one item every 2.7s. Followed wrongly, the items looked 0.1s apart and the whole page played from the first cue.
+      const tubes = await measureVariant("stats", "tubes", [["Blood", "83%"], ["Brain", "75%"], ["Muscle", "70%"], ["Bone", "30%"]].map((texts) => ({ texts, icon: "user" })));
+      const tt = timing(tubes.measured, tubes.formula);
+      for (let i = 1; i < 4; i++) expect(tt.starts![i]! - tt.starts![i - 1]!, `tubes gap ${i}`).toBeGreaterThan(2);
+
+      const tape = await measureVariant("stats", "tape", [["1950", "2.5B"], ["1975", "4.1B", "+1.6B"], ["2000", "6.1B", "+2.0B"], ["2023", "8.0B", "+1.9B"]].map((texts) => ({ texts, icon: "users" })));
+      const tp = timing(tape.measured, tape.formula);
+      for (let i = 1; i < 4; i++) expect(tp.starts![i]! - tp.starts![i - 1]!, `tape gap ${i}`).toBeGreaterThan(1.5);
+    },
+    60000,
+  );
+
+  it(
+    "compare split: no slider pill, and the divider rests in the middle instead of overshooting or nudging on every row (patches/compare-split.js)",
+    async () => {
+      // The designer's page overshoots the middle while it sweeps in (about 0.9s) and nudges the divider 26px on each row; both are corrected.
+      const at = await splitDivider([0.3, 0.9, 1.0, 1.2, 1.6, 2.2, 2.6, 3.4, 5, 7]);
+      for (const p of at) expect(p.pill, `pill at ${p.time}`).toBe("none");
+      for (const p of at.filter((q) => q.time >= 1.0)) expect(p.x, `divider at ${p.time}`).toBe(960);
+      expect(at[0]!.x).toBeGreaterThan(960); // it still sweeps in from the right
     },
     60000,
   );

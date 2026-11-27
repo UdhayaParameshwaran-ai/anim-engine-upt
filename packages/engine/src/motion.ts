@@ -1,4 +1,4 @@
-import { motionSet, motionVariant, pageData, templateUrl, timing, warpTime, THEMES, type Measured, type Outro, type SceneData } from "@anim/html-templates";
+import { motionSet, motionVariant, pageData, templateUrl, timing, warpTime, THEMES, type Measured, type SceneData } from "@anim/html-templates";
 import type { ElementIR } from "@anim/ir";
 import { ICONS } from "./art.js";
 import type { Instance } from "./components.js";
@@ -64,8 +64,6 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
   let cues: (number | undefined)[] = [];
   let starts: number[] | null = null;
   let spans: number[] | null = null;
-  let exit: { leave: number; gone: number } | null = null;
-  let sceneEnd = 0;
   const page = () => frame.contentWindow as Frame | null;
   inst.ready = new Promise<void>((resolve) => {
     frame.addEventListener("load", () => {
@@ -81,14 +79,6 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
             measured = null;
           }
           ({ starts, spans } = timing(measured, formula));
-          // A title that plays out leaves as the scene ends. Its exit is the designer's own: titles-core.js gives it out = 0.8 x max(0.8, pace)
-          // seconds, ending 0.3s before the page does (pace: relaxed 1.35, normal 1, snappy 0.72).
-          if (scene.options?.playout) {
-            const d = w?.__tpl?.duration() ?? 0;
-            const pace = ({ relaxed: 1.35, normal: 1, snappy: 0.72 } as Record<string, number>)[scene.options.pace ?? "normal"] ?? 1;
-            const out = 0.8 * Math.max(0.8, pace);
-            if (d > out + 0.3) exit = { leave: d - 0.3 - out, gone: d - 0.3 };
-          }
         })
         .catch(() => undefined)
         .then(() => resolve());
@@ -97,12 +87,9 @@ export function buildMotion(doc: Document, el: ElementIR, theme: Theme, inst: In
   inst.setCues = (c) => {
     cues = c;
   };
-  inst.setSceneEnd = (s) => {
-    sceneEnd = s;
-  };
+  // The page never plays its own exit: the scene's transition (ours, the same for every template) takes it away.
   inst.tick = (t) => {
-    const outro: Outro | null = exit && sceneEnd > 0 ? { ...exit, end: sceneEnd } : null;
-    page()?.__tpl?.seek(warpTime(t, cues, starts, spans, outro));
+    page()?.__tpl?.seek(warpTime(t, cues, starts, spans));
   };
   return div;
 }

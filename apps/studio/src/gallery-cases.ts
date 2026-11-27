@@ -150,6 +150,8 @@ function hostedScript(t: TemplateManifest, variant: string, n: number, long: boo
     return `video 1 "Gallery"\n\nscene s "Example" ${attrs}\n${decl.join("\n")}\n> Plants make their own food from sunlight.\n`;
   }
   if (t.name === "compare") decl.push(`left = label "${s("Server session")}"`, `right = label "${s("Signed token")}"`);
+  // What the numbers measure: a line under the heading and the axis titles the stats motions print.
+  if (t.name === "stats") decl.push(`metric = text "Active users per quarter, in thousands"`, `yaxis = text "Active users (thousands)"`, `xaxis = text "Quarter"`);
   const ids: string[] = [];
   rows.slice(0, Math.max(1, n)).forEach((r, i) => {
     const id = `i${i + 1}`;

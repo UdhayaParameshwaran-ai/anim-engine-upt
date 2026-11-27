@@ -167,7 +167,7 @@
 
     /** Scene heading, same layout as the Story Studio scene header: kicker + headline at the top left. */
     head(stage, data) {
-      const h = U.el('div', 'hd', `<div class="hd-k">${U.esc(data.kicker)}</div><div class="hd-h">${U.esc(data.heading)}</div>`);
+      const h = U.el('div', 'hd', `<div class="hd-k">${U.esc(data.kicker)}</div><div class="hd-h">${U.esc(data.heading)}</div>${data.metric ? `<div class="hd-m">${U.esc(data.metric)}</div>` : ''}`);
       stage.append(h);
       return (f) => { const p = 1 - Math.pow(1 - U.lin(f, 2, 18), 3); h.style.opacity = p; h.style.transform = `translateY(${(1 - p) * 14}px)`; };
     },
@@ -203,6 +203,9 @@
     pace: 'normal', motion: 'rise', order: 'forward',
     kicker: 'Growth',
     heading: 'Active users, quarter by quarter',
+    metric: 'Active users per quarter, in thousands (k)',
+    xAxis: 'Quarter',
+    yAxis: 'Active users (thousands)',
     items: [
       { label: 'Q1 2025', value: '12', prefix: '', suffix: 'k', delta: '', deltaLabel: '', icon: 'user', highlight: false },
       { label: 'Q2 2025', value: '21', prefix: '', suffix: 'k', delta: '75', deltaLabel: 'vs Q1', icon: 'user', highlight: false },
@@ -214,7 +217,15 @@
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) { const d = JSON.parse(raw); if (d && Array.isArray(d.items)) return Object.assign({ pace: 'normal', motion: 'rise', order: 'forward' }, d); }
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && Array.isArray(d.items)) {
+          // data saved before the metric field existed: fill it in only if the stats are still the demo ones
+          const same = d.items.map((x) => x.label).join('|') === DEFAULT_DATA.items.map((x) => x.label).join('|');
+          if (same) ['metric', 'xAxis', 'yAxis'].forEach((k) => { if (d[k] === undefined) d[k] = DEFAULT_DATA[k]; });
+          return Object.assign({ pace: 'normal', motion: 'rise', order: 'forward' }, d);
+        }
+      }
     } catch (_) { /* storage unavailable — fall back to defaults */ }
     return structuredClone(DEFAULT_DATA);
   }
@@ -238,7 +249,7 @@
     let playing = !params.has('paused');
     let duration = 1;
     let update = () => {};
-    const max = variant.maxItems || 6;
+    const max = variant.maxItems || 6, min = variant.minItems || 1;
 
     const icons = {
       play: '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>',
@@ -251,6 +262,7 @@
       <header class="app-bar">
         <a class="back" href="index.html">← All variants</a>
         <h1>Stats · ${U.esc(variant.name)}</h1>
+        <div class="guide"><div><b>Use when</b>${U.esc(variant.use || '')}</div><div><b>Example</b>${U.esc(variant.example || '')}</div><div><b>Avoid</b>${U.esc(variant.avoid || '')}</div></div>
         <nav class="variants">${VARIANTS.map((v) => `<a href="${v.file}" class="${v.id === variant.id ? 'on' : ''}">${v.name}</a>`).join('')}</nav>
         <nav class="themes" aria-label="Theme">${THEMES.map((th) => `<button data-theme-id="${th.id}" class="${th.id === theme.id ? 'on' : ''}" title="${U.esc(th.label)}"><i style="background:linear-gradient(135deg, ${th.swatch[1]} 50%, ${th.swatch[0]} 50%)"></i>${U.esc(th.label)}</button>`).join('')}</nav>
       </header>
@@ -274,7 +286,10 @@
           <h2>Heading</h2>
           <div class="field"><label>Kicker</label><input data-k="kicker"></div>
           <div class="field"><label>Heading</label><input data-k="heading"></div>
-          <h2>Stats <span class="cap">(this variant shows up to ${max})</span></h2>
+          <div class="field"><label>What the numbers measure (units, period)</label><input data-k="metric" placeholder="e.g. Orders per month, in thousands"></div>
+          <div class="field"><label>X-axis title (charts with axes)</label><input data-k="xAxis" placeholder="e.g. Month"></div>
+          <div class="field"><label>Y-axis title (charts with axes)</label><input data-k="yAxis" placeholder="e.g. Orders (thousands)"></div>
+          <h2>Stats <span class="cap">(this variant takes ${min}–${max})</span></h2>
           <div class="items"></div>
           <div class="row">
             <button class="btn primary add">+ Add stat</button>
@@ -301,6 +316,7 @@
       stage.innerHTML = '';
       const P = PACES[data.pace] || PACES.normal;
       const items = data.items.slice(0, max);
+      if (items.length < min) { stage.innerHTML = `<div style="position:absolute;inset:0;display:grid;place-items:center;color:var(--text-muted);font-size:40px">This variant needs at least ${min} stats</div>`; update = () => {}; duration = 1; render(); return; }
       duration = variant.duration(Math.max(1, items.length), P) / F;
       if (items.length) update = variant.build(stage, Object.assign({}, data, { items }), U, { motion: data.motion, order: data.order, P });
       else { stage.innerHTML = '<div style="position:absolute;inset:0;display:grid;place-items:center;color:var(--text-muted);font-size:40px">Add a stat to start</div>'; update = () => {}; }
@@ -369,7 +385,7 @@
             <span class="tools">
               <button data-a="up" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
               <button data-a="down" title="Move down" ${i === data.items.length - 1 ? 'disabled' : ''}>↓</button>
-              <button data-a="del" title="Remove">✕</button>
+              <button data-a="del" title="Remove" ${data.items.length <= min ? 'disabled' : ''}>✕</button>
             </span>
           </div>
           <input data-f="label" placeholder="Label (Q1 2025)" value="${U.esc(it.label)}">

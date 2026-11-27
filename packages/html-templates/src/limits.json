@@ -459,15 +459,15 @@
     "min": 2,
     "max": 6,
     "codeMax": 6,
-    "effectiveMax": 3
+    "effectiveMax": 6
    },
    "field": "label",
    "level": 1,
    "titleChars": 20,
    "detailChars": 48,
-   "note": "bubbles run off the bottom of the frame from the 4th (20-character labels); the designer's table says 6",
+   "note": "re-checked with the updated page (it now has a legend panel): six bubbles with 20-character labels stay in the frame; the legend cuts a long label with an ellipsis",
    "reviewed": true,
-   "provisional": true
+   "provisional": false
   },
   {
    "set": "stats",
@@ -491,15 +491,15 @@
     "min": 2,
     "max": 6,
     "codeMax": 6,
-    "effectiveMax": 3
+    "effectiveMax": 6
    },
    "field": "label",
    "level": 1,
    "titleChars": 20,
    "detailChars": 48,
-   "note": "the nested labels overprint each other at 4 items; 3 not yet seen",
+   "note": "re-checked with the updated page: six nested squares stay readable (the smallest labels are tiny but do not overprint)",
    "reviewed": true,
-   "provisional": true
+   "provisional": false
   },
   {
    "set": "stats",

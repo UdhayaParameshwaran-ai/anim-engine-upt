@@ -22,6 +22,8 @@ interface SceneView {
   svg: SVGGElement;
   html: HTMLDivElement;
   instances: Map<string, Instance>;
+  /** The scene shows a designer's page. Such a page measures its own layout while it loads, so it must keep one while it waits. */
+  hosted: boolean;
 }
 
 type Props = Partial<Record<Prop, Value>>;
@@ -174,7 +176,7 @@ export class Stage {
       if (labels.childNodes.length) g.append(labels);
       this.svgCamera.append(g);
       this.htmlCamera.append(html);
-      this.scenes.push({ res, ir: sceneIr, svg: g, html, instances });
+      this.scenes.push({ res, ir: sceneIr, svg: g, html, instances, hosted: [...instances.values()].some((i) => i.setCues) });
     }
 
     // A hosted page shows each item when the script shows it: the first moment its element becomes visible in its scene.
@@ -182,7 +184,6 @@ export class Stage {
       if (!inst.setCues) continue;
       const ids = String(inst.el.params.items ?? "").split(",").filter(Boolean);
       inst.setCues(ids.map((id) => this.firstShown(`${view.res.id}/${id}`, view.res.t0)));
-      inst.setSceneEnd?.(Math.max(0, view.res.t1 - view.res.t0 - view.res.transitionOut.duration));
     }
 
     container.append(this.root);
@@ -263,7 +264,10 @@ export class Stage {
       ["filter", s.blur > 0.05 ? `blur(${round(s.blur, 2)}px)` : ""],
     ];
     css(view.svg, "", sceneCss);
-    css(view.html, SCENE_HTML_BASE, [...sceneCss, ["clip-path", s.clip]]);
+    // A hosted page that is waiting for its scene is hidden, not removed: with `display: none` the iframe has no layout, and pages that
+    // fix their letter widths or fit themselves on the first frame (weight, reel, logo) would measure nothing and keep it for good.
+    const htmlCss: Css = view.hosted ? [["display", ""], ["visibility", active ? "" : "hidden"], ...sceneCss.slice(1)] : sceneCss;
+    css(view.html, SCENE_HTML_BASE, [...htmlCss, ["clip-path", s.clip]]);
 
     if (active) {
       const cam = (state.get(`${res.id}/camera`)?.camera as Box | undefined) ?? { x: 0, y: 0, w: this.width, h: this.height };

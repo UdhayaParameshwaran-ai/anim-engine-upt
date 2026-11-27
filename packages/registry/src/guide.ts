@@ -92,11 +92,14 @@ s3 = asset:tree "It grows" "Leaves feed the plant and the trunk thickens"
   },
   stats: {
     shape: "numbers",
-    useWhen: "1–6 key figures: a label, a value (with its unit) and optionally how much it changed (\"+45% vs Q3\"): users, speed, cost, growth",
+    useWhen: "1–6 key figures: a label, a value (with its unit) and optionally how much it changed (\"+45% vs Q3\"): users, speed, cost, growth. Say what they measure: yaxis (the unit or quantity, printed as the axis, scale or legend), xaxis (what runs along a series) and metric (a line under the heading)",
     avoidWhen: "the numbers are to be compared as a chart over categories or time → chart; the numbers are values inside an algorithm → trace",
     variants: Object.fromEntries(STATS.variants.map((v) => [v.id, { when: `${v.when}${v.provisional ? "" : ` (${`label up to ${v.titleChars} characters`})`}`, items: v.items }])),
     example: `scene growth "Users keep growing" template=stats variant=figures
 title = title "Active users"
+metric = text "Active users per quarter, in thousands"
+yaxis = text "Active users (thousands)"
+xaxis = text "Quarter"
 s1 = icon:user "Q1" "12k"
 s2 = icon:user "Q2" "21k" "+75% vs Q1"
 s3 = icon:user "Q3" "33k" "+57% vs Q2"

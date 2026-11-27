@@ -560,7 +560,7 @@ class Validator {
   }
 
   /**
-   * The motions of a designed page that a scene can ask for (see PageOptions): `pace=`, `bg=`, `highlight=`, `playout=`.
+   * The motions of a designed page that a scene can ask for (see PageOptions): `pace=`, `bg=`, `highlight=`.
    * Each belongs to the templates whose pages use it; elsewhere it is ignored, so it is reported and dropped.
    */
   private pageOptions(scene: Scene): void {
@@ -570,7 +570,6 @@ class Validator {
       pace: ["steps", "compare", "timeline", "stats", "chart", "ui", "title"],
       bg: ["title"],
       highlight: ["stats"],
-      playout: ["title"],
     };
     for (const key of Object.keys(uses)) {
       const value = a[key];
@@ -586,7 +585,7 @@ class Validator {
         if (!ids.includes(value)) this.warn(C.BadLayoutKnob, `highlight= takes the id of one of the stats (${ids.join(", ")}), not \`${value}\``, scene.span, drop);
         continue;
       }
-      const allowed: readonly string[] = key === "playout" ? ["true", "false"] : (PAGE_OPTION_VALUES as Record<string, readonly string[]>)[key]!;
+      const allowed = (PAGE_OPTION_VALUES as Record<string, readonly string[]>)[key]!;
       if (!allowed.includes(value)) {
         const near = closest(value, allowed);
         this.warn(C.BadLayoutKnob, `${key}= takes ${allowed.join(", ")}, not \`${value}\``, scene.span, { desc: near ? `used \`${near}\`` : "removed", apply: () => (near ? (a[key] = near) : delete a[key]) });

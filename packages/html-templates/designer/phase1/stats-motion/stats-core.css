@@ -196,3 +196,9 @@ body.embed .viewport { border-radius: 0; box-shadow: none; }
 .chk input { width: auto; accent-color: var(--primary); }
 .item.off { opacity: .5; }
 .editor h2 .cap { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* Context: what the numbers measure, and when to use this variant */
+.hd-m { font-size: 26px; font-weight: 500; color: var(--text-muted); margin-top: 10px; }
+.guide { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 20px; }
+.guide div { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; font-size: 15px; line-height: 1.45; color: var(--text); }
+.guide b { display: block; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--secondary); margin-bottom: 4px; }

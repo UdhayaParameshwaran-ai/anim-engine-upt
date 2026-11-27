@@ -33,6 +33,8 @@
   const durOf = (n, P, tail = 1.4) => Math.round((T0 + n * beat(P) + tail) * FPS);
 
   const parsed = (it) => U.parse(it.value);
+  /** Context text (axis titles, scales, keys) placed once; faded in with the heading. */
+  const ctxEl = (root, cls, html, css) => { const e = el('div', 'ctx ' + cls, html); if (css) e.style.cssText = css; root.append(e); return e; };
   const vmaxOf = (items) => Math.max(1e-9, ...items.map((it) => Math.abs(parsed(it).v)));
   const fmtVal = (it, v) => U.fmt(v, parsed(it).dec);
   const numHTML = (it, v) => `${it.prefix ? `<span class="fx-aff">${esc(it.prefix)}</span>` : ''}<span class="fx-n">${fmtVal(it, v)}</span>${it.suffix ? `<span class="fx-aff">${esc(it.suffix)}</span>` : ''}`;
@@ -83,7 +85,11 @@
   //     the last stat's flag to the needle, and each finished stat leaves a flag hanging from the tape.
   // ════════════════════════════════════════════════════════════════════════
   V.tape = {
-    name: 'Tape Measure', maxItems: 6,
+    minItems: 1, maxItems: 6,
+    name: 'Tape Measure',
+    use: 'Showing how a number moved from one value to the next, and by how much.',
+    example: 'Revenue Q1 to Q4: the gap between flags is the growth each quarter.',
+    avoid: 'Many unrelated numbers at once; the ruler needs values that share one scale.',
     note: 'Tape measure: a ruler scrolls under a fixed needle and locks onto each value, with blur following its speed. The distance it travels is the change: a band spans from the last flag to the needle, and every stat leaves a flag on the tape.',
     duration: (n, P) => durOf(n, P),
     build(stage, data, _U, o) {
@@ -114,6 +120,7 @@
       });
       const rail = el('div', 'tp-rail'); rail.append(tape); stage.append(rail);
       stage.append(el('div', 'tp-needle', '<i></i>'));
+      const ctx = data.yAxis || data.xAxis ? [ctxEl(stage, 'ctx-under', `${esc(data.yAxis || '')}${data.xAxis ? `<span> · one flag per ${esc(data.xAxis.toLowerCase())}</span>` : ''}`, 'left:0;right:0;top:868px')] : [];
       const num = el('div', 'tp-num'); stage.append(num);
       const labs = items.map((it) => { const L = words(it.label, 'tp-label', 'wipe'); stage.append(L.el); return L; });
       const dels = items.map((it) => { if (!U.deltaOf(it)) return null; const d = U.delta(U.deltaOf(it), 'lg'); const w = el('div', 'tp-delta'); w.append(d.el); stage.append(w); return { d, w }; });
@@ -121,6 +128,7 @@
       return (f) => {
         const t = f / FPS;
         head(f);
+        ctx.forEach((e) => { e.style.opacity = expoOut(win(f / FPS, 0.2, 0.6)).toFixed(3); });
         const c = curAt(t), vpx = Math.abs(c - curAt(t - 1 / FPS)) * PPU;
         const intro = expoOut(win(t, 0.1, 0.9));
         tape.style.transform = `translateX(${(960 - (c - from) * PPU).toFixed(1)}px)`;
@@ -161,7 +169,11 @@
   //     the dots. Dots added in this beat glow; earlier ones settle back, so the growth reads at a glance.
   // ════════════════════════════════════════════════════════════════════════
   V.swarm = {
-    name: 'Unit Swarm', maxItems: 6,
+    minItems: 1, maxItems: 6,
+    name: 'Unit Swarm',
+    use: 'Showing a count of things, or one value as a share of a whole (customers, orders, tickets).',
+    example: 'Orders by region: 100 dots stand for 100 percent, and each region claims its own dots.',
+    avoid: 'Decimals or very large totals that do not read as countable units.',
     note: 'Unit swarm: a cloud of 100 dots drifts; each stat pulls its share out of the cloud on curved paths into a 10×10 grid. Dots added this beat glow, earlier ones settle back — the growth is visible, not just the number.',
     duration: (n, P) => durOf(n, P),
     build(stage, data, _U, o) {
@@ -190,6 +202,7 @@
       const firstLit = (k, j) => { let m = k; while (m > 0 && litAt(m - 1, j)) m--; return m; };
 
       const legend = el('div', 'sw-legend', `<i></i><span>= ${esc(unit)}</span>`); stage.append(legend);
+      const ctx = data.yAxis ? [ctxEl(legend, 'ctx-inline', `· ${esc(data.yAxis)}`)] : [];
       const panel = el('div', 'sw-panel'); stage.append(panel);
       const beats = items.map((it, i) => {
         const box = el('div', 'sw-beat');
@@ -206,6 +219,7 @@
       return (f) => {
         const t = f / FPS;
         head(f);
+        ctx.forEach((e) => { e.style.opacity = expoOut(win(f / FPS, 0.2, 0.6)).toFixed(3); });
         const k = activeAt(S, t);
         fx(legend, expoOut(win(t, 0.4, 0.8)));
         dots.forEach((p, j) => {
@@ -256,7 +270,11 @@
   //     At the end every tube comes back into focus and the highlighted one glows.
   // ════════════════════════════════════════════════════════════════════════
   V.tubes = {
-    name: 'Liquid Tubes', maxItems: 6,
+    minItems: 2, maxItems: 6,
+    name: 'Liquid Tubes',
+    use: 'Comparing levels against a capacity: how full each bucket is (budget used, storage, quota).',
+    example: 'Budget used per team: each tube fills to its percent of allowance.',
+    avoid: 'Values with no natural maximum, since the tube needs a full mark.',
     note: 'Liquid tubes: each tube fills with a sloshing liquid that settles, bubbles rise, and the value floats on the surface. Focus walks tube to tube while the camera leans in; at the end all tubes return and the highlight glows.',
     duration: (n, P) => durOf(n, P, 2.2),
     build(stage, data, _U, o) {
@@ -267,6 +285,11 @@
       const w = 132, Ht = 520, top = 330, span = Math.min(1500, n * 280);
       const gap = n > 1 ? (span - w) / (n - 1) : 0, left0 = 960 - span / 2;
       const end = S[n - 1] + B + 0.2;
+      const yOf = (v) => top + Ht - 5 - (Math.abs(v) / vmax) * 0.84 * (Ht - 10), a0 = items[0], ax = left0 - 40;
+      const ctx = [0, 0.5, 1].map((q) => ctxEl(world, 'ctx-tick', `${esc(a0.prefix || '')}${U.fmt(q * vmax, q * vmax >= 10 || q === 0 ? 0 : 1)}${esc(a0.suffix || '')}`, `left:${ax}px;top:${yOf(q * vmax)}px`));
+      ctx.push(ctxEl(world, 'ctx-axis', '', `left:${ax + 14}px;top:${yOf(vmax)}px;height:${yOf(0) - yOf(vmax)}px`));
+      if (data.yAxis) ctx.push(ctxEl(world, 'ctx-ytitle', esc(data.yAxis), `left:${ax - 130}px;top:${(yOf(0) + yOf(vmax)) / 2}px`));
+      if (data.xAxis) ctx.push(ctxEl(world, 'ctx-xtitle', esc(data.xAxis), `left:960px;top:${top + Ht + 92}px`));
       const tubes = items.map((it, i) => {
         const cx = n > 1 ? left0 + w / 2 + i * gap : 960;
         const ac = it.highlight ? 'var(--secondary)' : U.accent(i);
@@ -294,6 +317,7 @@
       return (f) => {
         const t = f / FPS;
         head(f);
+        ctx.forEach((e) => { e.style.opacity = expoOut(win(f / FPS, 0.2, 0.6)).toFixed(3); });
         const k = activeAt(S, t);
         const resolve = inOut(win(t, end, 0.9));
         // camera: lean toward the tube being filled, ease back to centre at the end
@@ -344,7 +368,11 @@
   //     the cluster settles with a soft wobble and keeps breathing. The newest bubble is lit, the rest step back.
   // ════════════════════════════════════════════════════════════════════════
   V.bubbles = {
-    name: 'Bubble Pack', maxItems: 6,
+    minItems: 2, maxItems: 6,
+    name: 'Bubble Pack',
+    use: 'Relative size and share across several categories, where the biggest should stand out.',
+    example: 'Revenue by product line: bubble area is the revenue of each line.',
+    avoid: 'Exact comparisons; people judge area less precisely than length.',
     note: 'Bubble pack: each stat inflates as a bubble whose area is the value; it floats into the cluster and shoulders the others aside (real collision physics), then everything settles with a soft wobble. The newest bubble is lit.',
     duration: (n, P) => durOf(n, P, 2),
     build(stage, data, _U, o) {
@@ -396,11 +424,17 @@
         if (dl) { const w = el('div', 'bp-delta'); w.append(dl.el); b.append(w); }
         return { b, num, L, dl };
       });
+      // legend: every bubble's colour, label and value, so small bubbles stay readable
+      const leg = el('div', 'bp-leg'); stage.append(leg);
+      const ctx = data.yAxis ? [ctxEl(leg, 'ctx-legtitle', `Bubble size = ${esc(data.yAxis)}`)] : [];
+      const rows = items.map((it, i) => { const r = el('div', 'bp-row' + (it.highlight ? ' hi' : ''), `<i style="background:${it.highlight ? 'var(--secondary)' : U.accent(i)}"></i><span>${esc(it.label)}</span><b>${numHTML(it, parsed(it).v)}</b>`); leg.append(r); return r; });
       return (f) => {
         const t = f / FPS;
         head(f);
+        ctx.forEach((e) => { e.style.opacity = expoOut(win(f / FPS, 0.2, 0.6)).toFixed(3); });
         const fr = frames[Math.min(frames.length - 1, Math.max(0, Math.round(f)))];
         const k = activeAt(S, t);
+        rows.forEach((r, i) => { const p = expoOut(win(t, S[i] + 0.3, 0.5)); r.style.opacity = (p * (i === k ? 1 : 0.6)).toFixed(3); r.style.transform = `translateX(${((1 - p) * 30).toFixed(1)}px)`; r.classList.toggle('on', i === k); });
         bubs.forEach((bb, i) => {
           const r = rad(i, t) * (1 + 0.012 * Math.sin(t * 2.1 + i * 1.7));
           if (r <= 0.5) { bb.b.style.visibility = 'hidden'; return; }
@@ -424,7 +458,11 @@
   //     you feel how much bigger it got. A side panel carries the number and "× vs first".
   // ════════════════════════════════════════════════════════════════════════
   V.scale = {
-    name: 'Scale Zoom', maxItems: 6,
+    minItems: 2, maxItems: 6,
+    name: 'Scale Zoom',
+    use: 'How much bigger a value is than the one before: growth across periods.',
+    example: 'Annual revenue by year: each year is a square that grows from the same corner.',
+    avoid: 'Values that shrink or stay close together; the squares will not visibly grow.',
     note: 'Scale zoom: each value is a square whose area is the number, all growing from one corner. The newest square always fills the frame — the camera pulls back and the older squares shrink inside it, so you feel the growth.',
     duration: (n, P) => durOf(n, P),
     build(stage, data, _U, o) {
@@ -434,6 +472,7 @@
       const A = { x: 180, y: 975 }, DISP = 640;
       const side = items.map((it) => Math.max(0.02, Math.sqrt(Math.abs(parsed(it).v) / vmax)));
       const view = el('div', 'zs-view'); stage.append(view);
+      const ctx = data.yAxis ? [ctxEl(stage, 'ctx-under', `Square area = ${esc(data.yAxis)}`, `left:${A.x}px;width:${DISP}px;top:${A.y + 22}px;text-align:left`)] : [];
       const sq = items.map((it, i) => {
         const e = el('div', 'zs-sq' + (it.highlight ? ' hi' : ''));
         e.style.setProperty('--ac', it.highlight ? 'var(--secondary)' : U.accent(i));
@@ -459,6 +498,7 @@
       return (f) => {
         const t = f / FPS;
         head(f);
+        ctx.forEach((e) => { e.style.opacity = expoOut(win(f / FPS, 0.2, 0.6)).toFixed(3); });
         const k = Math.max(0, activeAt(S, t));
         // camera zoom: the active square's side always maps to DISP pixels
         let cur = side[0];
@@ -498,7 +538,11 @@
   //     look-ahead space, pausing at each point where a pin drops; at the end it pulls back to show the whole path.
   // ════════════════════════════════════════════════════════════════════════
   V.comet = {
-    name: 'Comet Trail', maxItems: 8,
+    minItems: 2, maxItems: 8,
+    name: 'Comet Trail',
+    use: 'A trend over time, where the order of the points matters.',
+    example: 'Monthly active users across twelve months, drawn as a line through each month.',
+    avoid: 'Unordered categories; the line implies a sequence.',
     note: 'Comet trail: a glowing comet draws the line; the number riding on it is the value of the line under it, so it flows between points, and a level line reads its height straight off the axis. Pins drop in at each point.',
     duration: (n, P) => durOf(n, P, 2.4),
     build(stage, data, _U, o) {
@@ -532,11 +576,18 @@
       world.append(svg);
       const level = svg.querySelector('.cm-level');
       const axTag = el('div', 'cm-axtag'); world.append(axTag);
+      // axis: value ticks on the gridlines and every period label along the baseline, visible from the start
+      const a0 = items[0], tdec = vmax / 3 >= 10 ? 0 : 1;
+      const axis = [0, 1, 2, 3].map((j) => { const e = el('div', 'cm-tick', `${esc(a0.prefix || '')}${U.fmt((j * vmax) / 3, j ? tdec : 0)}${esc(a0.suffix || '')}`); e.style.left = `${X1 + 80}px`; e.style.top = `${YB - (j * (YB - YT)) / 3}px`; world.append(e); return e; })
+        .concat(pts.map((p) => { const e = el('div', 'cm-x', esc(p.it.label)); e.style.left = `${p.x}px`; e.style.top = `${YB + 34}px`; world.append(e); return e; }));
+      // axis titles: what runs along the bottom, and what the height measures
+      if (data.xAxis) { const e = el('div', 'cm-xt', esc(data.xAxis)); e.style.left = `${(X0 + X1) / 2}px`; e.style.top = `${YB + 80}px`; world.append(e); axis.push(e); }
+      if (data.yAxis) { const e = el('div', 'cm-yt', esc(data.yAxis)); e.style.left = `${X1 + 190}px`; e.style.top = `${(YB + YT) / 2}px`; world.append(e); axis.push(e); }
       const clip = svg.querySelector('.cm-clip'), glows = [...svg.querySelectorAll('.cm-glow')], lines = [...svg.querySelectorAll('.cm-line')];
       const pins = pts.map((p, i) => {
         const e = el('div', 'cm-pin' + (p.it.highlight ? ' hi' : ''));
         e.style.left = `${p.x}px`; e.style.top = `${p.y}px`;
-        e.innerHTML = `<i class="cm-ring"></i><i class="cm-dot"></i><div class="cm-pl"><b>${esc(p.it.prefix || '')}${fmtVal(p.it, p.v)}${esc(p.it.suffix || '')}</b><span>${esc(p.it.label)}</span></div>`;
+        e.innerHTML = `<i class="cm-ring"></i><i class="cm-dot"></i><div class="cm-pl"><b>${esc(p.it.prefix || '')}${fmtVal(p.it, p.v)}${esc(p.it.suffix || '')}</b></div>`;
         world.append(e);
         return { e, ring: e.querySelector('.cm-ring'), lab: e.querySelector('.cm-pl'), dot: e.querySelector('.cm-dot') };
       });
@@ -557,6 +608,7 @@
       return (f) => {
         const t = f / FPS;
         head(f);
+        axis.forEach((e) => { e.style.opacity = (0.9 * expoOut(win(f / FPS, 0.2, 0.6))).toFixed(3); });
         const c = where(t);
         // lines: done segments full, current one drawing
         lines.forEach((ln, i) => {
@@ -601,7 +653,11 @@
   //     (Kept by the owner's choice although Titles · Reel also uses reels: here it is place-value counting physics.)
   // ════════════════════════════════════════════════════════════════════════
   V.odometer = {
-    name: 'Odometer', maxItems: 6,
+    minItems: 1, maxItems: 6,
+    name: 'Odometer',
+    use: 'One headline counter climbing to a final total (sign-ups, funds raised, visitors).',
+    example: 'Total donations raised so far this year, counting up to the final figure.',
+    avoid: 'Several numbers that need comparing; reels are read one at a time.',
     note: 'Odometer: each digit is a reel that spins and lands — the ones digit spins most, like a real counter, and blur follows each reel\'s speed. Finished numbers drop into a history rail.',
     duration: (n, P) => durOf(n, P),
     build(stage, data, _U, o) {
@@ -609,6 +665,7 @@
       const head = U.head(stage, data);
       const world = el('div', 'fx-world'); stage.append(world);
       const rail = el('div', 'od-rail'); world.append(rail);
+      const ctx = data.yAxis ? [ctxEl(stage, 'ctx-under', esc(data.yAxis), 'left:0;right:0;top:250px')] : [];
 
       const beats = items.map((it) => {
         const { v, dec } = parsed(it);
@@ -645,6 +702,7 @@
       return (f) => {
         const t = f / FPS;
         head(f);
+        ctx.forEach((e) => { e.style.opacity = expoOut(win(f / FPS, 0.2, 0.6)).toFixed(3); });
         beats.forEach((b, i) => {
           const s = S[i], last = i === n - 1;
           const x = last ? 0 : inOut(win(t, s + B, 0.5));
@@ -675,7 +733,7 @@
 
   function mount(id) {
     const v = V[id];
-    SM.mount({ id, name: v.name, maxItems: v.maxItems, note: v.note, duration: v.duration, build: v.build });
+    SM.mount({ id, name: v.name, minItems: v.minItems, maxItems: v.maxItems, note: v.note, use: v.use, example: v.example, avoid: v.avoid, duration: v.duration, build: v.build });
   }
   window.StatsFX = { mount, variants: V };
 })();
