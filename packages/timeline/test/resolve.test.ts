@@ -146,11 +146,13 @@ describe("timing rules", () => {
 
 describe("scenes", () => {
   it("lays scenes end to end with transitions, focus and kept elements", async () => {
-    const src = `video 1\nscene a\nx = icon:sun\n> {1}Hi.\n1 pop x\nend move x @R\nstep zoom\nfocus x\n> Closer.\nscene b keep=x in=slide\ny = icon:heart @L\n> Still {1}here.\n1 pop y\n`;
+    const src = `video 1\nscene a\nx = icon:sun\n> {1}Hi.\n1 pop x\nend move x @R\nstep zoom\nfocus x\n> Closer.\nscene b keep=x in=push\ny = icon:heart @L\n> Still {1}here.\n1 pop y\n`;
     const { tl } = await build(src);
     const [a, b] = tl.scenes as [ResolvedTimeline["scenes"][0], ResolvedTimeline["scenes"][0]];
     expect(b.t0).toBe(a.t1);
-    expect(b.transitionIn).toEqual({ type: "slide", duration: 0.6 });
+    // the designer's 1.3s push: 0.6s of it on the scene being left, the rest on this one
+    expect(a.transitionOut).toEqual({ type: "push", duration: 0.6 });
+    expect(b.transitionIn).toEqual({ type: "push", duration: 0.7 });
     const cam = tweens(tl, "a/camera", "camera")[0]!;
     expect(cam.t0).toBe(a.steps[1]!.t0);
     expect((cam.to as { w: number }).w).toBeLessThan(1920);

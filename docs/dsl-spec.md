@@ -35,7 +35,7 @@ The first token decides the statement type.
 | Statement | Syntax | Where |
 |---|---|---|
 | Header | `video <version> ["title"]` | First line, required, once |
-| Setting | `theme <look>` · `motion <personality>` · `kit <plain|dashed|bold|soft>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
+| Setting | `theme <look>` · `motion <personality>` · `transitions <family>` · `kit <plain|dashed|bold|soft>` · `voice <name>` · `size <W>x<H> [fps]` · `lang <code>` · `fps <n>` | Before the first scene (video-wide) or inside a scene |
 | Scene | `scene <id> ["title"] [template=<t>] [in=<transition>] [out=<transition>] [keep=<id,id>] [carry=<id,id>]` | Top level |
 | Step | `step [<id>] ["title"]` | Inside a scene |
 | Layout | `layout <name>` | Inside a scene/step (when no template does the layout) |
@@ -141,6 +141,7 @@ A script's visual style comes from two video-wide settings. Neither changes the 
 
 - **`theme <look>`** picks a token set: palette, fonts, heading style, corner radius, stroke weight, shadows, emphasis style and how data widgets are filled. Looks: `chalk` `paper` `dark` `light` `editorial` `neo-brutal` `soft-pastel` `tech-neon` `magazine` `bold-pop` `crayon` `midnight-luxe` `blueprint`. Fonts are bundled (Fontsource, OFL), so the preview and the MP4 match on every machine.
 - **`kit <name>`** is the decor kit of the video: how the lines and cards a template draws look, besides the look itself. `plain` (default) is the look's own; `dashed` draws connectors and card borders dashed; `bold` thickens connectors and card borders; `soft` draws connectors dotted and cards without a border. The Director picks one per video and avoids the last one.
+- **`transitions <family>`** is the video's set of scene transitions, so its scene changes read as one style: `clean` (push, wipe; defocus into a new part), `brand` (wipe, push; panel), `soft` (defocus, iris; defocus), `film` (defocus; zoom), `play` (iris, slats; ripple), `depth` (push, zoom; cube), `doors` (wipe, slats; split). Without it the motion's own family is used (standard: clean, playful: play, corporate: brand, cinematic: film, energetic: doors, minimal: soft, dramatic: depth). The Director picks one per video from those that suit the motion and avoids the last one. Generated scripts never write `motion`, `transitions` or `in=`: the Director chooses them.
 - **`motion <personality>`** decides how the verbs move. It rescales default durations and explicit staggers, reinterprets ease names (`out` under *cinematic* is a long exponential ease), and gives enter verbs their own entrance:
 
 | Motion | Feel | `fade` enters by | `pop` |
@@ -169,7 +170,7 @@ Narration timing never changes: only default durations scale, and explicit durat
 
 **Background.** Every video draws on a plain white board, whatever the look; looks differ by ink colors, type, shapes and emphasis. A `bg` line from older scripts is removed with a warning (NAR214).
 
-**Transitions.** `in=` accepts `auto` (default) `cut` `fade` `slide` `wipe` `iris` `zoom` `blur` `rise`. A scene starts empty (its elements appear on their cues), so with any personality other than `standard`, a scene's transition is played as the *previous* scene's exit (unless that scene sets `out=`). `auto` takes the next transition from the personality's set (playful: zoom, iris, rise; corporate: rise, wipe, fade; cinematic: blur, fade, zoom; energetic: wipe, slide, zoom; dramatic: zoom, iris, blur), and the video ends with a fade. Under `standard`, `auto` means fade, as before.
+**Transitions.** The scene transitions are the designer's (`packages/html-templates/designer/phase1/transitions`): `wipe` `push` `zoom` `iris` `slats` `split` `defocus` `cube` `panel` `ripple`, plus `auto` (default) and `cut` (none). A transition plays across the boundary with both scenes on screen: the first 0.6s of it (times the motion's tempo) at the end of the scene being left, the rest at the start of the next scene. `in=` names the boundary's transition, unless the previous scene set `out=`. `auto` takes it from the video's transition family (`transitions <family>`): the family's opener into a title scene (it starts a new part of the video), its step transitions in turn everywhere else. The first scene opens with a cut and the last leaves with a defocus. The old names still compile with a warning (NAR213): `fade` and `blur` become `defocus`, `slide` and `rise` become `push`.
 
 ## 6c. Layout variants and knobs
 
@@ -341,7 +342,7 @@ Run `pnpm check <file>` to see them. Most come with a deterministic auto-fix. A 
 | NAR210 | schema | Link rule (`arrow` needs `a->b`, others take none) | Drop the element / drop the link |
 | NAR211 | schema | Verb target rule | Drop the call / drop the targets |
 | NAR212 | schema | `fit` on a verb that doesn't support it | Remove `fit` |
-| NAR213 | schema | Unknown transition | Closest transition, else `fade` |
+| NAR213 | schema | Unknown or retired transition | The designer's transition a retired name means (warning), else the closest, else `auto` |
 | NAR214 | schema | Bad setting (size, fps, theme, lang, voice) | Remove / closest theme |
 | NAR215 | schema | Unknown scene attribute (warning) | Ignore |
 | NAR216 | schema | `move` without a destination | Drop the call |

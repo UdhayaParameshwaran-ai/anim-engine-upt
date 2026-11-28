@@ -113,10 +113,12 @@ describe("whole prompts", () => {
 });
 
 describe("recent looks", () => {
-  it("the plan request names the looks and motions to vary", () => {
+  it("the plan request names the looks to vary, and leaves motion and transitions to the Director", () => {
     const ask = outlinePrompt("dns", { min: 2, max: 4 }, { looks: ["chalk", "dark"], motions: ["minimal"] });
     expect(ask).toContain("looks chalk, dark");
-    expect(ask).toContain("motions minimal");
+    expect(ask).not.toContain("motions minimal");
+    expect(ask).not.toContain("motion <personality>");
+    expect(ask).not.toContain("in=<transition>");
     expect(outlinePrompt("dns", { min: 2, max: 4 })).not.toContain("recent videos used");
   });
 });

@@ -4,6 +4,7 @@ import { createEvaluator, EASES, type FrameState, type Value } from "@anim/timel
 import { build, paintFills, round, svg, SVG_NS, type Instance } from "./components.js";
 import { fontFace, fontFaceCss } from "./fonts.js";
 import { color, getTheme, type Theme } from "./theme.js";
+import { crossLook, noOverlays, still, type Css, type Overlays, type SceneLook } from "./transitions.js";
 
 export interface StageOptions {
   /** Override the video's theme. */
@@ -16,9 +17,18 @@ export interface StageOptions {
   templateBase?: string;
 }
 
+/**
+ * One scene on the stage: a frame (the scene's background and everything in it, what a transition moves, clips or turns) holding
+ * its content (what a transition shifts a little inside the frame), which holds the scene's SVG layer and its HTML layer, each
+ * under the scene's own camera. Two scenes are on screen together while a transition runs between them.
+ */
 interface SceneView {
   res: ResolvedScene;
   ir: SceneIR;
+  frame: HTMLDivElement;
+  content: HTMLDivElement;
+  svgCamera: SVGGElement;
+  htmlCamera: HTMLDivElement;
   svg: SVGGElement;
   html: HTMLDivElement;
   instances: Map<string, Instance>;
@@ -27,26 +37,14 @@ interface SceneView {
 }
 
 type Props = Partial<Record<Prop, Value>>;
-type Css = [property: string, value: string][];
 /** Element kinds that are pictures (they float while idle, and glow when highlighted). */
 const PICTURES = new Set(["icon", "asset"]);
 
 let stageCount = 0;
 const SVG_ROOT_BASE = "position: absolute; left: 0px; top: 0px;";
-
-/** How a transition shows a scene at a moment. */
-interface SceneLook {
-  opacity: number;
-  dx: number;
-  dy: number;
-  scale: number;
-  blur: number;
-  /** CSS clip-path on the scene's layers ("" = none). */
-  clip: string;
-  /** Where scaling is centered (a zoom into an element); the stage center when absent. */
-  origin?: { x: number; y: number };
-}
 const SCENE_HTML_BASE = "position: absolute; inset: 0px;";
+const CONTENT_BASE = "position: absolute; inset: 0px;";
+const OVERLAY_BASE = "position: absolute; inset: 0px; z-index: 5; pointer-events: none; overflow: hidden;";
 
 /**
  * Writes a node's whole inline style in a fixed property order. Setting
@@ -66,9 +64,12 @@ function css(node: HTMLElement | SVGElement, base: string, entries: Css): void {
 export class Stage {
   readonly root: HTMLDivElement;
   readonly theme: Theme;
-  private readonly svgRoot: SVGSVGElement;
-  private readonly svgCamera: SVGGElement;
-  private readonly htmlCamera: HTMLDivElement;
+  /** Filters the scenes share (highlight marks, the ripple transition's distortion). */
+  private readonly defs: SVGSVGElement;
+  /** The transitions' own pieces, over every scene. */
+  private readonly overlay: { layer: HTMLDivElement; edge: HTMLElement; ring: HTMLElement; seam: HTMLElement; panel: HTMLElement; sheen: HTMLElement };
+  private readonly ripple: { turbulence: SVGElement; displace: SVGElement };
+  private readonly frameBase: string;
   private readonly scenes: SceneView[] = [];
   /** Instances that host a designer page; they are told the time every frame and the frame waits for them. */
   private readonly pages: Instance[] = [];
@@ -88,7 +89,6 @@ export class Stage {
   private readonly idle: number;
   /** Build-time inline styles that dynamic styles are appended to. */
   private readonly baseStyle = new WeakMap<Element, string>();
-  private readonly htmlCameraBase: string;
   private readonly width: number;
   private readonly height: number;
   private time = 0;
@@ -120,23 +120,37 @@ export class Stage {
     fonts.textContent = fontFaceCss(this.theme.faces, opts.fontBase ?? "/fonts/");
     this.root.append(fonts);
 
-    this.svgRoot = svg(doc, "svg", { viewBox: `0 0 ${this.width} ${this.height}`, width: this.width, height: this.height }) as SVGSVGElement;
-    this.svgRoot.style.cssText = SVG_ROOT_BASE;
-    if (this.theme.emphasis === "mark") this.svgRoot.append(this.markFilters(doc));
-    this.svgCamera = svg(doc, "g", {
-      "data-camera": "",
-      stroke: this.theme.fg,
-      "stroke-width": this.theme.stroke,
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round",
-      fill: "none",
-    }) as SVGGElement;
-    this.svgRoot.append(this.svgCamera);
+    // Filters any scene's layer may use (an id is the document's, whichever SVG holds it).
+    this.defs = svg(doc, "svg", { width: 0, height: 0, "aria-hidden": "true" }) as SVGSVGElement;
+    this.defs.style.cssText = "position: absolute; width: 0px; height: 0px;";
+    if (this.theme.emphasis === "mark") this.defs.append(this.markFilters(doc));
+    const rip = svg(doc, "filter", { id: `${this.markId}-ripple`, x: 0, y: 0, width: "100%", height: "100%" });
+    const turbulence = svg(doc, "feTurbulence", { type: "fractalNoise", baseFrequency: "0.003 0.008", numOctaves: 2, seed: 7, result: "n" });
+    const displace = svg(doc, "feDisplacementMap", { in: "SourceGraphic", in2: "n", scale: 0, xChannelSelector: "R", yChannelSelector: "G" });
+    rip.append(turbulence, displace);
+    const defs = svg(doc, "defs", {});
+    defs.append(rip);
+    this.defs.append(defs);
+    this.ripple = { turbulence, displace };
+    this.root.append(this.defs);
+    // Every scene's frame has the look's background, so a scene that slides or opens over another covers it.
+    this.frameBase = `position: absolute; inset: 0px; overflow: hidden; background: ${this.theme.bg};`;
 
-    this.htmlCamera = doc.createElement("div");
-    Object.assign(this.htmlCamera.style, { position: "absolute", left: "0", top: "0", width: `${this.width}px`, height: `${this.height}px`, transformOrigin: "0 0" });
-    this.htmlCameraBase = this.htmlCamera.style.cssText;
-    this.root.append(this.svgRoot, this.htmlCamera);
+    const piece = (base: string) => {
+      const n = doc.createElement("div");
+      this.baseStyle.set(n, base);
+      n.style.cssText = `${base} display: none;`;
+      return n;
+    };
+    const layer = doc.createElement("div");
+    layer.style.cssText = OVERLAY_BASE;
+    layer.dataset.transition = "";
+    const panel = piece("position: absolute; inset: 0px; overflow: hidden;");
+    const sheen = piece("position: absolute; inset: 0px;");
+    panel.append(sheen);
+    this.overlay = { layer, edge: piece("position: absolute;"), ring: piece("position: absolute; border-radius: 50%; box-sizing: border-box;"), seam: piece("position: absolute;"), panel, sheen };
+    layer.append(this.overlay.edge, this.overlay.ring, this.overlay.seam, panel);
+    this.root.append(layer);
 
     for (const res of timeline.scenes) this.addScene(res);
 
@@ -198,9 +212,35 @@ export class Stage {
     const labels = svg(doc, "g", { "data-layer": "labels" }) as SVGGElement;
     for (const inst of instances.values()) if (inst.connector?.label) labels.append(inst.connector.label);
     if (labels.childNodes.length) g.append(labels);
-    this.svgCamera.append(g);
-    this.htmlCamera.append(html);
-    this.scenes.push({ res, ir: sceneIr, svg: g, html, instances, hosted: [...instances.values()].some((i) => i.setCues) });
+
+    const frame = doc.createElement("div");
+    frame.dataset.sceneFrame = res.id;
+    frame.style.cssText = this.frameBase;
+    const content = doc.createElement("div");
+    content.style.cssText = CONTENT_BASE;
+    const svgRoot = svg(doc, "svg", { viewBox: `0 0 ${this.width} ${this.height}`, width: this.width, height: this.height }) as SVGSVGElement;
+    svgRoot.style.cssText = SVG_ROOT_BASE;
+    const svgCamera = svg(doc, "g", {
+      "data-camera": "",
+      stroke: this.theme.fg,
+      "stroke-width": this.theme.stroke,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      fill: "none",
+    }) as SVGGElement;
+    svgCamera.append(g);
+    svgRoot.append(svgCamera);
+    const htmlCamera = doc.createElement("div");
+    htmlCamera.style.cssText = this.htmlCameraBase;
+    htmlCamera.append(html);
+    content.append(svgRoot, htmlCamera);
+    frame.append(content);
+    this.root.insertBefore(frame, this.overlay.layer);
+    this.scenes.push({ res, ir: sceneIr, frame, content, svgCamera, htmlCamera, svg: g, html, instances, hosted: [...instances.values()].some((i) => i.setCues) });
+  }
+
+  private get htmlCameraBase(): string {
+    return `position: absolute; left: 0px; top: 0px; width: ${this.width}px; height: ${this.height}px; transform-origin: 0 0;`;
   }
 
   /** A hosted page shows each item when the script shows it: the first moment its element becomes visible in its scene. */
@@ -284,44 +324,105 @@ export class Stage {
   render(t: number): void {
     this.time = Math.min(Math.max(t, 0), this.duration);
     const state = this.evaluator.at(this.time);
-    // Clip transitions (wipe, iris) act on the active scene's layers, never the stage color behind them.
-    let clip = "";
-    const last = this.scenes[this.scenes.length - 1];
-    for (const view of this.scenes) {
-      const { t0, t1 } = view.res;
-      const active = (this.time >= t0 && this.time < t1) || (view === last && this.time >= t1);
-      // Inactive scenes are rendered too, so no node ever keeps state from an earlier frame.
-      const c = this.renderScene(view, state, active);
-      if (active) clip = c;
+    const { on, overlays } = this.looks(state);
+    // The ripple's distortion, on both scenes while it runs.
+    const s = overlays.ripple;
+    const k = this.width / 1920;
+    this.ripple.displace.setAttribute("scale", String(round(s * 48 * k, 1)));
+    this.ripple.turbulence.setAttribute("baseFrequency", `${round((0.003 + s * 0.0018) / k, 5)} ${round((0.008 + s * 0.004) / k, 5)}`);
+    const extra = s > 0 ? `url(#${this.markId}-ripple)` : "";
+    // Scenes off screen are rendered too, so no node ever keeps state from an earlier frame.
+    for (const view of this.scenes) this.renderScene(view, state, on.get(view), extra);
+    const o = this.overlay;
+    for (const [node, entries] of [[o.edge, overlays.edge], [o.ring, overlays.ring], [o.seam, overlays.seam], [o.panel, overlays.panel], [o.sheen, overlays.sheen]] as const) {
+      css(node, this.baseStyle.get(node) ?? "", entries.length ? [...entries] : [["display", "none"]]);
     }
-    css(this.svgRoot, SVG_ROOT_BASE, [["clip-path", clip]]);
   }
 
-  /** Renders one scene's layers; returns the clip-path its transition puts on the stage. */
-  private renderScene(view: SceneView, state: FrameState, active: boolean): string {
+  /**
+   * The scenes on screen at this moment and how each looks: the one playing, or the two a transition is running between (the old
+   * one for the exit part of the transition, at the end of its own time, and the new one for the rest, at the start of its time).
+   * Before the first scene and after the last the stage's background stands in for the missing one.
+   */
+  private looks(state: FrameState): { on: Map<SceneView, SceneLook>; overlays: Overlays } {
+    const t = this.time;
+    const n = this.scenes.length;
+    const on = new Map<SceneView, SceneLook>();
+    let overlays = noOverlays();
+    this.scenes.forEach((v, i) => {
+      if ((t >= v.res.t0 && t < v.res.t1) || (i === n - 1 && t >= v.res.t1)) on.set(v, still());
+    });
+    for (let i = 0; i <= n; i++) {
+      const A = this.scenes[i - 1];
+      const B = this.scenes[i];
+      const before = A ? A.res.transitionOut.duration : 0;
+      const after = B ? B.res.transitionIn.duration : 0;
+      if (before + after <= 0) continue;
+      const at = A ? A.res.t1 : B!.res.t0;
+      if (t < at - before || (B && t >= at + after)) continue;
+      const p = clamp01((t - (at - before)) / (before + after));
+      const type = A ? A.res.transitionOut.type : B!.res.transitionIn.type;
+      if (type.startsWith("into:")) {
+        if (A && before > 0) on.set(A, this.into(A, state, p * (before + after) / before));
+        continue;
+      }
+      const cross = crossLook(type, p, { width: this.width, height: this.height, accent: this.theme.accent, cool: this.theme.cool });
+      if (A) on.set(A, cross.a);
+      if (B) on.set(B, cross.b);
+      overlays = cross.overlays;
+    }
+    return { on, overlays };
+  }
+
+  /** `into:<id>`: the camera pushes into the element and the scene dissolves as it fills the frame (q: 0 → 1 over the exit). */
+  private into(view: SceneView, state: FrameState, q: number): SceneLook {
+    const k = 1 - EASES.out!(clamp01(1 - q));
+    const look = still();
+    if (k <= 0) return look;
+    look.transform = `scale(${round(1 + k * 2.2, 4)})`;
+    look.opacity = 1 - clamp01((k - 0.35) / 0.65);
+    const focus = view.res.transitionOut.focus;
+    if (focus) {
+      // the element's spot in the scene, where the scene's camera shows it on the frame
+      const cam = this.camera(view, state);
+      look.origin = `${round(((focus.x - cam.x) * this.width) / cam.w)}px ${round(((focus.y - cam.y) * this.width) / cam.w)}px`;
+    }
+    return look;
+  }
+
+  private camera(view: SceneView, state: FrameState): Box {
+    return (state.get(`${view.res.id}/camera`)?.camera as Box | undefined) ?? { x: 0, y: 0, w: this.width, h: this.height };
+  }
+
+  /** Renders one scene: its frame as the transition shows it (look; none = off screen), its camera and its elements. */
+  private renderScene(view: SceneView, state: FrameState, look: SceneLook | undefined, extraFilter: string): void {
     const { res } = view;
-    const s = this.transition(res);
-    const moved = s.dx || s.dy || s.scale !== 1;
-    const transform = moved ? `translate(${round(s.dx)}px, ${round(s.dy)}px) scale(${round(s.scale, 4)})` : "";
-    const sceneCss: Css = [
-      ["display", active ? "" : "none"],
-      ["opacity", String(round(s.opacity, 4))],
-      ["transform-origin", moved ? `${round(s.origin?.x ?? this.width / 2)}px ${round(s.origin?.y ?? this.height / 2)}px` : ""],
-      ["transform", transform],
-      ["filter", s.blur > 0.05 ? `blur(${round(s.blur, 2)}px)` : ""],
-    ];
-    css(view.svg, "", sceneCss);
+    const shown = look?.visible ?? false;
+    const l = look ?? still();
+    const filter = shown ? [l.filter, extraFilter].filter(Boolean).join(" ") : "";
     // A hosted page that is waiting for its scene is hidden, not removed: with `display: none` the iframe has no layout, and pages that
     // fix their letter widths or fit themselves on the first frame (weight, reel, logo) would measure nothing and keep it for good.
-    const htmlCss: Css = view.hosted ? [["display", ""], ["visibility", active ? "" : "hidden"], ...sceneCss.slice(1)] : sceneCss;
-    css(view.html, SCENE_HTML_BASE, [...htmlCss, ["clip-path", s.clip]]);
+    css(view.frame, this.frameBase, [
+      ["display", shown || view.hosted ? "" : "none"],
+      ["visibility", shown ? "" : "hidden"],
+      ["z-index", shown && l.top ? "1" : ""],
+      ["opacity", l.opacity < 1 ? String(round(Math.max(0, l.opacity), 4)) : ""],
+      ["transform-origin", l.origin],
+      ["transform", l.transform],
+      ["filter", filter],
+      ["clip-path", l.clip],
+      ["box-shadow", l.shadow],
+      ["backface-visibility", l.backface ? "hidden" : ""],
+    ]);
+    css(view.content, CONTENT_BASE, [
+      ["transform", l.inner],
+      ["filter", l.innerFilter],
+    ]);
 
-    if (active) {
-      const cam = (state.get(`${res.id}/camera`)?.camera as Box | undefined) ?? { x: 0, y: 0, w: this.width, h: this.height };
-      const camTransform = `scale(${round(this.width / cam.w, 5)}) translate(${round(-cam.x)}px, ${round(-cam.y)}px)`;
-      css(this.svgCamera, "", [["transform-origin", "0 0"], ["transform", camTransform]]);
-      css(this.htmlCamera, this.htmlCameraBase, [["transform", camTransform]]);
-    }
+    const cam = this.camera(view, state);
+    const camTransform = `scale(${round(this.width / cam.w, 5)}) translate(${round(-cam.x)}px, ${round(-cam.y)}px)`;
+    css(view.svgCamera, "", [["transform-origin", "0 0"], ["transform", camTransform]]);
+    css(view.htmlCamera, this.htmlCameraBase, [["transform", camTransform]]);
 
     for (const inst of view.instances.values()) {
       const target = `${res.id}/${inst.el.id}`;
@@ -334,57 +435,6 @@ export class Stage {
       }
     }
     for (const inst of view.instances.values()) if (inst.connector) this.route(inst, view, state);
-    return s.clip;
-  }
-
-  /** Scene-level opacity, offset, scale, blur and clip from its in/out transitions. */
-  private transition(res: ResolvedScene): SceneLook {
-    const t = this.time;
-    const look: SceneLook = { opacity: 1, dx: 0, dy: 0, scale: 1, blur: 0, clip: "" };
-    const out = EASES.out!;
-    // k: how far the scene still is from fully shown (1 → 0 entering, 0 → 1 leaving).
-    const apply = (type: string, k: number, leaving: boolean) => {
-      if (k <= 0) return;
-      const dir = leaving ? -1 : 1;
-      if (type.startsWith("into:") && leaving) {
-        // The camera pushes into the element and the scene dissolves as it fills the frame.
-        look.scale *= 1 + k * 2.2;
-        look.opacity *= 1 - clamp01((k - 0.35) / 0.65);
-        if (res.transitionOut.focus) look.origin = res.transitionOut.focus;
-        return;
-      }
-      switch (type) {
-        case "fade":
-          look.opacity *= 1 - k;
-          break;
-        case "slide":
-          look.opacity *= 1 - k;
-          look.dx += dir * k * this.width * 0.25;
-          break;
-        case "rise":
-          look.opacity *= 1 - k;
-          look.dy += dir * k * this.height * 0.12;
-          break;
-        case "zoom":
-          look.opacity *= 1 - k;
-          look.scale *= leaving ? 1 - k * 0.06 : 1 + k * 0.12;
-          break;
-        case "blur":
-          look.opacity *= 1 - k;
-          look.blur += k * 18;
-          break;
-        case "wipe":
-          // Enters left to right; leaves left to right too.
-          look.clip = leaving ? `inset(0 0 0 ${round(k * 100, 3)}%)` : `inset(0 ${round(k * 100, 3)}% 0 0)`;
-          break;
-        case "iris":
-          look.clip = `circle(${round((1 - k) * 75, 3)}% at 50% 50%)`;
-          break;
-      }
-    };
-    if (res.transitionIn.duration > 0) apply(res.transitionIn.type, 1 - out(clamp01((t - res.t0) / res.transitionIn.duration)), false);
-    if (res.transitionOut.duration > 0) apply(res.transitionOut.type, 1 - out(clamp01((res.t1 - t) / res.transitionOut.duration)), true);
-    return look;
   }
 
   private applyElement(inst: Instance, target: string, p: Props): void {

@@ -1,6 +1,6 @@
 import type { Action, Args, Diagnostic, ElementDecl, Script, Setting } from "@anim/dsl";
 import { IR_VERSION, type ActionIR, type BeatIR, type Box, type ElementIR, type SceneIR, type VideoIR } from "@anim/ir";
-import { COMPONENTS, findComponent, findMotion, findVerb, KITS, partsOf, VERBS, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
+import { COMPONENTS, findComponent, findMotion, findVerb, findFamily, KITS, partsOf, RETIRED_TRANSITIONS, TRANSITION_FAMILIES, VERBS, type AssetLibrary, type MotionProfile, type ParamSpec } from "@anim/registry";
 import { htmlSceneOf, motionElement, MOTION_ID, type HtmlScene } from "./html.js";
 import { layoutScene, type SceneLayout } from "./layout.js";
 import { expandTrace } from "./trace.js";
@@ -377,46 +377,38 @@ function typed(raw: Record<string, string>, specs: Record<string, ParamSpec>): R
 }
 
 /**
- * Scene transitions. A new scene starts empty (its elements appear on their
- * cues), so a transition only shows on the scene being left. With the
- * standard personality, `in=` keeps its original meaning (`auto` = fade).
- * With any other personality, a scene's transition (`in=`, or the next one
- * from the personality's set for `auto`) becomes the previous scene's
- * exit, unless that scene chose its own `out=`; the video ends with a fade.
+ * Scene transitions: the designer's (registry SCENE_TRANSITIONS), each one played between two scenes, both on screen while it
+ * runs. A boundary takes the next scene's `in=` unless the scene before chose its own `out=`, and both scenes carry it: the old one
+ * as its exit, the new one as its entrance. `auto` (what generated scripts leave it at) takes it from the video's transition family
+ * (the `transitions` setting, else the motion's own): its opener into a title scene, which starts a new part of the video, and its
+ * step transitions in turn everywhere else. The first scene
+ * opens with a cut (there is nothing before it to leave) and the last leaves with a defocus, unless it chose its own `out=`.
+ * `in=into:<id>` zooms the previous scene into that element and starts this one at once; a scene that carries an element on
+ * from the previous one meets it with a cut, so the element does not go away with its scene.
  */
 function boundaries(scenes: SceneIR[], script: Script, motion: MotionProfile): void {
-  const pick = (name: string, i: number) => (name === "auto" ? motion.transitions[i % motion.transitions.length]! : name);
-  // A scene that carries an element on from the previous one meets it with a cut: the element must not fade with its scene.
-  const cutAtCarry = () =>
-    scenes.forEach((s, i) => {
-      if (i > 0 && s.carry?.length) {
-        s.transitionIn = "cut";
-        scenes[i - 1]!.transitionOut = "cut";
-      }
-    });
-  // `in=into:<id>`: the previous scene zooms into that element, and this one starts at once.
-  const intoAtBoundary = () =>
-    scenes.forEach((s, i) => {
-      if (i > 0 && s.transitionIn.startsWith("into:")) {
-        scenes[i - 1]!.transitionOut = s.transitionIn;
-        s.transitionIn = "cut";
-      }
-    });
-  if (motion.name === "standard") {
-    for (const s of scenes) s.transitionIn = s.transitionIn === "auto" ? "fade" : s.transitionIn;
-    intoAtBoundary();
-    cutAtCarry();
-    return;
-  }
+  const named = (name: string | undefined) => (name === undefined || name === "auto" ? undefined : (RETIRED_TRANSITIONS[name] ?? name));
+  const family = findFamily(script.settings.find((x) => x.key === "transitions")?.args[0]) ?? findFamily(motion.family) ?? TRANSITION_FAMILIES[0];
+  let steps = 0;
+  const auto = (s: SceneIR) => (s.template === "title" ? family.opener : family.steps[steps++ % family.steps.length]!);
   scenes.forEach((s, i) => {
-    const wanted = pick(s.transitionIn, i);
-    s.transitionIn = i === 0 ? "fade" : wanted.startsWith("into:") ? wanted : "cut";
-    if (i > 0 && script.scenes[i - 1]!.attrs.out === undefined) scenes[i - 1]!.transitionOut = wanted;
+    const wanted = named(s.transitionIn) ?? (i === 0 ? "cut" : auto(s));
+    if (i === 0) {
+      s.transitionIn = "cut";
+      return;
+    }
+    const prev = scenes[i - 1]!;
+    if (wanted.startsWith("into:")) {
+      prev.transitionOut = wanted;
+      s.transitionIn = "cut";
+    } else if (s.carry?.length) {
+      prev.transitionOut = s.transitionIn = "cut";
+    } else {
+      prev.transitionOut = s.transitionIn = named(script.scenes[i - 1]!.attrs.out) ?? wanted;
+    }
   });
   const last = scenes.at(-1);
-  if (last && script.scenes.at(-1)!.attrs.out === undefined) last.transitionOut = "fade";
-  intoAtBoundary();
-  cutAtCarry();
+  if (last) last.transitionOut = named(script.scenes.at(-1)!.attrs.out) ?? "defocus";
 }
 
 /** The `kit` setting when it names a known decor kit (and isn't plain). */

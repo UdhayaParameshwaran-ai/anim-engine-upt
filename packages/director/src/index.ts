@@ -1,14 +1,15 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parse, print, printScene, type Script } from "@anim/dsl";
-import { findTemplate, isFamily, KITS, motionPool, motionSet, MOTIONS, THEMES, variantGuide } from "@anim/registry";
+import { findMotion, findTemplate, isFamily, KITS, motionPool, motionSet, MOTIONS, THEMES, TRANSITION_FAMILIES, variantGuide } from "@anim/registry";
 
 const LINKS = new Set(["arrow", "line", "edge"]);
 
 /**
  * The style director: gives every video its own look without touching its
  * content. From the topic's mood it picks a look and a motion personality
- * that suit each other, then varies scene arrangements
+ * that suit each other and a family of scene transitions that suits the
+ * motion, then varies scene arrangements
  * (template variants, mirrored grid pages). A per-user history makes recent
  * choices less likely, so someone generating many videos keeps getting new
  * ones. Everything is seeded: the same topic and history give the same
@@ -18,6 +19,8 @@ const LINKS = new Set(["arrow", "line", "edge"]);
 export interface StyleChoice {
   theme: string;
   motion: string;
+  /** Scene transition family (registry TRANSITION_FAMILIES); absent in older history. */
+  transitions?: string;
   /** Decor kit (how connectors and cards are drawn); absent in older history. */
   kit?: string;
   /** Scene id → layout attributes the director set. */
@@ -50,7 +53,7 @@ export interface DirectOptions {
   /** Past videos of this user, newest last. */
   history?: HistoryEntry[];
   /** Choices the user fixed (brand kit, "make it playful"); never changed. */
-  lock?: Partial<Pick<StyleChoice, "theme" | "motion" | "kit">>;
+  lock?: Partial<Pick<StyleChoice, "theme" | "motion" | "kit" | "transitions">>;
   /**
    * Keep a look/motion the script already names: true unless it was used recently (the default),
    * "always" even then (the LLM chooses look and motion; the Director only fills in what it left out).
@@ -95,6 +98,21 @@ const PAIRS: Record<string, Weights> = {
   light: { corporate: 1.7, minimal: 1.4, dramatic: 0.6 },
   blueprint: { corporate: 1.4, energetic: 1.3, playful: 0.6 },
 };
+
+/**
+ * Transition families that suit each motion, by weight (unlisted ones are never picked): the motion's own family is the most
+ * likely, and a few others that move the same way keep consecutive videos from always changing scenes alike.
+ */
+const FAMILY_FIT: Record<string, Weights> = {
+  standard: { clean: 3, soft: 1.5, brand: 1 },
+  playful: { play: 3, soft: 1, doors: 1 },
+  corporate: { brand: 3, clean: 2, soft: 1 },
+  cinematic: { film: 3, soft: 1.5, depth: 1 },
+  energetic: { doors: 3, depth: 1.5, brand: 1.5 },
+  minimal: { soft: 3, film: 1, clean: 1 },
+  dramatic: { depth: 3, film: 1.5, doors: 1 },
+};
+const ALL_FAMILIES = new Set<string>(TRANSITION_FAMILIES.map((f) => f.name));
 
 /** Mulberry32. */
 function prng(seed: number): () => number {
@@ -172,13 +190,15 @@ export class Director {
   private readonly rand: () => number;
   /** Its own stream, so spacing and mirroring never change the other seeded choices. */
   private readonly knobRand: () => number;
+  /** Its own stream too, so adding the transition pick left every earlier choice as it was. */
+  private readonly familyRand: () => number;
   /** The previous scene got a spacing or mirror choice: the next one keeps the default. */
   private knobbed = false;
   private readonly mood: Mood;
   private readonly recentLayouts: string[];
   private last = "";
   private arc?: { open: string; close: string };
-  private style?: Pick<StyleChoice, "theme" | "motion" | "kit">;
+  private style?: Pick<StyleChoice, "theme" | "motion" | "kit" | "transitions">;
   private readonly scenes: StyleChoice["scenes"] = {};
   private readonly layouts: string[] = [];
 
@@ -186,11 +206,12 @@ export class Director {
     this.history = opts.history ?? [];
     this.rand = prng(hash(opts.topic) ^ (this.history.length * 2654435761));
     this.knobRand = prng(hash(opts.topic) ^ 0x9e3779b9 ^ (this.history.length * 40503));
+    this.familyRand = prng(hash(opts.topic) ^ 0x85ebca6b ^ (this.history.length * 69069));
     this.mood = moodOf(opts.topic);
     this.recentLayouts = this.history.slice(-3).flatMap((h) => h.layouts);
   }
 
-  /** Picks look and motion and writes them into the header (any scenes in `source` are kept). */
+  /** Picks look, motion and transition family and writes them into the header (any scenes in `source` are kept). */
   header(source: string): string {
     const { script } = parse(source);
     const setting = (key: string) => script.settings.find((x) => x.key === key)?.args[0];
@@ -224,9 +245,20 @@ export class Director {
       for (const k of KITS) w[k] = (k === "plain" ? 2 : 1) * novelty((h) => (h.kit ?? "plain") === k, history);
       kit = pick(w, this.knobRand);
     }
-    this.style = { theme, motion, kit };
+    // Scene transitions: one family for the whole video, so its scene changes read as one style. A family the script names stays.
+    const scriptFamily = setting("transitions");
+    let transitions = opts.lock?.transitions;
+    if (!transitions && scriptFamily && ALL_FAMILIES.has(scriptFamily)) transitions = scriptFamily;
+    if (!transitions) {
+      const fit = FAMILY_FIT[motion] ?? { [findMotion(motion).family]: 1 };
+      const w: Weights = {};
+      for (const f of ALL_FAMILIES) w[f] = (fit[f] ?? 0) * novelty((h) => h.transitions === f, history);
+      transitions = pick(w, this.familyRand);
+    }
+    this.style = { theme, motion, kit, transitions };
     setSetting(script, "theme", theme);
     setSetting(script, "motion", motion);
+    setSetting(script, "transitions", transitions);
     if (kit !== "plain") setSetting(script, "kit", kit);
     // Backgrounds aren't a feature; a stray `bg` line from the LLM is dropped here rather than warned about.
     script.settings = script.settings.filter((x) => x.key !== "bg");
@@ -358,7 +390,7 @@ export function historyEntry(choice: StyleChoice, source: string): HistoryEntry 
     if (s.attrs.grid) return [`${s.attrs.grid}${s.attrs.mirror === "true" ? ":mirror" : ""}`];
     return [];
   });
-  return { theme: choice.theme, motion: choice.motion, layouts, at: Date.now() };
+  return { theme: choice.theme, motion: choice.motion, ...(choice.transitions && { transitions: choice.transitions }), layouts, at: Date.now() };
 }
 
 /** Per-user style history in a JSON file (`{ user: HistoryEntry[] }`), capped at the last 30 videos. */

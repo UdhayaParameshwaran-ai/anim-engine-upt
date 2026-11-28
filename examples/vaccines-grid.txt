@@ -1,6 +1,6 @@
 video 1 "How Vaccines Work"
 
-scene numbers "By the numbers" grid=L3-02 in=fade
+scene numbers "By the numbers" grid=L3-02 in=defocus
 title = title "Vaccines save millions of lives"
 subtitle = text "Measles vaccination, worldwide"
 chart = chart:bar data=12,48,72,85 labels=1980,1995,2010,2020
@@ -16,7 +16,7 @@ start fade subtitle,foot
 > Once coverage passes {1 ninety-five percent}, outbreaks stop spreading.
 1 draw note
 
-scene how "How the immune system learns" grid=L2-01 in=slide
+scene how "How the immune system learns" grid=L2-01 in=push
 title = title "Training the immune system"
 steps = stepper "Inject|a harmless piece of the germ;Detect|immune cells spot it;Remember|memory cells stay ready"
 facts = checklist "No disease needed;Lasts for years;Protects others too"
@@ -27,7 +27,7 @@ start write title
 1 draw facts
 end highlight facts.1
 
-scene compare "With and without" grid=L2-07 in=fade
+scene compare "With and without" grid=L2-07 in=defocus
 title = title "Why it matters"
 key = definition "Herd immunity" "When enough people are immune, a germ can't find new hosts."
 table = table "Disease|Before|After;Measles|2.6M|128K;Polio|350K|<100;Tetanus|787K|25K" key=2

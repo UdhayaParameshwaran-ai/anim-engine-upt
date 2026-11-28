@@ -58,10 +58,30 @@ describe("stage", () => {
     const stage = new Stage(container, ir, tl, { autoFit: false });
     const [a, b] = tl.scenes;
     stage.render((a!.t0 + a!.t1) / 2);
-    expect((stage.root.querySelector('g[data-scene="need"]') as SVGGElement).style.display).toBe("");
-    expect((stage.root.querySelector('g[data-scene="output"]') as SVGGElement).style.display).toBe("none");
+    expect((stage.root.querySelector('[data-scene-frame="need"]') as HTMLElement).style.display).toBe("");
+    expect((stage.root.querySelector('[data-scene-frame="output"]') as HTMLElement).style.display).toBe("none");
     stage.render((b!.t0 + b!.t1) / 2);
-    expect((stage.root.querySelector('g[data-scene="need"]') as SVGGElement).style.display).toBe("none");
+    expect((stage.root.querySelector('[data-scene-frame="need"]') as HTMLElement).style.display).toBe("none");
+  });
+
+  it("shows both scenes while the designer's transition runs between them, and only the new one after it", async () => {
+    const { ir, tl } = await load("photosynthesis.txt");
+    const stage = new Stage(container, ir, tl, { autoFit: false });
+    const [a, b] = tl.scenes;
+    const frame = (id: string) => stage.root.querySelector(`[data-scene-frame="${id}"]`) as HTMLElement;
+    expect(a!.transitionOut.type).toBe("push");
+    // At the boundary the push is under way: the new scene comes in from the right over the old one, which is still there.
+    stage.render(a!.t1);
+    expect(frame(a!.id).style.display).toBe("");
+    expect(frame(b!.id).style.display).toBe("");
+    expect(frame(b!.id).style.transform).toMatch(/^translate\(\d/);
+    expect(frame(b!.id).style.zIndex).toBe("1");
+    stage.render(b!.t0 + b!.transitionIn.duration + 0.05);
+    expect(frame(a!.id).style.display).toBe("none");
+    expect(frame(b!.id).style.transform).toBe("");
+    // the video ends on the look's background: the last scene has defocused away
+    stage.render(tl.duration);
+    expect(frame(b!.id).style.opacity).toBe("0");
   });
 
   describe("extend: scenes arrive while the video plays", () => {
@@ -117,7 +137,7 @@ describe("stage", () => {
     // lock every width at zero (the weight title piled its letters in one spot, the reel title never showed).
     const { ir, tl } = await loadSource(`video 1\nscene a "A" template=title variant=rise\ntitle = title "First"\n> One.\n\nscene b "B" template=title variant=weight\ntitle = title "Gravity"\n> Two.\n\nscene c "C" template=cards\nx = icon:sun "Sun"\n> A {1}sun.\n1 pop x\n`);
     const stage = new Stage(container, ir, tl, { autoFit: false });
-    const layer = (id: string) => stage.root.querySelector(`div[data-scene="${id}"]`) as HTMLElement;
+    const layer = (id: string) => stage.root.querySelector(`[data-scene-frame="${id}"]`) as HTMLElement;
     stage.render((tl.scenes[0]!.t0 + tl.scenes[0]!.t1) / 2);
     expect(layer("a").style.visibility).toBe("");
     expect(layer("b").style.display).toBe("");
@@ -136,13 +156,14 @@ describe("stage", () => {
     const fresh = probes.map((t) => {
       const s = new Stage(document.createElement("div"), ir, tl, { autoFit: false });
       s.render(t);
-      return s.root.innerHTML;
+      return s.root.innerHTML.replace(/anim-mark-\d+/g, "mark");
     });
     // Play forward frame by frame, then seek backwards through the same times.
     for (let f = 0; f <= tl.duration * tl.fps; f += 3) stage.render(f / tl.fps);
     for (const [i, t] of [...probes.entries()].reverse()) {
       stage.render(t);
-      expect(stage.root.innerHTML, `t=${t}`).toBe(fresh[i]);
+      // (each stage numbers its filters, which are the stage's own and the same on every frame)
+      expect(stage.root.innerHTML.replace(/anim-mark-\d+/g, "mark"), `t=${t}`).toBe(fresh[i]);
     }
   });
 

@@ -1,7 +1,7 @@
 video 1 "How Photosynthesis Works"
 theme chalk
 
-scene need "What a plant needs" template=converge variant=left in=fade
+scene need "What a plant needs" template=converge variant=left in=defocus
 title  = title "What a plant needs"
 sun    = icon:sun "Sunlight"
 water  = icon:droplet "Water"

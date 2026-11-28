@@ -19,6 +19,8 @@ import {
   TEMPLATES,
   KITS,
   THEMES,
+  RETIRED_TRANSITIONS,
+  TRANSITION_FAMILIES,
   TRANSITIONS,
   VERBS,
   type ComponentManifest,
@@ -209,6 +211,16 @@ class Validator {
           const near = arg ? closest(arg, names) : undefined;
           this.warn(C.BadSetting, `unknown motion \`${arg ?? ""}\` (motions: ${names.join(", ")})`, s.span, {
             desc: near ? `used \`${near}\`` : "removed; standard motion applies",
+            apply: () => (near ? (s.args = [near]) : remove(settings, s)),
+          });
+          break;
+        }
+        case "transitions": {
+          const names: string[] = TRANSITION_FAMILIES.map((f) => f.name);
+          if (arg && names.includes(arg)) break;
+          const near = arg ? closest(arg, names) : undefined;
+          this.warn(C.BadSetting, `unknown transition family \`${arg ?? ""}\` (families: ${names.join(", ")})`, s.span, {
+            desc: near ? `used \`${near}\`` : "removed; the motion's own family applies",
             apply: () => (near ? (s.args = [near]) : remove(settings, s)),
           });
           break;
@@ -488,13 +500,17 @@ class Validator {
         // A zoom into an element of the previous scene: it has to be one (a scene checked on its own has none to check).
         const id = value.slice(5);
         if (prevDeclared.size && !prevDeclared.has(id)) {
-          this.error(C.BadKeep, `in=into:${id}: \`${id}\` is not declared in the previous scene`, scene.span, { desc: "used `fade`", apply: () => (scene.attrs.in = "fade") });
+          this.error(C.BadKeep, `in=into:${id}: \`${id}\` is not declared in the previous scene`, scene.span, { desc: "used `auto`", apply: () => (scene.attrs.in = "auto") });
         }
-      } else if ((key === "in" || key === "out") && !(TRANSITIONS as readonly string[]).includes(value)) {
+      } else if ((key === "in" || key === "out") && RETIRED_TRANSITIONS[value]) {
+        // The old transitions are gone; the designer's closest one takes their place.
+        const to = RETIRED_TRANSITIONS[value]!;
+        this.warn(C.UnknownTransition, `\`${value}\` is no longer a transition; it means \`${to}\``, scene.span, { desc: `used \`${to}\``, apply: () => (scene.attrs[key] = to) });
+      } else if ((key === "in" || key === "out") && !TRANSITIONS.includes(value)) {
         const near = closest(value, TRANSITIONS);
         this.error(C.UnknownTransition, `unknown transition \`${value}\` (transitions: ${TRANSITIONS.join(", ")})`, scene.span, {
-          desc: `used \`${near ?? "fade"}\``,
-          apply: () => (scene.attrs[key] = near ?? "fade"),
+          desc: `used \`${near ?? "auto"}\``,
+          apply: () => (scene.attrs[key] = near ?? "auto"),
         });
       } else if (key === "template" && !findTemplate(value) && resolveTemplate(value)) {
         // `grid` (renamed `cards`) or a shape name written as a template (`template=transform`).

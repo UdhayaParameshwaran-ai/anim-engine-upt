@@ -105,19 +105,19 @@ export interface MotionProfile {
   idle: number;
   /** Peak scale of `pulse`. */
   pulse: number;
-  /** Scene transitions `in=auto` rotates through, scene by scene. */
-  transitions: string[];
+  /** The transition family (TRANSITION_FAMILIES) a video with this motion uses when it names none. */
+  family: string;
 }
 
 export const MOTIONS: readonly MotionProfile[] = [
   // The original behavior: older scripts render exactly as before.
-  { name: "standard", summary: "balanced fades and springy pops", durScale: 1, staggerScale: 1, ease: {}, fade: "plain", pop: { from: 0.6, ease: "spring" }, distance: 0, drift: 36, push: 0.03, idle: 3, pulse: 1.15, transitions: ["fade"] },
-  { name: "playful", summary: "bouncy and overshooting; things hop in", durScale: 0.9, staggerScale: 1, ease: { out: "back", spring: "elastic" }, fade: "rise", pop: { from: 0.3, ease: "elastic" }, distance: 48, drift: 80, push: 0.035, idle: 6, pulse: 1.25, transitions: ["zoom", "iris", "rise"] },
-  { name: "corporate", summary: "quick, clean, subtle rise-ins", durScale: 0.8, staggerScale: 0.8, ease: { out: "quart", spring: "quart" }, fade: "rise", pop: { from: 0.94, ease: "quart" }, distance: 18, drift: 32, push: 0.025, idle: 2, pulse: 1.06, transitions: ["rise", "wipe", "fade"] },
-  { name: "cinematic", summary: "slow and smooth; blur-to-focus reveals", durScale: 1.5, staggerScale: 1.6, ease: { out: "expo", spring: "expo", inout: "sine" }, fade: "blur", pop: { from: 1.08, ease: "expo", blur: 14 }, distance: 0, drift: 28, push: 0.05, idle: 3, pulse: 1.08, transitions: ["blur", "fade", "zoom"] },
-  { name: "energetic", summary: "fast, punchy slides that snap into place", durScale: 0.65, staggerScale: 0.7, ease: { out: "back", spring: "back", inout: "quart" }, fade: "slide", pop: { from: 0.2, ease: "back" }, distance: 90, drift: 130, push: 0.035, idle: 4, pulse: 1.3, transitions: ["wipe", "slide", "zoom"] },
-  { name: "minimal", summary: "calm, quiet fades only", durScale: 1.1, staggerScale: 1.2, ease: { out: "sine", spring: "sine", inout: "sine" }, fade: "plain", pop: { from: 1, ease: "sine" }, distance: 0, drift: 0, push: 0, idle: 0, pulse: 1.04, transitions: ["fade"] },
-  { name: "dramatic", summary: "weighty zoom-ins from depth", durScale: 1.25, staggerScale: 1.3, ease: { out: "expo", spring: "back" }, fade: "zoom", pop: { from: 1.6, ease: "expo", blur: 8 }, distance: 0, drift: 0, push: 0.06, idle: 2, pulse: 1.2, transitions: ["zoom", "iris", "blur"] },
+  { name: "standard", summary: "balanced fades and springy pops", durScale: 1, staggerScale: 1, ease: {}, fade: "plain", pop: { from: 0.6, ease: "spring" }, distance: 0, drift: 36, push: 0.03, idle: 3, pulse: 1.15, family: "clean" },
+  { name: "playful", summary: "bouncy and overshooting; things hop in", durScale: 0.9, staggerScale: 1, ease: { out: "back", spring: "elastic" }, fade: "rise", pop: { from: 0.3, ease: "elastic" }, distance: 48, drift: 80, push: 0.035, idle: 6, pulse: 1.25, family: "play" },
+  { name: "corporate", summary: "quick, clean, subtle rise-ins", durScale: 0.8, staggerScale: 0.8, ease: { out: "quart", spring: "quart" }, fade: "rise", pop: { from: 0.94, ease: "quart" }, distance: 18, drift: 32, push: 0.025, idle: 2, pulse: 1.06, family: "brand" },
+  { name: "cinematic", summary: "slow and smooth; blur-to-focus reveals", durScale: 1.5, staggerScale: 1.6, ease: { out: "expo", spring: "expo", inout: "sine" }, fade: "blur", pop: { from: 1.08, ease: "expo", blur: 14 }, distance: 0, drift: 28, push: 0.05, idle: 3, pulse: 1.08, family: "film" },
+  { name: "energetic", summary: "fast, punchy slides that snap into place", durScale: 0.65, staggerScale: 0.7, ease: { out: "back", spring: "back", inout: "quart" }, fade: "slide", pop: { from: 0.2, ease: "back" }, distance: 90, drift: 130, push: 0.035, idle: 4, pulse: 1.3, family: "doors" },
+  { name: "minimal", summary: "calm, quiet fades only", durScale: 1.1, staggerScale: 1.2, ease: { out: "sine", spring: "sine", inout: "sine" }, fade: "plain", pop: { from: 1, ease: "sine" }, distance: 0, drift: 0, push: 0, idle: 0, pulse: 1.04, family: "soft" },
+  { name: "dramatic", summary: "weighty zoom-ins from depth", durScale: 1.25, staggerScale: 1.3, ease: { out: "expo", spring: "back" }, fade: "zoom", pop: { from: 1.6, ease: "expo", blur: 8 }, distance: 0, drift: 0, push: 0.06, idle: 2, pulse: 1.2, family: "depth" },
 ];
 
 export function findMotion(name: string | undefined): MotionProfile {
@@ -127,8 +127,52 @@ export function findMotion(name: string | undefined): MotionProfile {
 export const SLOTS = ["TL", "T", "TR", "L", "C", "R", "BL", "B", "BR"] as const;
 export const RELATIONS = ["right-of", "left-of", "above", "below", "inside"] as const;
 export const LAYOUTS = ["center", "row", "col", "grid", "split", "stack", "cycle"] as const;
-/** Scene transitions; `auto` (the default) takes the next one from the motion personality's set. */
-export const TRANSITIONS = ["auto", "cut", "fade", "slide", "wipe", "iris", "zoom", "blur", "rise"] as const;
+/**
+ * The designer's scene transitions (html-templates/designer/phase1/transitions): one scene gives way to the next, both on screen
+ * while it runs. `seconds` is the whole change at normal pace; a directional one moves the scenes towards the left.
+ */
+export const SCENE_TRANSITIONS = [
+  { name: "wipe", seconds: 1.2, summary: "a soft line with a thin light on it uncovers the new scene" },
+  { name: "push", seconds: 1.3, summary: "the new scene pushes the old one out, which dims and shrinks as it goes" },
+  { name: "zoom", seconds: 1.5, summary: "the camera flies into the old scene and the new one grows out of the distance" },
+  { name: "iris", seconds: 1.3, summary: "a circle with a thin ring opens from the centre onto the new scene" },
+  { name: "slats", seconds: 1.5, summary: "the new scene arrives in eight strips that open one after another" },
+  { name: "split", seconds: 1.3, summary: "the old scene parts down the middle like doors" },
+  { name: "defocus", seconds: 1.5, summary: "the old scene drifts out of focus as the new one pulls into focus" },
+  { name: "cube", seconds: 1.4, summary: "the two scenes are faces of a cube that turns in 3D" },
+  { name: "panel", seconds: 1.5, summary: "a block of the look's colour sweeps across, and the scene changes behind it" },
+  { name: "ripple", seconds: 1.7, summary: "the old scene dissolves into the new one through a wave of distortion" },
+] as const;
+export type SceneTransition = (typeof SCENE_TRANSITIONS)[number];
+export function findTransition(name: string | undefined): SceneTransition | undefined {
+  return SCENE_TRANSITIONS.find((t) => t.name === name);
+}
+/**
+ * Scene transitions a script may name: `auto` (the default) takes one from the video's transition family, `cut` has none (the
+ * compiler uses it where a scene carries an element on), and the designer's ten.
+ */
+export const TRANSITIONS: readonly string[] = ["auto", "cut", ...SCENE_TRANSITIONS.map((t) => t.name)];
+/** Transitions older scripts name, and the designer's transition each now means. */
+export const RETIRED_TRANSITIONS: Readonly<Record<string, string>> = { fade: "defocus", blur: "defocus", slide: "push", rise: "push" };
+
+/**
+ * A video's scene transitions, chosen together so they read as one style instead of a mix: `steps` take turns between scenes that
+ * carry the story on, and `opener` (a bigger change) brings in a title scene, which opens a new part of the video. The Director
+ * picks one family per video (the `transitions <family>` setting); without one, the motion personality's own family is used.
+ */
+export const TRANSITION_FAMILIES = [
+  { name: "clean", steps: ["push", "wipe"], opener: "defocus", summary: "directional pushes and wipes; a calm defocus into a new part" },
+  { name: "brand", steps: ["wipe", "push"], opener: "panel", summary: "wipes and pushes; a sweep of the look's colour into a new part" },
+  { name: "soft", steps: ["defocus", "iris"], opener: "defocus", summary: "calm focus pulls and an opening circle" },
+  { name: "film", steps: ["defocus"], opener: "zoom", summary: "focus pulls; a fly-through into a new part" },
+  { name: "play", steps: ["iris", "slats"], opener: "ripple", summary: "an opening circle and strips; a ripple into a new part" },
+  { name: "depth", steps: ["push", "zoom"], opener: "cube", summary: "pushes and fly-throughs; a turning cube into a new part" },
+  { name: "doors", steps: ["wipe", "slats"], opener: "split", summary: "wipes and strips; doors that part into a new part" },
+] as const;
+export type TransitionFamily = (typeof TRANSITION_FAMILIES)[number];
+export function findFamily(name: string | undefined): TransitionFamily | undefined {
+  return TRANSITION_FAMILIES.find((f) => f.name === name);
+}
 
 /**
  * Decor kits: how the lines and cards a template draws look, one per video (besides its look).

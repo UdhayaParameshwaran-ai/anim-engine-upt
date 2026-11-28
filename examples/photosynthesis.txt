@@ -3,7 +3,7 @@ theme chalk
 voice narrator
 size 1920x1080 30
 
-scene need "What a plant needs" in=fade
+scene need "What a plant needs" in=defocus
 layout row
 sun   = icon:sun
 water = icon:droplet
@@ -29,7 +29,7 @@ chl = label "chloroplast" @right-of:leaf
 1 write chl then highlight leaf fit
 wait 0.5
 
-scene output "What it makes" in=slide
+scene output "What it makes" in=push
 layout split
 eq   = formula "6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂" @T
 sug  = icon:cube "glucose" @L

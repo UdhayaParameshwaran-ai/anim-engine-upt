@@ -89,7 +89,7 @@ export const SLOT_INFO: Record<string, { about: string; required?: boolean }> = 
   sentences: { about: "sentences per scene (Writing scenes setting)" },
   compose_patterns: { about: "the names of the compose patterns" },
   verbs: { about: "every verb with its category and summary", required: true },
-  style_menu: { about: "the looks and motions to choose from, with the transitions" },
+  style_menu: { about: "the looks to choose from (motion and transitions are the Director's)" },
   templates: { about: "every template with when to use it", required: true },
   layouts: { about: "the layouts and their slot sizes" },
   slot_hints: { about: "the @slot names and relations" },

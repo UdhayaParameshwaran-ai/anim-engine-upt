@@ -14,7 +14,7 @@ import {
   type VideoIR,
   type WordTiming,
 } from "@anim/ir";
-import { findMotion, findVerb, type MotionProfile } from "@anim/registry";
+import { findMotion, findVerb, SCENE_TRANSITIONS, type MotionProfile } from "@anim/registry";
 import { tweenValue, type Value } from "./evaluate.js";
 import { focusBox, PRIMITIVES, type TweenSpec } from "./primitives.js";
 
@@ -39,8 +39,13 @@ export interface ResolveOptions {
   transitions?: Record<string, number>;
 }
 
-const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, fade: 0.5, slide: 0.6, wipe: 0.6, iris: 0.7, zoom: 0.6, blur: 0.7, rise: 0.6 };
-/** Exit length (s) under any personality but standard, whatever the transition. */
+/** Whole length (s) of each of the designer's transitions at normal pace; `cut` has none. */
+const DEFAULT_TRANSITIONS: Record<string, number> = { cut: 0, ...Object.fromEntries(SCENE_TRANSITIONS.map((t) => [t.name, t.seconds])) };
+/**
+ * The part of a transition (s, before the motion's tempo) that runs on the scene being left; the rest runs on the next scene. It
+ * is the same for every transition, the closing one too: appending a scene turns the last scene's closing defocus into the
+ * transition between the two, and the last scene's end time must not move.
+ */
 const EXIT = 0.6;
 /** Length (s) of a zoom into an element at a scene boundary. */
 const INTO = 1;
@@ -152,13 +157,12 @@ class Resolver {
   // ------------------------------------------------------------ schedule ---
 
   private scene(scene: SceneIR, sp: SceneSpeech, start: number, prev: SceneIR | undefined): number {
-    // Transitions take the personality's tempo (cinematic ones are slower).
-    const trIn = { type: scene.transitionIn, duration: this.q((this.transitions[scene.transitionIn] ?? 0) * this.motion.durScale) };
-    // Exits all last the same under a personality: appending a scene turns the last scene's
-    // closing fade into a boundary transition, and its end time must not move.
-    // `into:<id>` (zoom into an element) is always a full second-ish push, under any personality.
+    // A transition plays across the boundary: EXIT of it on the scene being left, the rest on this one. Both take the
+    // personality's tempo (cinematic ones are slower). `into:<id>` (zoom into an element) is always a full second-ish push.
+    const whole = (name: string) => this.transitions[name] ?? 0;
+    const trIn = { type: scene.transitionIn, duration: whole(scene.transitionIn) > 0 ? this.q(Math.max(0, whole(scene.transitionIn) - EXIT) * this.motion.durScale) : 0 };
     const into = scene.transitionOut.startsWith("into:");
-    const outBase = into ? INTO : this.motion.name !== "standard" && scene.transitionOut !== "cut" ? EXIT : (this.transitions[scene.transitionOut] ?? 0);
+    const outBase = into ? INTO : whole(scene.transitionOut) > 0 ? Math.min(EXIT, whole(scene.transitionOut)) : 0;
     const trOut: ResolvedScene["transitionOut"] = { type: scene.transitionOut, duration: this.q(outBase * (into ? 1 : this.motion.durScale)) };
     const t0 = this.q(start);
     this.initScene(scene, prev);
@@ -290,7 +294,7 @@ class Resolver {
       const id = scene.transitionOut.slice(5);
       const el = scene.elements.find((e) => e.id === id);
       if (el && !el.link) trOut.focus = { x: num(this.valueAt(`${scene.id}/${id}`, "x", Infinity) as number, el.box.x + el.box.w / 2), y: num(this.valueAt(`${scene.id}/${id}`, "y", Infinity) as number, el.box.y + el.box.h / 2) };
-      else trOut.type = "fade";
+      else trOut.type = "defocus";
     }
     this.scenes.push({ id: scene.id, t0, t1, transitionIn: trIn, transitionOut: trOut, steps, beats });
     return t1;

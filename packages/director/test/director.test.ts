@@ -176,3 +176,24 @@ describe("scenes drawn by a designer page", () => {
     }
   });
 });
+
+describe("scene transitions", () => {
+  it("gives every video one transition family that suits its motion, written as a setting, and never the last video's again", () => {
+    const runs = session(Array.from({ length: 8 }, (_, i) => `How plants make food, part ${i + 1}`));
+    const fits: Record<string, string[]> = {
+      standard: ["clean", "soft", "brand"], playful: ["play", "soft", "doors"], corporate: ["brand", "clean", "soft"],
+      cinematic: ["film", "soft", "depth"], energetic: ["doors", "depth", "brand"], minimal: ["soft", "film", "clean"], dramatic: ["depth", "film", "doors"],
+    };
+    for (const r of runs) {
+      expect(fits[r.choice.motion], `${r.choice.motion} → ${r.choice.transitions}`).toContain(r.choice.transitions);
+      expect(r.script).toMatch(new RegExp(`^transitions ${r.choice.transitions}$`, "m"));
+    }
+    for (let i = 1; i < runs.length; i++) expect(runs[i]!.choice.transitions).not.toBe(runs[i - 1]!.choice.transitions);
+    expect(new Set(runs.map((r) => r.choice.transitions)).size).toBeGreaterThan(2);
+  });
+
+  it("keeps a family the script or the user chose", () => {
+    expect(direct(`transitions doors\n${script}`, { topic: "plants" }).choice.transitions).toBe("doors");
+    expect(direct(script, { topic: "plants", lock: { transitions: "film" } }).choice.transitions).toBe("film");
+  });
+});

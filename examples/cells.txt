@@ -2,7 +2,7 @@ video 1 "Plant vs Animal Cells"
 theme chalk
 voice narrator
 
-scene compare "Two kinds of cell" template=compare in=fade
+scene compare "Two kinds of cell" template=compare in=defocus
 title = title "Plant vs Animal Cells"
 left  = asset:cell.plant "Plant cell"
 right = asset:cell.animal "Animal cell"

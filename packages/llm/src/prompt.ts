@@ -19,10 +19,8 @@ import {
   templatesFor,
   variantChoices,
   COMPOSE_PATTERNS,
-  MOTIONS,
   THEME_SUMMARIES,
   THEMES,
-  TRANSITIONS,
   VERBS,
   type AssetManifest,
   type Shape,
@@ -131,9 +129,8 @@ export function pictureList(assets: AssetManifest[]): string {
 
 const EXAMPLE = `video 1 "Plant vs Animal Cells"
 theme chalk
-motion playful
 
-scene compare "Two kinds of cell" template=compare variant=sides in=fade
+scene compare "Two kinds of cell" template=compare variant=sides
 title = title "Plant vs Animal Cells"
 left = label "Plant cell"
 right = label "Animal cell"
@@ -142,7 +139,7 @@ r2 = icon:sun "Chloroplasts make food" "Eats food made elsewhere"
 > Cells come in two familiar kinds. {r1}A plant cell has a rigid wall and an animal cell does not.
 > {r2}Only plants carry chloroplasts, so only they make their own food.
 
-scene energy "Where the energy comes from" in=fade
+scene energy "Where the energy comes from"
 layout row
 sun = icon:sun "Sunlight"
 leaf = asset:leaf "Leaf"
@@ -151,7 +148,7 @@ beam = arrow sun->leaf
 1 pop sun
 2 draw beam fit then draw leaf
 
-scene numbers "By the numbers" grid=L3-02 in=fade
+scene numbers "By the numbers" grid=L3-02
 title = title "Microscopes changed biology"
 chart = chart:bar data=2,40,300 labels=1700,1900,2000
 cells = stat "37T" "cells in a human body"
@@ -163,7 +160,7 @@ start write title
 1 draw cells
 end draw tip
 
-scene decide "What next?" template=flow in=slide
+scene decide "What next?" template=flow
 n1 = node "Curious about cells?"
 n2 = node "Use a microscope"
 n3 = node "Read a textbook"
@@ -207,8 +204,7 @@ Reply with Narrascript only — no prose, no markdown fences.
 STATEMENTS (one per line; the first word decides the type)
 video 1 "Title"                      first line of a full script
 theme <look>                         see STYLE
-motion <personality>                 see STYLE
-scene <id> "Title" [template=<t> [variant=<v>|auto] | compose=<pattern>] [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]
+scene <id> "Title" [template=<t> [variant=<v>|auto] | compose=<pattern>] [emphasis=first|last|<id>] [density=airy|tight] [mirror=true]
 step <id> "Title"                    optional sub-scene on the same stage
 <id> = <kind>[:<name>] ["text"] [key=value] [@slot]   declares an element (hidden until an action shows it)
 <id> = <a> -> <b> ["label"]          graph edge (template=flow)
@@ -288,7 +284,7 @@ const STORY: Record<string, string> = {
   chart: "- Write each value as `b1 = label \"Jan\" \"$42k\"` (label, value with its unit) and name each where the narration says it: `> {b1}January made forty-two thousand, {b2}February fifty-five.` Write no action lines at all in this scene, not even `write title` (no pop, pulse or mark). variant=bars for categories, variant=line for a trend over time (3 or more points, in order), variant=ring for shares of a whole. Every bar measures the same thing in the same unit: never put a total next to its parts, or a per-second value next to a count. Use a chart for numbers worth comparing, not to replay the steps of a run (that is a trace). The chart plays through once, starting at its first cue. Optional: `kicker = text \"Revenue\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
   stats: "- Write each figure as `s1 = icon:name \"Label\" \"21k\" \"+75% vs Q1\"` (label, value with its unit, and optionally how much it changed) and show it where the narration says it, by naming it in braces: `> It began at {s1}twelve thousand, then {s2}reached twenty-one.` Write no action lines at all in this scene, not even `write title` (no pop, count or pulse): the motion rolls the numbers. variant=figures for separate figures or a series; variant=shares when the figures are parts of a whole or sizes to compare by area. The last stat glows; highlight=s2 on the scene line picks another. All the figures of one scene share one unit and scale, because the motions size, fill and rank them against each other (never 5 MB next to 2 TB, or a count next to a percentage); write a value as a plain number with its unit (`2.5B`, `$18M`, `45%`), never as a time like 2:08. Say what the numbers measure, because the motions print it as the axis, scale or legend: `yaxis = text \"Active users (thousands)\"` (the unit or quantity), and for a series over time `xaxis = text \"Quarter\"` (what runs along it); `metric = text \"Active users per quarter, in thousands\"` is a line under the heading. Optional: `kicker = text \"Growth\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
   gitgraph: "- Walk the history in order: pop each commit and draw the line to it, then visit that commit (the ring follows the latest commit); mark the merge commit as=ok, and shake a commit where there is a conflict.",
-  title: "- Write the headline as `title = title \"…\"`, the subtitle as `subtitle = text \"…\"`, and a kicker, byline or brand only when they help; at most one icon. A designed motion plays the opening, so there are no action lines and no cues. Options on the scene line: bg=base|tint|deep sets its backdrop, pace=relaxed|normal|snappy sets how fast it moves. The title never leaves by itself: the scene transition (in= / out=) takes it away. Declare only the slots: no carry=, keep= or emphasis=.",
+  title: "- Write the headline as `title = title \"…\"`, the subtitle as `subtitle = text \"…\"`, and a kicker, byline or brand only when they help; at most one icon. A designed motion plays the opening, so there are no action lines and no cues. Options on the scene line: bg=base|tint|deep sets its backdrop, pace=relaxed|normal|snappy sets how fast it moves. The title never leaves by itself: the scene transition takes it away. Declare only the slots: no carry=, keep= or emphasis=.",
   compare: "- Name the sides with `left = label \"…\"` and `right = label \"…\"`, then one row per point: `r1 = icon:name \"what is true of the left\" \"what is true of the right\"`, and show each row where the narration says it, by naming it in braces: `> A session {r1}keeps state on the server; a token {r2}carries it with the user.` Write no action lines at all in this scene, not even `write title` (no pop, strike, mark or visit). variant=sides (the usual choice) sets the two options point against point with no winner, right for a trade-off. variant=verdict only when the narration says the right side wins (it is the better, newer or correct one): it ticks the right and crosses the left on every row, so never use it for a trade-off. Optional: `kicker = text \"Before vs after\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
   cycle: "- Go round the loop: after each step appears, visit it (the ring moves c1 → c2 → c3), and visit the first one again when the cycle closes; pulse the step being named.",
   timeline: "- Write each event as `t1 = label \"1796\" \"First vaccine\" \"One line of detail\"` (date, title, detail) in date order and show it where the narration reaches its date, by naming it in braces: `> The first vaccine came in {t1}1796, and polio in {t2}1955.` Write no action lines at all in this scene, not even `write title` (no pop, visit or mark). A ribbon event may add a fourth string for its picture slot: a figure (\"10,000+ doses\", it counts up) or a short line of text, and a fifth as its caption; the other variants ignore them. Optional: `kicker = text \"History\"`, pace=relaxed|normal|snappy. Declare only the slots and the items: no carry=, keep= or emphasis=.",
@@ -347,7 +343,7 @@ function baseSceneSystemPrompt(kind: SceneKind, assets: AssetManifest[], canvas:
   const kinds = COMPONENTS.filter((c) => c.kind !== "placeholder" && c.kind !== "footer" && !gridOnly.has(c.kind) && (flow || !["node", "edge"].includes(c.kind)) && (trace || !COLLECTIONS.includes(c.kind as (typeof COLLECTIONS)[number])))
     .map((c) => `  ${(c.named === "required" ? `${c.kind}:<name>` : c.kind).padEnd(13)} ${c.summary}`)
     .join("\n");
-  const sceneLine = grid ? `scene <id> "Title" grid=<layout> [mirror=true] [in=<transition>]` : `scene <id> "Title" template=${kind.template.name} [emphasis=first|last|<id>] [density=airy|tight] [mirror=true] [in=<transition>]`;
+  const sceneLine = grid ? `scene <id> "Title" grid=<layout> [mirror=true]` : `scene <id> "Title" template=${kind.template.name} [emphasis=first|last|<id>] [density=airy|tight] [mirror=true]`;
   const words = settings.maxWords ?? DEFAULT_MAX_WORDS;
   const key = grid ? "grid" : kind.template.name;
   const hint = settings.motionHints?.[key] ?? STORY[key];
@@ -511,10 +507,9 @@ Reply with Narrascript lines only — no prose, no markdown fences.
 LINES
 video 1 "Title"
 theme <look>
-motion <personality>
 scene <id> "Title" template=<template>      a diagram
 scene <id> "Title" grid=<layout code>        an editorial page (add mirror=true to some)
-# usecase: <name>                           once, right after the motion line: what this video is (see USE CASES)
+# usecase: <name>                           once, right after the theme line: what this video is (see USE CASES)
 # question: <what the video answers>        the BRIEF: three comment lines right after the usecase line, written before any scene
 # example: <the one concrete case the video follows, with its real values, or "none">
 # outcome: <what the viewer can see, say or do at the end>
@@ -584,26 +579,25 @@ export interface RecentUse {
   motions?: string[];
 }
 
-/** One line for the planner: the looks and motions of the last videos, so it picks others when they fit equally well. */
+/** One line for the planner: the looks of the last videos, so it picks others when they fit equally well. */
 function lookNote(recent: RecentUse): string {
   const looks = [...new Set(recent.looks ?? [])];
-  const motions = [...new Set(recent.motions ?? [])];
-  if (!looks.length && !motions.length) return "";
+  if (!looks.length) return "";
   return `
-The viewer's recent videos used the looks ${looks.join(", ") || "-"} and the motions ${motions.join(", ") || "-"}. Choose a different look and motion where another fits the topic equally well.
+The viewer's recent videos used the looks ${looks.join(", ")}. Choose a different look where another fits the topic equally well.
 `;
 }
 
-/** Looks and motion personalities with one line each, so the model can match them to the topic. */
+/**
+ * Looks with one line each, so the model can match them to the topic. How things move (the motion personality) and how scenes
+ * change (the transitions) are not the writer's: the Director picks them for the whole video, so the model writes neither.
+ */
 function styleSection(): string {
   const looks = THEMES.map((t) => `  ${t.padEnd(14)} ${THEME_SUMMARIES[t]}`).join("\n");
-  const motions = MOTIONS.map((m) => `  ${m.name.padEnd(14)} ${m.summary}`).join("\n");
   return `STYLE (once per video, before the first scene; pick what suits the topic and audience)
 theme <look>:
 ${looks}
-motion <personality>:
-${motions}
-Scene transitions: in=auto (default) lets the motion choose; or in=${TRANSITIONS.filter((t) => t !== "auto").join("|")}`;
+How things move and how one scene gives way to the next are chosen for you: write no motion line, and no in= or out= on a scene.`;
 }
 
 /** First pass: plan the scenes without writing narration. */
@@ -629,12 +623,12 @@ ${S.v("topic", topic)}
 Audience level: ${S.v("level", level)}.
 ${S.v("variety", variety + lookNote(recent))}${S.v("planning_advice", advice ? `${advice}\n` : "")}${decided ? S.v("teaching_plan", decidedBlock(decided)) : S.v("usecase_hint", guess ? `Likely use case: ${guess.name} (change it if the topic is really something else).\n` : "")}${S.v("house_style", styleGuide(settings))}
 Output only:
-- the "video 1" line, a "theme" line and a "motion" line that suit the topic and audience
-- right after the "motion" line, one comment line "# usecase: ${decided ? decided.usecase : "<name>"}"${decided ? "" : " from USE CASES"}
+- the "video 1" line and a "theme" line that suits the topic and audience
+- right after the "theme" line, one comment line "# usecase: ${decided ? decided.usecase : "<name>"}"${decided ? "" : " from USE CASES"}
 - then the brief: "# question: …", "# example: …" (one concrete case with its real values, or none), "# outcome: …"
 - then the method: "# method: ${decided ? `${decided.method.name} · why: ${decided.why}` : "<method> · why: <one line>"}"
 - one "scene" line per scene (${S.v("scenes", decided ? `exactly ${decided.slots.length}` : `${scenes.min}–${scenes.max}`)} scenes), each with a fitting template= (diagrams) or grid= (editorial pages of numbers, charts, lists, quotes), followed by one comment line "# shape: <shape> · role: <role> · goal: <what this scene explains and what it shows>" and one comment line "# beat: <${decided ? "its slot from the list above, word for word" : "beat of the method"}> [· via: <method>] [· device: <devices>] · link: <how it follows from the scene before>" (the first scene has no link)
-- optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "motion" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
+- optional, only when something really stays in view from one scene to the next (a client, a server, a database; at most 3): after the "theme" line one comment line naming it, "# cast: client = icon:smartphone "Client"; server = icon:server "Server"", and "· carry: client, server" at the end of the comment line of every later scene it stays in. A carried thing keeps its picture and moves into the new scene's layout instead of disappearing.
 No elements, narration or actions yet.`);
 }
 

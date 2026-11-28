@@ -14,7 +14,7 @@ const SCRIPT = `video 1 "Render test"
 theme paper
 size 640x360 15
 
-scene s "Test" in=fade
+scene s "Test" in=defocus
 a = icon:sun
 b = box "Box"
 x = arrow a->b

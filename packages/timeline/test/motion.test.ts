@@ -77,16 +77,18 @@ describe("scene transitions", () => {
   const two = (head: string, attrs = ["", ""]) => `video 1 "Two"\n${head}scene a "A"${attrs[0]}\nlayout row\ns = icon:sun "Sun"\n> The {1}sun.\n1 pop s\nscene b "B"${attrs[1]}\nlayout row\nt = icon:sun "Sun"\n> Again the {1}sun.\n1 pop t\n`;
   const ir = (src: string) => compile(src).ir!;
 
-  it("keep the original transitions under the standard personality", () => {
-    expect(ir(two("")).scenes.map((s) => [s.transitionIn, s.transitionOut])).toEqual([["fade", "cut"], ["fade", "cut"]]);
+  it("play the designer's transitions under the standard personality too: a cut into the first scene, a defocus out of the last", () => {
+    expect(ir(two("")).scenes.map((s) => [s.transitionIn, s.transitionOut])).toEqual([["cut", "push"], ["push", "defocus"]]);
   });
 
-  it("play each scene's transition as the previous scene's exit", () => {
+  it("play each boundary's transition on both scenes: the old one leaving, the new one arriving", () => {
     const playful = ir(two("motion playful\n"));
-    expect(playful.scenes.map((s) => [s.transitionIn, s.transitionOut])).toEqual([["fade", "iris"], ["cut", "fade"]]);
+    expect(playful.scenes.map((s) => [s.transitionIn, s.transitionOut])).toEqual([["cut", "iris"], ["iris", "defocus"]]);
     // An explicit in= moves to the boundary too; an explicit out= is never overridden.
     expect(ir(two("motion playful\n", ["", " in=wipe"])).scenes[0]!.transitionOut).toBe("wipe");
-    expect(ir(two("motion playful\n", [" out=slide", " in=wipe"])).scenes[0]!.transitionOut).toBe("slide");
+    expect(ir(two("motion playful\n", [" out=cube", " in=wipe"])).scenes[0]!.transitionOut).toBe("cube");
+    // The old transitions are gone: a script that names one gets the designer's closest.
+    expect(ir(two("", ["", " in=fade"])).scenes.map((s) => [s.transitionIn, s.transitionOut])).toEqual([["cut", "defocus"], ["defocus", "defocus"]]);
   });
 
   it("drop the removed bg setting from older scripts, with a warning", () => {
@@ -95,5 +97,19 @@ describe("scene transitions", () => {
     expect(r.diagnostics.find((d) => d.code === "NAR214")).toMatchObject({ severity: "warning", fixed: "removed the bg setting" });
     expect(r.ir).not.toHaveProperty("background");
     expect(r.script.settings.some((x) => x.key === "bg")).toBe(false);
+  });
+});
+
+describe("transition families", () => {
+  const scene = (id: string, tpl = "") => `scene ${id} "${id}"${tpl}\nlayout row\ns${id} = icon:sun "Sun"\n> The {1}sun.\n1 pop s${id}\n`;
+  const ir = (src: string) => compile(src).ir!;
+
+  it("takes turns through the family's step transitions, and opens a title scene (a new part) with its opener", () => {
+    const src = `video 1 "Parts"\ntransitions depth\n${scene("a")}${scene("b")}${scene("c")}scene part "Part two" template=title variant=rise\ntitle = title "Part two"\n> Now the second part.\n${scene("d")}`;
+    expect(ir(src).scenes.map((s) => s.transitionIn)).toEqual(["cut", "push", "zoom", "cube", "push"]);
+  });
+
+  it("uses the motion's own family when the script names none", () => {
+    expect(ir(`video 1 "Two"\nmotion cinematic\n${scene("a")}${scene("b")}`).scenes[1]!.transitionIn).toBe("defocus");
   });
 });
